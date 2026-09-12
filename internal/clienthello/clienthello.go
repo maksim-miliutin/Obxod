@@ -43,6 +43,12 @@ func Parse(payload []byte) (Hello, error) {
 
 	recordLen := int(binary.BigEndian.Uint16(payload[3:5]))
 
+	// A record shorter than the handshake header cannot hold a hello, and clamping
+	// its end below the body start would slice backwards.
+	if recordLen < handshakeHeaderLen {
+		return Hello{}, ErrTooShort
+	}
+
 	// A hello split across segments declares more than this segment carries.
 	recordEnd := recordHeaderLen + recordLen
 	if recordEnd > len(payload) {

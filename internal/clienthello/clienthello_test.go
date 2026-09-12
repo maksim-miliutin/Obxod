@@ -7,25 +7,39 @@ import (
 	"testing"
 )
 
-func build(host string) []byte {
-	name := []byte(host)
+func ext(kind uint16, data []byte) []byte {
+	e := binary.BigEndian.AppendUint16(nil, kind)
+	e = binary.BigEndian.AppendUint16(e, uint16(len(data)))
 
-	sni := []byte{0x00, 0x00}
-	sni = binary.BigEndian.AppendUint16(sni, uint16(len(name)+5))
-	sni = binary.BigEndian.AppendUint16(sni, uint16(len(name)+3))
-	sni = append(sni, 0x00)
-	sni = binary.BigEndian.AppendUint16(sni, uint16(len(name)))
-	sni = append(sni, name...)
+	return append(e, data...)
+}
 
-	extensions := binary.BigEndian.AppendUint16(nil, uint16(len(sni)))
-	extensions = append(extensions, sni...)
+func build(host string, before ...[]byte) []byte {
+	var extensions []byte
+	for _, e := range before {
+		extensions = append(extensions, e...)
+	}
+
+	if host != "" {
+		name := []byte(host)
+
+		list := binary.BigEndian.AppendUint16(nil, uint16(len(name)+3))
+		list = append(list, nameTypeHost)
+		list = binary.BigEndian.AppendUint16(list, uint16(len(name)))
+		list = append(list, name...)
+
+		extensions = append(extensions, ext(extServerName, list)...)
+	}
+
+	block := binary.BigEndian.AppendUint16(nil, uint16(len(extensions)))
+	block = append(block, extensions...)
 
 	body := []byte{0x03, 0x03}
 	body = append(body, bytes.Repeat([]byte{0xab}, 32)...)
 	body = append(body, 0x00)
 	body = append(body, 0x00, 0x02, 0x13, 0x01)
 	body = append(body, 0x01, 0x00)
-	body = append(body, extensions...)
+	body = append(body, block...)
 
 	handshake := []byte{typeClientHello, 0x00, 0x00, 0x00}
 	handshake[1] = byte(len(body) >> 16)
@@ -120,6 +134,8 @@ func TestParseErrors(t *testing.T) {
 		{"one byte short of both headers", build("example.com")[:8], ErrTooShort},
 		{"application data", applicationData, ErrNotHandshake},
 		{"server hello", serverHello, ErrNotClientHello},
+		{"record declares nothing", []byte{0x16, 0x03, 0x01, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00}, ErrTooShort},
+		{"record declares less than a handshake header", []byte{0x16, 0x03, 0x01, 0x00, 0x03, 0x01, 0x00, 0x00, 0x00}, ErrTooShort},
 	}
 
 	for _, c := range cases {
