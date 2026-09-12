@@ -11,6 +11,8 @@ import (
 var (
 	dll       = syscall.NewLazyDLL("WinDivert.dll")
 	procOpen  = dll.NewProc("WinDivertOpen")
+	procRecv  = dll.NewProc("WinDivertRecv")
+	procSend  = dll.NewProc("WinDivertSend")
 	procClose = dll.NewProc("WinDivertClose")
 )
 
@@ -46,6 +48,52 @@ func Open(filter string, mode Mode) (*Handle, error) {
 	}
 
 	return &Handle{raw: syscall.Handle(raw)}, nil
+}
+
+func (h *Handle) Recv(buf []byte) (int, Addr, error) {
+	var addr Addr
+
+	if len(buf) == 0 {
+		return 0, addr, ErrEmptyBuffer
+	}
+
+	var got uint32
+
+	ok, _, lastErr := procRecv.Call(
+		uintptr(h.raw),
+		uintptr(unsafe.Pointer(&buf[0])),
+		uintptr(len(buf)),
+		uintptr(unsafe.Pointer(&got)),
+		uintptr(unsafe.Pointer(&addr)),
+	)
+
+	if ok == 0 {
+		return 0, addr, fmt.Errorf("divert: recv: %w", lastErr)
+	}
+
+	return int(got), addr, nil
+}
+
+func (h *Handle) Send(packet []byte, addr *Addr) error {
+	if len(packet) == 0 {
+		return ErrNoPacket
+	}
+
+	var sent uint32
+
+	ok, _, lastErr := procSend.Call(
+		uintptr(h.raw),
+		uintptr(unsafe.Pointer(&packet[0])),
+		uintptr(len(packet)),
+		uintptr(unsafe.Pointer(&sent)),
+		uintptr(unsafe.Pointer(addr)),
+	)
+
+	if ok == 0 {
+		return fmt.Errorf("divert: send: %w", lastErr)
+	}
+
+	return nil
 }
 
 func (h *Handle) Close() error {
