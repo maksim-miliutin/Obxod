@@ -3,11 +3,14 @@ package main
 import (
 	"bytes"
 	"encoding/binary"
-	"strings"
 	"testing"
+
+	"obxod/internal/forge"
+	"obxod/internal/hello"
+	"obxod/internal/ip"
 )
 
-func hello(host string) []byte {
+func clientHello(host string) []byte {
 	name := []byte(host)
 
 	list := binary.BigEndian.AppendUint16(nil, uint16(len(name)+3))
@@ -24,9 +27,7 @@ func hello(host string) []byte {
 
 	body := []byte{0x03, 0x03}
 	body = append(body, bytes.Repeat([]byte{0xab}, 32)...)
-	body = append(body, 0x00)
-	body = append(body, 0x00, 0x02, 0x13, 0x01)
-	body = append(body, 0x01, 0x00)
+	body = append(body, 0x00, 0x00, 0x02, 0x13, 0x01, 0x01, 0x00)
 	body = append(body, extensions...)
 
 	handshake := []byte{0x01, byte(len(body) >> 16), byte(len(body) >> 8), byte(len(body))}
@@ -38,71 +39,60 @@ func hello(host string) []byte {
 	return append(record, handshake...)
 }
 
-func packetTo(port uint16, protocol byte, payload []byte) []byte {
-	var transport []byte
-
-	if protocol == 17 {
-		transport = make([]byte, 8)
-		binary.BigEndian.PutUint16(transport[2:4], port)
-		binary.BigEndian.PutUint16(transport[4:6], uint16(8+len(payload)))
-	}
-
-	if protocol == 6 {
-		transport = make([]byte, 20)
-		binary.BigEndian.PutUint16(transport[2:4], port)
-		transport[12] = 5 << 4
-		transport[13] = 0x18
-	}
-
+func packet443(payload []byte) []byte {
+	transport := make([]byte, 20)
+	binary.BigEndian.PutUint16(transport[2:4], 443)
+	transport[12] = 5 << 4
+	transport[13] = 0x18
 	transport = append(transport, payload...)
 
-	packet := make([]byte, 20)
-	packet[0] = 4<<4 | 5
-	packet[8] = 64
-	packet[9] = protocol
-	copy(packet[12:16], []byte{192, 168, 1, 2})
-	copy(packet[16:20], []byte{93, 184, 216, 34})
-	packet = append(packet, transport...)
-	binary.BigEndian.PutUint16(packet[2:4], uint16(len(packet)))
+	p := make([]byte, 20)
+	p[0] = 4<<4 | 5
+	p[8] = 64
+	p[9] = ip.ProtocolTCP
+	copy(p[12:16], []byte{192, 168, 1, 2})
+	copy(p[16:20], []byte{93, 184, 216, 34})
+	p = append(p, transport...)
+	binary.BigEndian.PutUint16(p[2:4], uint16(len(p)))
 
-	return packet
+	return p
 }
 
-func TestDescribe(t *testing.T) {
-	cases := []struct {
-		name   string
-		packet []byte
-		want   string
-	}{
-		{"hello for discord", packetTo(443, 6, hello("gateway.discord.gg")), "tcp to 443, hello for gateway.discord.gg"},
-		{"hello for youtube", packetTo(443, 6, hello("www.youtube.com")), "tcp to 443, hello for www.youtube.com"},
-		{"plain tcp data", packetTo(443, 6, []byte{0x17, 0x03, 0x03, 0x00, 0x10}), "tcp to 443, 5 bytes"},
-		{"voice datagram", packetTo(50021, 17, bytes.Repeat([]byte{0xcd}, 200)), "udp to 50021, 200 bytes"},
-		{"empty", nil, "not ipv4"},
-		{"version six", []byte{6 << 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, "not ipv4"},
+// The whole point of commit 12: a hello for the chosen host yields a valid copy
+// that sits ahead of the original, and everything else is left untouched.
+func TestChosenHostIsCopied(t *testing.T) {
+	packet := packet443(clientHello("gateway.discord.gg"))
+
+	found, ok := hello.Found(packet)
+	if !ok || found.Host != "gateway.discord.gg" {
+		t.Fatalf("host not recognised: %v %q", ok, found.Host)
 	}
 
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			if got := describe(c.packet); got != c.want {
-				t.Errorf("describe = %q, want %q", got, c.want)
+	copied, err := forge.Copy(packet, forge.Recipe{TTL: 4})
+	if err != nil {
+		t.Fatalf("forge.Copy: %v", err)
+	}
+
+	if copied[8] != 4 {
+		t.Errorf("copy ttl = %d, want 4", copied[8])
+	}
+
+	if !bytes.Equal(packet, packet443(clientHello("gateway.discord.gg"))) {
+		t.Error("the original packet was modified")
+	}
+}
+
+func TestOtherTrafficIsNotAHello(t *testing.T) {
+	cases := map[string][]byte{
+		"plain data": packet443([]byte{0x17, 0x03, 0x03, 0x00, 0x05}),
+		"bare ack":   packet443(nil),
+	}
+
+	for name, packet := range cases {
+		t.Run(name, func(t *testing.T) {
+			if _, ok := hello.Found(packet); ok {
+				t.Error("plain traffic taken for a hello")
 			}
 		})
-	}
-}
-
-func TestDescribeSurvivesTruncation(t *testing.T) {
-	packet := packetTo(443, 6, hello("gateway.discord.gg"))
-
-	for cut := 0; cut <= len(packet); cut++ {
-		got := describe(packet[:cut])
-
-		if strings.Contains(got, "gateway.discord.gg") && cut < len(packet) {
-			continue
-		}
-
-		if got == "" {
-			t.Fatalf("cut %d: describe said nothing", cut)
-		}
 	}
 }
