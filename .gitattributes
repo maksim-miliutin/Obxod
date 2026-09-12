@@ -1,0 +1,7 @@
+* text=auto eol=lf
+*.go text eol=lf
+*.mod text eol=lf
+*.yml text eol=lf
+*.md text eol=lf
+*.png binary
+*.ico binary
