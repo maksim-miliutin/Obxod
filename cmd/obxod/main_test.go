@@ -10,6 +10,8 @@ import (
 	"obxod/internal/forge"
 	"obxod/internal/hello"
 	"obxod/internal/ip"
+	"obxod/internal/rules"
+	"strings"
 )
 
 func clientHello(host string) []byte {
@@ -204,22 +206,26 @@ func TestDecoyAndCutBothGoOut(t *testing.T) {
 
 	cases := []struct {
 		name    string
-		ttl     uint8
+		rule    string
 		decoy   string
-		where   string
 		want    int
 		ownSend bool
 	}{
-		{"decoy alone", 4, "auto", "", 1, false},
-		{"cut alone", 0, "", "name", 2, true},
-		{"decoy and cut", 4, "auto", "name", 3, true},
+		{"decoy alone", "updates.discord.com=ttl:4,decoy", "auto", 1, false},
+		{"cut alone", "updates.discord.com=cut:name", "", 2, true},
+		{"decoy and cut", "updates.discord.com=ttl:4,decoy,cut:name", "auto", 3, true},
 	}
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			r := &recorder{}
 
-			sent, err := forward(r, packet, addr, []string{host}, c.ttl, 0, false, c.decoy, c.where, true)
+			set, err := rules.ParseAll([]string{c.rule})
+			if err != nil {
+				t.Fatalf("ParseAll: %v", err)
+			}
+
+			sent, err := forward(r, packet, addr, set, true)
 			if err != nil {
 				t.Fatalf("forward: %v", err)
 			}
@@ -244,7 +250,7 @@ func TestDecoyAndCutBothGoOut(t *testing.T) {
 				}
 			}
 
-			if c.where != "" {
+			if strings.Contains(c.rule, "cut") {
 				halves := r.sent[len(r.sent)-2:]
 
 				for _, half := range halves {
@@ -254,6 +260,40 @@ func TestDecoyAndCutBothGoOut(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestPlanSpreadsFlagsOverHosts(t *testing.T) {
+	set, err := plan(nil, "discord.com, discord.gg", 0, 100000, false, "auto", "name")
+	if err != nil {
+		t.Fatalf("plan: %v", err)
+	}
+
+	if len(set) != 2 {
+		t.Fatalf("plan made %d rules, want 2", len(set))
+	}
+
+	for _, r := range set {
+		if r.BadSeq != 100000 || r.Decoy != "auto" || r.Cut != "name" {
+			t.Errorf("rule %+v lost part of the flags", r)
+		}
+	}
+}
+
+func TestPlanPrefersExplicitRules(t *testing.T) {
+	set, err := plan([]string{"discord.gg=ttl:2,cut:start"}, "ignored.example", 4, 0, false, "", "")
+	if err != nil {
+		t.Fatalf("plan: %v", err)
+	}
+
+	if len(set) != 1 || set[0].Host != "discord.gg" || set[0].TTL != 2 {
+		t.Errorf("plan = %+v, want the rule as written", set)
+	}
+}
+
+func TestPlanNeedsSomething(t *testing.T) {
+	if _, err := plan(nil, "discord.com", 0, 0, false, "", ""); err == nil {
+		t.Error("a plan with no way to bypass was accepted")
 	}
 }
 

@@ -12,6 +12,7 @@ import (
 	"obxod/internal/forge"
 	"obxod/internal/hello"
 	"obxod/internal/ip"
+	"obxod/internal/rules"
 	"obxod/internal/udp"
 )
 
@@ -27,6 +28,9 @@ func main() {
 }
 
 func run() error {
+	var ruleTexts repeated
+
+	flag.Var(&ruleTexts, "rule", "a rule per site, repeatable: host=way,way (ways: ttl:4 badseq:100000 badsum decoy decoy:name cut:name|after|start)")
 	hosts := flag.String("host", "", "sites to work on, comma separated; a bare domain covers its subdomains, \"all\" covers everything")
 	ttl := flag.Int("ttl", 0, "hops the forged copy may live; zero leaves the original ttl alone")
 	badseq := flag.Uint("badseq", 0, "shift the copy's sequence number by this much")
@@ -37,17 +41,13 @@ func run() error {
 	wet := flag.Bool("wet", false, "actually send copies; off by default, only reports")
 	flag.Parse()
 
-	watched := parseHosts(*hosts)
-	if len(watched) == 0 {
-		return fmt.Errorf("give -host, e.g. -host discord.com,discord.gg,discordapp.com")
+	set, err := plan(ruleTexts, *hosts, uint8(*ttl), uint32(*badseq), *badsum, *decoy, *where)
+	if err != nil {
+		return err
 	}
 
 	// An untouched copy is a second identical hello: the server sees the payload
 	// twice and drops the connection, which looks like the bypass making things worse.
-	if *wet && *ttl == 0 && *badseq == 0 && !*badsum && *where == "" && *decoy == "" {
-		return fmt.Errorf("give -ttl, -badseq, -badsum, -decoy or -cut: a copy with nothing wrong would break the connection")
-	}
-
 	outbound, err := filter.Outbound(voice, *noQUIC)
 	if err != nil {
 		return err
@@ -64,7 +64,11 @@ func run() error {
 		mode = "sending copies"
 	}
 
-	fmt.Printf("watching %s, %s, %s\n", strings.Join(watched, " "), spoils(uint8(*ttl), uint32(*badseq), *badsum), mode)
+	fmt.Printf("%s\n", mode)
+
+	for _, r := range set {
+		fmt.Printf("  %s: %s\n", r.Host, describe(r))
+	}
 
 	buf := make([]byte, maxPacket)
 
@@ -88,7 +92,7 @@ func run() error {
 			continue
 		}
 
-		sent, err := forward(h, packet, &addr, watched, uint8(*ttl), uint32(*badseq), *badsum, *decoy, *where, *wet)
+		sent, err := forward(h, packet, &addr, set, *wet)
 		if err != nil {
 			return err
 		}
@@ -111,32 +115,37 @@ type sender interface {
 
 // forward returns true when it already put the packet on the wire itself, which
 // happens for a cut: the original must not follow its own halves.
-func forward(h sender, packet []byte, addr *divert.Addr, watched []string, ttl uint8, badseq uint32, badsum bool, decoy string, where string, wet bool) (bool, error) {
+func forward(h sender, packet []byte, addr *divert.Addr, set rules.Set, wet bool) (bool, error) {
 	found, ok := hello.Found(packet)
-	if !ok || !watches(watched, found.Host) {
+	if !ok {
+		return false, nil
+	}
+
+	r, ok := set.For(found.Host)
+	if !ok {
 		return false, nil
 	}
 
 	// The decoy goes first and the real hello follows, cut or whole: an inspector
 	// that reads the decoy and then finds no name in either half has nothing to match.
-	if ttl != 0 || badseq != 0 || badsum || decoy != "" {
-		if err := fake(h, packet, addr, found, ttl, badseq, badsum, decoy, wet); err != nil {
+	if r.TTL != 0 || r.BadSeq != 0 || r.BadSum || r.Decoy != "" {
+		if err := fake(h, packet, addr, found, r, wet); err != nil {
 			return false, err
 		}
 	}
 
-	if where != "" {
-		return split(h, packet, addr, found, where, wet)
+	if r.Cut != "" {
+		return split(h, packet, addr, found, r.Cut, wet)
 	}
 
 	return false, nil
 }
 
-func fake(h sender, packet []byte, addr *divert.Addr, found hello.Outgoing, ttl uint8, badseq uint32, badsum bool, decoy string, wet bool) error {
-	recipe := forge.Recipe{TTL: ttl, SeqDelta: badseq, BadSum: badsum}
+func fake(h sender, packet []byte, addr *divert.Addr, found hello.Outgoing, r rules.Rule, wet bool) error {
+	recipe := forge.Recipe{TTL: r.TTL, SeqDelta: r.BadSeq, BadSum: r.BadSum}
 
-	if decoy != "" {
-		name := decoy
+	if r.Decoy != "" {
+		name := r.Decoy
 		if name == "auto" {
 			name = decoyFor(found.Host)
 		}
@@ -157,12 +166,12 @@ func fake(h sender, packet []byte, addr *divert.Addr, found hello.Outgoing, ttl 
 	}
 
 	if !wet {
-		fmt.Printf("  %s: would send a %d byte copy (%s%s)\n", found.Host, len(copied), spoils(ttl, badseq, badsum), wearing(recipe.Name))
+		fmt.Printf("  %s: would send a %d byte copy (%s%s)\n", found.Host, len(copied), spoils(r.TTL, r.BadSeq, r.BadSum), wearing(recipe.Name))
 
 		return nil
 	}
 
-	fmt.Printf("  %s: copy sent ahead (%s%s)\n", found.Host, spoils(ttl, badseq, badsum), wearing(recipe.Name))
+	fmt.Printf("  %s: copy sent ahead (%s%s)\n", found.Host, spoils(r.TTL, r.BadSeq, r.BadSum), wearing(recipe.Name))
 
 	return h.Send(copied, addr)
 }
@@ -299,4 +308,88 @@ func isQUIC(packet []byte) bool {
 	}
 
 	return datagram.DstPort == 443
+}
+
+type repeated []string
+
+func (r *repeated) String() string {
+	return strings.Join(*r, " ")
+}
+
+func (r *repeated) Set(text string) error {
+	*r = append(*r, text)
+
+	return nil
+}
+
+// plan turns whatever the command line carried into rules: either -rule entries,
+// or the older single-strategy flags spread over the hosts in -host.
+func plan(texts []string, hosts string, ttl uint8, badseq uint32, badsum bool, decoy string, where string) (rules.Set, error) {
+	if len(texts) > 0 {
+		return rules.ParseAll(texts)
+	}
+
+	var ways []string
+
+	if ttl != 0 {
+		ways = append(ways, fmt.Sprintf("ttl:%d", ttl))
+	}
+
+	if badseq != 0 {
+		ways = append(ways, fmt.Sprintf("badseq:%d", badseq))
+	}
+
+	if badsum {
+		ways = append(ways, "badsum")
+	}
+
+	if decoy != "" {
+		ways = append(ways, "decoy:"+decoy)
+	}
+
+	if where != "" {
+		ways = append(ways, "cut:"+where)
+	}
+
+	if len(ways) == 0 {
+		return nil, fmt.Errorf("say what to do: -rule host=way,way or the -ttl, -badseq, -badsum, -decoy and -cut flags")
+	}
+
+	var texts2 []string
+
+	for _, host := range parseHosts(hosts) {
+		texts2 = append(texts2, host+"="+strings.Join(ways, ","))
+	}
+
+	if len(texts2) == 0 {
+		return nil, fmt.Errorf("give -host, e.g. -host discord.com,discord.gg, or use -rule")
+	}
+
+	return rules.ParseAll(texts2)
+}
+
+func describe(r rules.Rule) string {
+	var named []string
+
+	if r.TTL != 0 {
+		named = append(named, fmt.Sprintf("ttl %d", r.TTL))
+	}
+
+	if r.BadSeq != 0 {
+		named = append(named, fmt.Sprintf("badseq %d", r.BadSeq))
+	}
+
+	if r.BadSum {
+		named = append(named, "badsum")
+	}
+
+	if r.Decoy != "" {
+		named = append(named, "decoy "+r.Decoy)
+	}
+
+	if r.Cut != "" {
+		named = append(named, "cut at "+r.Cut)
+	}
+
+	return strings.Join(named, " + ")
 }
