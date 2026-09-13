@@ -12,6 +12,7 @@ import (
 	"obxod/internal/forge"
 	"obxod/internal/hello"
 	"obxod/internal/ip"
+	"obxod/internal/link"
 	"obxod/internal/rules"
 	"obxod/internal/sweep"
 	"strings"
@@ -228,7 +229,7 @@ func TestDecoyAndCutBothGoOut(t *testing.T) {
 				t.Fatalf("ParseAll: %v", err)
 			}
 
-			sent, err := forward(r, packet, addr, set, attempt.New(time.Minute), nil, true)
+			sent, err := forward(r, packet, addr, set, attempt.New(time.Minute), link.New(), nil, true)
 			if err != nil {
 				t.Fatalf("forward: %v", err)
 			}

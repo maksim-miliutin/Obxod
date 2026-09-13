@@ -15,6 +15,7 @@ import (
 	"obxod/internal/forge"
 	"obxod/internal/hello"
 	"obxod/internal/ip"
+	"obxod/internal/link"
 	"obxod/internal/replies"
 	"obxod/internal/rules"
 	"obxod/internal/sweep"
@@ -95,7 +96,7 @@ func run() error {
 
 	var guard sync.Mutex
 
-	answered := make(map[string]bool)
+	health := link.New()
 
 	go func() {
 		watch := replies.Watch{
@@ -112,7 +113,8 @@ func run() error {
 					return
 				}
 
-				fmt.Printf("  %s: reset by the other side, the handshake was killed\n", host)
+				fmt.Printf("  %s on port %d: reset by the other side\n", host, port)
+				health.Forget(port)
 
 				guard.Lock()
 				defer guard.Unlock()
@@ -122,21 +124,12 @@ func run() error {
 				}
 			},
 			Data: func(port uint16) {
-				host, known := tries.HostOn(port)
-				if !known {
-					return
-				}
-
-				guard.Lock()
-				first := !answered[host]
-				answered[host] = true
-				guard.Unlock()
-
+				host, first := health.Data(port, time.Now())
 				if !first {
 					return
 				}
 
-				fmt.Printf("  %s: the server answered, this way is through\n", host)
+				fmt.Printf("  %s on port %d: the server answered\n", host, port)
 			},
 		}
 
@@ -203,9 +196,14 @@ func run() error {
 			}
 		}
 
+		for _, gone := range health.WentQuiet(time.Now(), 8*time.Second) {
+			fmt.Printf("  %s on port %d: answered %d times then went silent for %s, the connection was killed\n",
+				gone.Host, gone.Port, gone.Packets, gone.Silence.Round(time.Second))
+		}
+
 		guard.Unlock()
 
-		sent, err := forward(h, packet, &addr, set, tries, hunt, *wet)
+		sent, err := forward(h, packet, &addr, set, tries, health, hunt, *wet)
 		if err != nil {
 			return err
 		}
@@ -228,7 +226,7 @@ type sender interface {
 
 // forward returns true when it already put the packet on the wire itself, which
 // happens for a cut: the original must not follow its own halves.
-func forward(h sender, packet []byte, addr *divert.Addr, set rules.Set, tries *attempt.Tracker, watcher *sweep.Sweep, wet bool) (bool, error) {
+func forward(h sender, packet []byte, addr *divert.Addr, set rules.Set, tries *attempt.Tracker, health *link.Health, watcher *sweep.Sweep, wet bool) (bool, error) {
 	found, ok := hello.Found(packet)
 	if !ok {
 		return false, nil
@@ -244,6 +242,8 @@ func forward(h sender, packet []byte, addr *divert.Addr, set rules.Set, tries *a
 	if repeat {
 		fmt.Printf("  %s: asking again, so this way is not getting through\n", found.Host)
 	}
+
+	health.Hello(found.Host, found.SrcPort, time.Now())
 
 	if watcher != nil && watcher.Host() == found.Host {
 		watcher.Saw(repeat)
