@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"testing"
 
+	"obxod/internal/cut"
 	"obxod/internal/forge"
 	"obxod/internal/hello"
 	"obxod/internal/ip"
@@ -22,8 +23,15 @@ func clientHello(host string) []byte {
 	sni = binary.BigEndian.AppendUint16(sni, uint16(len(list)))
 	sni = append(sni, list...)
 
-	extensions := binary.BigEndian.AppendUint16(nil, uint16(len(sni)))
+	// Real hellos carry more extensions after the name; without one, "after" has
+	// nothing left to cut.
+	trailing := binary.BigEndian.AppendUint16(nil, 0x0015)
+	trailing = binary.BigEndian.AppendUint16(trailing, 8)
+	trailing = append(trailing, bytes.Repeat([]byte{0x00}, 8)...)
+
+	extensions := binary.BigEndian.AppendUint16(nil, uint16(len(sni)+len(trailing)))
 	extensions = append(extensions, sni...)
+	extensions = append(extensions, trailing...)
 
 	body := []byte{0x03, 0x03}
 	body = append(body, bytes.Repeat([]byte{0xab}, 32)...)
@@ -94,5 +102,58 @@ func TestOtherTrafficIsNotAHello(t *testing.T) {
 				t.Error("plain traffic taken for a hello")
 			}
 		})
+	}
+}
+
+// The bug this guards: splitting just past the name leaves the whole name in the
+// first packet, so an inspector reading packets one by one still sees it.
+func TestCutPointBreaksTheName(t *testing.T) {
+	const host = "updates.discord.com"
+
+	packet := packet443(clientHello(host))
+
+	found, ok := hello.Found(packet)
+	if !ok {
+		t.Fatal("hello went unrecognised")
+	}
+
+	// Only a cut through the name leaves neither packet holding it whole. The other
+	// two aim at inspectors that judge a stream by its first packet.
+	cases := map[string]bool{
+		"name":  true,
+		"after": false,
+		"start": false,
+	}
+
+	for where, wantBroken := range cases {
+		t.Run(where, func(t *testing.T) {
+			point, err := pointFor(found, where)
+			if err != nil {
+				t.Fatalf("pointFor: %v", err)
+			}
+
+			first, second, err := cut.At(packet, point)
+			if err != nil {
+				t.Fatalf("cut.At: %v", err)
+			}
+
+			broken := !bytes.Contains(first, []byte(host)) && !bytes.Contains(second, []byte(host))
+
+			if broken != wantBroken {
+				t.Errorf("name broken across packets = %v, want %v", broken, wantBroken)
+			}
+
+			joined := append(append([]byte(nil), first[40:]...), second[40:]...)
+
+			if !bytes.Contains(joined, []byte(host)) {
+				t.Error("the name did not survive being put back together")
+			}
+		})
+	}
+}
+
+func TestCutPointRejectsNonsense(t *testing.T) {
+	if _, err := pointFor(hello.Outgoing{Host: "x"}, "sideways"); err == nil {
+		t.Error("an unknown cut point was accepted")
 	}
 }

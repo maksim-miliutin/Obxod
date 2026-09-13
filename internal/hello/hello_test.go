@@ -116,3 +116,25 @@ func TestFoundSurvivesTruncation(t *testing.T) {
 		}
 	}
 }
+
+func TestFoundNameEnd(t *testing.T) {
+	const host = "updates.discord.com"
+
+	packet := packetTo(443, ip.ProtocolTCP, clientHello(host))
+
+	out, ok := Found(packet)
+	if !ok {
+		t.Fatal("hello went unrecognised")
+	}
+
+	payload := packet[40:]
+
+	if out.NameEnd <= 0 || out.NameEnd > len(payload) {
+		t.Fatalf("NameEnd = %d, outside a payload of %d", out.NameEnd, len(payload))
+	}
+
+	// Everything before the split point ends with the name, nothing of it spills past.
+	if !bytes.HasSuffix(payload[:out.NameEnd], []byte(host)) {
+		t.Errorf("payload up to %d does not end with the host name", out.NameEnd)
+	}
+}

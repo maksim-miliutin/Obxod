@@ -8,6 +8,11 @@ import (
 
 type Outgoing struct {
 	Host string
+
+	// NameStart and NameEnd bracket the host name inside the TCP payload. Split
+	// between them and no single packet carries the whole name.
+	NameStart int
+	NameEnd   int
 }
 
 // Found reports a TLS client hello leaving for port 443 and the site it names.
@@ -42,5 +47,9 @@ func Found(packet []byte) (Outgoing, bool) {
 		return Outgoing{}, false
 	}
 
-	return Outgoing{Host: name.Host}, true
+	return Outgoing{
+		Host:      name.Host,
+		NameStart: name.Offset,
+		NameEnd:   name.Offset + len(name.Host),
+	}, true
 }
