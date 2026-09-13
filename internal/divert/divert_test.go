@@ -64,7 +64,7 @@ func TestOpenRefusesUnknownMode(t *testing.T) {
 }
 
 func TestFiltersWeBuildPassTheGuard(t *testing.T) {
-	outbound, err := filter.Outbound([]filter.PortRange{{From: 19294, To: 19344}})
+	outbound, err := filter.Outbound([]filter.PortRange{{From: 19294, To: 19344}}, false)
 	if err != nil {
 		t.Fatalf("filter.Outbound: %v", err)
 	}

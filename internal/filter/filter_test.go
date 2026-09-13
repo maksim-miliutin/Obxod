@@ -38,7 +38,7 @@ func TestOutbound(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			got, err := Outbound(c.voice)
+			got, err := Outbound(c.voice, false)
 			if err != nil {
 				t.Fatalf("Outbound: %v", err)
 			}
@@ -64,7 +64,7 @@ func TestOutboundErrors(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			got, err := Outbound(c.voice)
+			got, err := Outbound(c.voice, false)
 			if !errors.Is(err, c.want) {
 				t.Errorf("err = %v, want %v", err, c.want)
 			}
@@ -92,7 +92,7 @@ func TestRepliesLeaveLoopbackAlone(t *testing.T) {
 }
 
 func TestBracketsBalance(t *testing.T) {
-	outbound, err := Outbound(discordVoice)
+	outbound, err := Outbound(discordVoice, false)
 	if err != nil {
 		t.Fatalf("Outbound: %v", err)
 	}
@@ -121,7 +121,7 @@ func TestBracketsBalance(t *testing.T) {
 }
 
 func TestOutboundKeepsOurOwnPacketsOut(t *testing.T) {
-	f, err := Outbound(discordVoice)
+	f, err := Outbound(discordVoice, false)
 	if err != nil {
 		t.Fatalf("Outbound: %v", err)
 	}
@@ -130,5 +130,25 @@ func TestOutboundKeepsOurOwnPacketsOut(t *testing.T) {
 		if !strings.Contains(f, guard) {
 			t.Errorf("filter lost %q", guard)
 		}
+	}
+}
+
+func TestOutboundCatchesQUIC(t *testing.T) {
+	with, err := Outbound(discordVoice, true)
+	if err != nil {
+		t.Fatalf("Outbound: %v", err)
+	}
+
+	if !strings.Contains(with, "udp.DstPort == 443") {
+		t.Error("quic was asked for but 443 over udp is not in the filter")
+	}
+
+	without, err := Outbound(discordVoice, false)
+	if err != nil {
+		t.Fatalf("Outbound: %v", err)
+	}
+
+	if strings.Contains(without, "udp.DstPort == 443") {
+		t.Error("quic was not asked for yet 443 over udp is in the filter")
 	}
 }

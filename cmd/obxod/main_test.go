@@ -304,3 +304,38 @@ func TestParseHostsDropsBlanks(t *testing.T) {
 		t.Errorf("parseHosts = %v, want nothing", got)
 	}
 }
+
+func datagramTo(port uint16) []byte {
+	datagram := make([]byte, 8)
+	binary.BigEndian.PutUint16(datagram[0:2], 51234)
+	binary.BigEndian.PutUint16(datagram[2:4], port)
+	binary.BigEndian.PutUint16(datagram[4:6], 8+4)
+	datagram = append(datagram, 0xc0, 0x00, 0x00, 0x01)
+
+	packet := make([]byte, 20)
+	packet[0] = 4<<4 | 5
+	packet[8] = 64
+	packet[9] = ip.ProtocolUDP
+	packet = append(packet, datagram...)
+	binary.BigEndian.PutUint16(packet[2:4], uint16(len(packet)))
+
+	return packet
+}
+
+func TestIsQUIC(t *testing.T) {
+	if !isQUIC(datagramTo(443)) {
+		t.Error("a datagram to 443 was not taken for quic")
+	}
+
+	if isQUIC(datagramTo(50021)) {
+		t.Error("a voice datagram was taken for quic")
+	}
+
+	if isQUIC(packet443(clientHello("discord.com"))) {
+		t.Error("a tcp hello was taken for quic")
+	}
+
+	if isQUIC(nil) {
+		t.Error("an empty packet was taken for quic")
+	}
+}

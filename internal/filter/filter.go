@@ -18,8 +18,12 @@ type PortRange struct {
 	To   uint16
 }
 
-func Outbound(voice []PortRange) (string, error) {
+func Outbound(voice []PortRange, quic bool) (string, error) {
 	clauses := []string{fmt.Sprintf("(tcp.DstPort == %d and tcp.PayloadLength > 0)", httpsPort)}
+
+	if quic {
+		clauses = append(clauses, fmt.Sprintf("udp.DstPort == %d", httpsPort))
+	}
 
 	for _, r := range voice {
 		if r.From == 0 || r.To == 0 {

@@ -11,6 +11,8 @@ import (
 	"obxod/internal/filter"
 	"obxod/internal/forge"
 	"obxod/internal/hello"
+	"obxod/internal/ip"
+	"obxod/internal/udp"
 )
 
 const maxPacket = 0xffff + 40
@@ -31,6 +33,7 @@ func run() error {
 	badsum := flag.Bool("badsum", false, "give the copy a wrong tcp checksum")
 	decoy := flag.String("decoy", "", "put another host name in the copy; \"auto\" makes one of the right length")
 	where := flag.String("cut", "", "split the real hello: name (through the middle of the host name), after (just past it), start (near the record start)")
+	noQUIC := flag.Bool("noquic", false, "drop outgoing quic so the browser falls back to tcp, which we can unblock")
 	wet := flag.Bool("wet", false, "actually send copies; off by default, only reports")
 	flag.Parse()
 
@@ -45,7 +48,7 @@ func run() error {
 		return fmt.Errorf("give -ttl, -badseq, -badsum, -decoy or -cut: a copy with nothing wrong would break the connection")
 	}
 
-	outbound, err := filter.Outbound(voice)
+	outbound, err := filter.Outbound(voice, *noQUIC)
 	if err != nil {
 		return err
 	}
@@ -65,6 +68,8 @@ func run() error {
 
 	buf := make([]byte, maxPacket)
 
+	var dropped int
+
 	for {
 		n, addr, err := h.Recv(buf)
 		if err != nil {
@@ -72,6 +77,16 @@ func run() error {
 		}
 
 		packet := buf[:n]
+
+		if *noQUIC && isQUIC(packet) {
+			dropped++
+
+			if dropped%50 == 1 {
+				fmt.Printf("  quic dropped: %d so far\n", dropped)
+			}
+
+			continue
+		}
 
 		sent, err := forward(h, packet, &addr, watched, uint8(*ttl), uint32(*badseq), *badsum, *decoy, *where, *wet)
 		if err != nil {
@@ -268,4 +283,20 @@ func watches(watched []string, host string) bool {
 	}
 
 	return false
+}
+
+// isQUIC reports a datagram heading for 443, which is how a browser tries HTTP/3
+// before it settles for tcp.
+func isQUIC(packet []byte) bool {
+	outer, err := ip.Parse(packet)
+	if err != nil || outer.Protocol != ip.ProtocolUDP {
+		return false
+	}
+
+	datagram, err := udp.Parse(outer.Payload)
+	if err != nil {
+		return false
+	}
+
+	return datagram.DstPort == 443
 }
