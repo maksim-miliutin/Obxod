@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"obxod/internal/attempt"
@@ -14,6 +15,7 @@ import (
 	"obxod/internal/forge"
 	"obxod/internal/hello"
 	"obxod/internal/ip"
+	"obxod/internal/replies"
 	"obxod/internal/rules"
 	"obxod/internal/sweep"
 	"obxod/internal/udp"
@@ -83,6 +85,48 @@ func run() error {
 		mode = "sending copies"
 	}
 
+	tries := attempt.New(20 * time.Second)
+
+	eyes, err := divert.Open(filter.Replies(), divert.Sniff)
+	if err != nil {
+		return fmt.Errorf("cannot watch replies: %w", err)
+	}
+	defer eyes.Close()
+
+	var guard sync.Mutex
+
+	go func() {
+		watch := replies.Watch{
+			Reset: func(port uint16) {
+				host, known := tries.HostOn(port)
+				if !known {
+					return
+				}
+
+				fmt.Printf("  %s: reset by the other side, the handshake was killed\n", host)
+
+				guard.Lock()
+				defer guard.Unlock()
+
+				if hunt != nil && hunt.Host() == host {
+					hunt.Saw(true)
+				}
+			},
+			Data: func(port uint16) {
+				host, known := tries.HostOn(port)
+				if !known {
+					return
+				}
+
+				fmt.Printf("  %s: the server answered, this way is through\n", host)
+			},
+		}
+
+		if err := watch.Run(eyes); err != nil {
+			fmt.Fprintf(os.Stderr, "watching replies stopped: %v\n", err)
+		}
+	}()
+
 	fmt.Printf("%s\n", mode)
 
 	for _, r := range set {
@@ -93,8 +137,6 @@ func run() error {
 
 	var dropped int
 	var quiet int
-
-	tries := attempt.New(20 * time.Second)
 
 	for {
 		n, addr, err := h.Recv(buf)
@@ -113,6 +155,8 @@ func run() error {
 
 			continue
 		}
+
+		guard.Lock()
 
 		if hunt != nil {
 			if verdict, done := hunt.Judge(time.Now()); done {
@@ -140,6 +184,8 @@ func run() error {
 				}
 			}
 		}
+
+		guard.Unlock()
 
 		sent, err := forward(h, packet, &addr, set, tries, hunt, *wet)
 		if err != nil {

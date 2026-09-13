@@ -79,3 +79,35 @@ func TestSweepKeepsTheMapSmall(t *testing.T) {
 		t.Errorf("watching %d after everything went stale, want 1", tracker.Watching())
 	}
 }
+
+func TestHostOnPort(t *testing.T) {
+	tracker := New(time.Minute)
+	now := time.Now()
+
+	tracker.Saw("gateway.discord.gg", 54321, 1000, now)
+	tracker.Saw("discord.com", 54322, 2000, now)
+
+	if host, ok := tracker.HostOn(54321); !ok || host != "gateway.discord.gg" {
+		t.Errorf("HostOn(54321) = %q %v, want gateway.discord.gg", host, ok)
+	}
+
+	if host, ok := tracker.HostOn(54322); !ok || host != "discord.com" {
+		t.Errorf("HostOn(54322) = %q %v, want discord.com", host, ok)
+	}
+
+	if _, ok := tracker.HostOn(9999); ok {
+		t.Error("a port we never used was claimed as known")
+	}
+}
+
+func TestHostOnForgetsWithTheRest(t *testing.T) {
+	tracker := New(10 * time.Second)
+	now := time.Now()
+
+	tracker.Saw("gateway.discord.gg", 54321, 1000, now)
+	tracker.Saw("discord.com", 54322, 2000, now.Add(time.Minute))
+
+	if _, ok := tracker.HostOn(54321); ok {
+		t.Error("a stale port is still claimed as known")
+	}
+}
