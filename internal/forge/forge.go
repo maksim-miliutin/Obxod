@@ -12,6 +12,7 @@ import (
 const (
 	ttlAt         = 8
 	ipChecksumAt  = 10
+	tcpSeqAt      = 4
 	tcpChecksumAt = 16
 )
 
@@ -21,7 +22,8 @@ var (
 )
 
 type Recipe struct {
-	TTL uint8 // hops the copy may live; zero keeps whatever the original had
+	TTL      uint8  // hops the copy may live; zero keeps whatever the original had
+	SeqDelta uint32 // added to the sequence number so the server drops the copy; zero leaves it
 }
 
 func Copy(packet []byte, r Recipe) ([]byte, error) {
@@ -48,6 +50,15 @@ func Copy(packet []byte, r Recipe) ([]byte, error) {
 
 	if r.TTL != 0 {
 		copied[ttlAt] = r.TTL
+	}
+
+	// The sequence number feeds the TCP checksum, so damage it before sealing,
+	// or the sum would cover the old number and the copy would die anywhere, not
+	// only at the server that rejects the wrong sequence.
+	if r.SeqDelta != 0 {
+		segment := copied[outer.HeaderLen:]
+		seq := binary.BigEndian.Uint32(segment[tcpSeqAt : tcpSeqAt+4])
+		binary.BigEndian.PutUint32(segment[tcpSeqAt:tcpSeqAt+4], seq+r.SeqDelta)
 	}
 
 	seal(copied, outer)

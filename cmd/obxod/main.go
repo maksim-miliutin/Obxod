@@ -26,6 +26,7 @@ func main() {
 func run() error {
 	host := flag.String("host", "", "send a forged copy ahead of hellos for this site")
 	ttl := flag.Int("ttl", 4, "hops the forged copy may live")
+	badseq := flag.Uint("badseq", 0, "shift the copy's sequence number by this much")
 	wet := flag.Bool("wet", false, "actually send copies; off by default, only reports")
 	flag.Parse()
 
@@ -49,7 +50,7 @@ func run() error {
 		mode = "sending copies"
 	}
 
-	fmt.Printf("watching for %s, ttl %d, %s\n", *host, *ttl, mode)
+	fmt.Printf("watching for %s, ttl %d, badseq %d, %s\n", *host, *ttl, *badseq, mode)
 
 	buf := make([]byte, maxPacket)
 
@@ -61,7 +62,7 @@ func run() error {
 
 		packet := buf[:n]
 
-		if err := forward(h, packet, &addr, *host, uint8(*ttl), *wet); err != nil {
+		if err := forward(h, packet, &addr, *host, uint8(*ttl), uint32(*badseq), *wet); err != nil {
 			return err
 		}
 
@@ -71,13 +72,13 @@ func run() error {
 	}
 }
 
-func forward(h *divert.Handle, packet []byte, addr *divert.Addr, host string, ttl uint8, wet bool) error {
+func forward(h *divert.Handle, packet []byte, addr *divert.Addr, host string, ttl uint8, badseq uint32, wet bool) error {
 	found, ok := hello.Found(packet)
 	if !ok || !strings.EqualFold(found.Host, host) {
 		return nil
 	}
 
-	copied, err := forge.Copy(packet, forge.Recipe{TTL: ttl})
+	copied, err := forge.Copy(packet, forge.Recipe{TTL: ttl, SeqDelta: badseq})
 	if err != nil {
 		fmt.Printf("  %s: cannot copy: %v\n", found.Host, err)
 

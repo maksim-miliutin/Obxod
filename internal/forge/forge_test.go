@@ -203,3 +203,76 @@ func TestCopyFixesAChecksumOffloadLeftWrong(t *testing.T) {
 
 	verify(t, copied)
 }
+
+func seqOf(packet []byte) uint32 {
+	return binary.BigEndian.Uint32(packet[20+tcpSeqAt : 20+tcpSeqAt+4])
+}
+
+func TestCopyShiftsSequence(t *testing.T) {
+	packet := build(ip.ProtocolTCP, 64, []byte("hello"), 0)
+	before := seqOf(packet)
+
+	copied, err := Copy(packet, Recipe{SeqDelta: 100000})
+	if err != nil {
+		t.Fatalf("Copy: %v", err)
+	}
+
+	if got := seqOf(copied); got != before+100000 {
+		t.Errorf("seq = %d, want %d", got, before+100000)
+	}
+
+	// The point of badseq: the number is wrong for the stream, yet the checksum
+	// is right for the packet, so it travels intact until the server rejects it.
+	verify(t, copied)
+}
+
+func TestCopyKeepsSequenceWhenNoneAsked(t *testing.T) {
+	packet := build(ip.ProtocolTCP, 64, []byte("hello"), 0)
+	before := seqOf(packet)
+
+	copied, err := Copy(packet, Recipe{TTL: 4})
+	if err != nil {
+		t.Fatalf("Copy: %v", err)
+	}
+
+	if got := seqOf(copied); got != before {
+		t.Errorf("seq = %d, want the original %d", got, before)
+	}
+}
+
+func TestCopySequenceWraps(t *testing.T) {
+	packet := build(ip.ProtocolTCP, 64, []byte("hello"), 0)
+	binary.BigEndian.PutUint32(packet[20+tcpSeqAt:20+tcpSeqAt+4], 0xfffffff0)
+
+	copied, err := Copy(packet, Recipe{SeqDelta: 0x20})
+	if err != nil {
+		t.Fatalf("Copy: %v", err)
+	}
+
+	// 0xfffffff0 + 0x20 wraps to 0x10; the field is 32 bits and must roll over.
+	if got := seqOf(copied); got != 0x10 {
+		t.Errorf("seq = %#x, want 0x10", got)
+	}
+
+	verify(t, copied)
+}
+
+func TestCopyTTLAndSeqTogether(t *testing.T) {
+	packet := build(ip.ProtocolTCP, 64, []byte("hello there"), 0)
+	before := seqOf(packet)
+
+	copied, err := Copy(packet, Recipe{TTL: 3, SeqDelta: 50})
+	if err != nil {
+		t.Fatalf("Copy: %v", err)
+	}
+
+	if copied[ttlAt] != 3 {
+		t.Errorf("ttl = %d, want 3", copied[ttlAt])
+	}
+
+	if got := seqOf(copied); got != before+50 {
+		t.Errorf("seq = %d, want %d", got, before+50)
+	}
+
+	verify(t, copied)
+}
