@@ -18,15 +18,27 @@ type Receiver interface {
 type Watch struct {
 	Reset func(port uint16)
 	Data  func(port uint16)
+
+	// Seen counts every reply the driver hands over, matched to a site or not:
+	// silence here and silence in Reset mean different faults.
+	Seen func(total int)
 }
 
 func (w Watch) Run(h Receiver) error {
 	buf := make([]byte, maxPacket)
 
+	var total int
+
 	for {
 		n, _, err := h.Recv(buf)
 		if err != nil {
 			return err
+		}
+
+		total++
+
+		if w.Seen != nil {
+			w.Seen(total)
 		}
 
 		port, reset, ok := read(buf[:n])

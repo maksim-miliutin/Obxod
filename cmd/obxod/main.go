@@ -95,11 +95,20 @@ func run() error {
 
 	var guard sync.Mutex
 
+	answered := make(map[string]bool)
+
 	go func() {
 		watch := replies.Watch{
+			Seen: func(total int) {
+				if total%200 == 1 {
+					fmt.Printf("  replies watched: %d so far\n", total)
+				}
+			},
 			Reset: func(port uint16) {
 				host, known := tries.HostOn(port)
 				if !known {
+					fmt.Printf("  reset on port %d, which we never touched\n", port)
+
 					return
 				}
 
@@ -115,6 +124,15 @@ func run() error {
 			Data: func(port uint16) {
 				host, known := tries.HostOn(port)
 				if !known {
+					return
+				}
+
+				guard.Lock()
+				first := !answered[host]
+				answered[host] = true
+				guard.Unlock()
+
+				if !first {
 					return
 				}
 
