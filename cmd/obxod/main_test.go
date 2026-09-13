@@ -229,7 +229,7 @@ func TestDecoyAndCutBothGoOut(t *testing.T) {
 				t.Fatalf("ParseAll: %v", err)
 			}
 
-			sent, err := forward(r, packet, addr, set, attempt.New(time.Minute), link.New(), nil, true)
+			sent, err := forward(r, packet, addr, set, attempt.New(time.Minute), link.New(), nil, nil, true)
 			if err != nil {
 				t.Fatalf("forward: %v", err)
 			}
@@ -399,5 +399,55 @@ func TestWithCandidateOnAnEmptyBase(t *testing.T) {
 
 	if set := withCandidate(nil, candidate); len(set) != 1 {
 		t.Errorf("set holds %d rules, want just the candidate", len(set))
+	}
+}
+
+func TestOverlapGoesOutAsTwoPackets(t *testing.T) {
+	const host = "updates.discord.com"
+
+	packet := packet443(clientHello(host))
+	pattern := clientHello("www.4pda.to")
+
+	set, err := rules.ParseAll([]string{host + "=overlap:1"})
+	if err != nil {
+		t.Fatalf("ParseAll: %v", err)
+	}
+
+	r := &recorder{}
+
+	sent, err := forward(r, packet, &divert.Addr{}, set, attempt.New(time.Minute), link.New(), nil, pattern, true)
+	if err != nil {
+		t.Fatalf("forward: %v", err)
+	}
+
+	if !sent {
+		t.Error("overlap did not take over sending, so the original would follow its own halves")
+	}
+
+	if len(r.sent) != 2 {
+		t.Fatalf("sent %d packets, want 2", len(r.sent))
+	}
+
+	if !bytes.Contains(r.sent[0], []byte("www.4pda.to")) {
+		t.Error("the first packet does not carry the recorded hello")
+	}
+}
+
+func TestOverlapWithoutAPatternIsRefused(t *testing.T) {
+	set, err := rules.ParseAll([]string{"updates.discord.com=overlap:1"})
+	if err != nil {
+		t.Fatalf("ParseAll: %v", err)
+	}
+
+	r := &recorder{}
+
+	sent, err := forward(r, packet443(clientHello("updates.discord.com")), &divert.Addr{}, set,
+		attempt.New(time.Minute), link.New(), nil, nil, true)
+	if err != nil {
+		t.Fatalf("forward: %v", err)
+	}
+
+	if sent || len(r.sent) != 0 {
+		t.Error("an overlap with no pattern put something on the wire")
 	}
 }

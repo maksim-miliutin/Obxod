@@ -21,28 +21,78 @@ var (
 	ErrNoPayload  = errors.New("cut: the packet carries nothing to split")
 	ErrBadPoint   = errors.New("cut: the split point lies outside the payload")
 	ErrNoRoomLeft = errors.New("cut: a split needs at least one byte on each side")
+	ErrNoPattern  = errors.New("cut: an overlap needs a recorded hello to lay over")
 )
+
+// Overlap splits the packet like At, but sends the first half from a sequence
+// number that many bytes earlier, filled with a hello recorded from another site.
+//
+// The server counts from where it left off, finds those bytes behind its window
+// and drops them, keeping only the real ones. An inspector that just stacks
+// payloads in the order they arrive reads the recorded hello instead, and stops
+// caring about the connection.
+//
+// Both halves together still carry the whole original payload, so nothing the
+// server rebuilds changes.
+func Overlap(packet []byte, pattern []byte, point int) ([]byte, []byte, error) {
+	if len(pattern) == 0 {
+		return nil, nil, ErrNoPattern
+	}
+
+	outer, segment, err := layers(packet)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if point < 0 || point > len(segment.Payload) {
+		return nil, nil, ErrBadPoint
+	}
+
+	if point == 0 || point == len(segment.Payload) {
+		return nil, nil, ErrNoRoomLeft
+	}
+
+	headers := outer.HeaderLen + segment.HeaderLen
+
+	ahead := make([]byte, 0, len(pattern)+point)
+	ahead = append(ahead, pattern...)
+	ahead = append(ahead, segment.Payload[:point]...)
+
+	first := build(packet, headers, ahead, segment.Seq-uint32(len(pattern)), outer)
+	second := build(packet, headers, segment.Payload[point:], segment.Seq+uint32(point), outer)
+
+	return first, second, nil
+}
+
+func layers(packet []byte) (ip.Header, tcp.Header, error) {
+	outer, err := ip.Parse(packet)
+	if err != nil {
+		return ip.Header{}, tcp.Header{}, err
+	}
+
+	if outer.Protocol != ip.ProtocolTCP {
+		return ip.Header{}, tcp.Header{}, ErrNotTCP
+	}
+
+	segment, err := tcp.Parse(outer.Payload)
+	if err != nil {
+		return ip.Header{}, tcp.Header{}, err
+	}
+
+	if len(segment.Payload) == 0 {
+		return ip.Header{}, tcp.Header{}, ErrNoPayload
+	}
+
+	return outer, segment, nil
+}
 
 // At splits the packet in two at the given offset into the TCP payload. Both
 // halves are real data, not copies: together they carry exactly what the
 // original carried, so the server rebuilds the same stream.
 func At(packet []byte, point int) ([]byte, []byte, error) {
-	outer, err := ip.Parse(packet)
+	outer, segment, err := layers(packet)
 	if err != nil {
 		return nil, nil, err
-	}
-
-	if outer.Protocol != ip.ProtocolTCP {
-		return nil, nil, ErrNotTCP
-	}
-
-	segment, err := tcp.Parse(outer.Payload)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	if len(segment.Payload) == 0 {
-		return nil, nil, ErrNoPayload
 	}
 
 	if point < 0 || point > len(segment.Payload) {

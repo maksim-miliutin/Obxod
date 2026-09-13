@@ -21,6 +21,10 @@ type Rule struct {
 	BadSum bool
 	Decoy  string // empty, "auto", or a name of the very same length
 	Cut    string // empty, "name", "after" or "start"
+
+	// Overlap says how many real bytes ride in the first half, behind a recorded
+	// hello laid over earlier sequence numbers. Zero means no overlap.
+	Overlap int
 }
 
 // Parse reads one rule, written as host=way,way,way. A way is ttl:4, badseq:100000,
@@ -44,11 +48,18 @@ func Parse(text string) (Rule, error) {
 		}
 	}
 
-	if r.TTL == 0 && r.BadSeq == 0 && !r.BadSum && r.Decoy == "" && r.Cut == "" {
+	if r.Blank() {
 		return Rule{}, ErrNoWay
 	}
 
 	return r, nil
+}
+
+// Blank reports a rule that would do nothing. It lives on the type so that every
+// place asking the question counts the same fields: a new way added to Rule and
+// forgotten here is a rule that silently does nothing.
+func (r Rule) Blank() bool {
+	return r.TTL == 0 && r.BadSeq == 0 && !r.BadSum && r.Decoy == "" && r.Cut == "" && r.Overlap == 0
 }
 
 func (r *Rule) take(way string) error {
@@ -82,6 +93,15 @@ func (r *Rule) take(way string) error {
 		}
 
 		r.BadSeq = uint32(shift)
+
+		return nil
+	case "overlap":
+		at, err := strconv.Atoi(value)
+		if err != nil || at < 1 {
+			return fmt.Errorf("rules: overlap wants how many real bytes go first, at least 1")
+		}
+
+		r.Overlap = at
 
 		return nil
 	case "cut":

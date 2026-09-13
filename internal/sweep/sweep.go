@@ -106,6 +106,12 @@ func Candidates(host string) []rules.Rule {
 		out = append(out, r)
 	}
 
+	// An overlap only works when a pattern was loaded; without one these come back
+	// as "cannot overlap" and cost a few seconds each.
+	add("overlap:1")
+	add("overlap:2")
+	add("overlap:1,badseq:100000,decoy")
+
 	add("decoy,badseq:100000,cut:name")
 	add("decoy,badseq:100000,cut:after")
 	add("decoy,badseq:100000,cut:start")

@@ -124,7 +124,7 @@ func TestCandidatesAreAllUsable(t *testing.T) {
 			t.Errorf("candidate names %q, want the host asked for", r.Host)
 		}
 
-		if r.TTL == 0 && r.BadSeq == 0 && !r.BadSum && r.Decoy == "" && r.Cut == "" {
+		if r.Blank() {
 			t.Error("a candidate does nothing at all")
 		}
 

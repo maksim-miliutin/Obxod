@@ -45,6 +45,7 @@ func run() error {
 	where := flag.String("cut", "", "split the real hello: name (through the middle of the host name), after (just past it), start (near the record start)")
 	sweepHost := flag.String("sweep", "", "try way after way for this site until one stops the retries")
 	seconds := flag.Int("seconds", 12, "how long to give each way while sweeping")
+	patternFile := flag.String("pattern", "", "a recorded hello from an allowed site, used by overlap")
 	silence := flag.Int("silence", 45, "seconds of silence after which a connection counts as killed")
 	noQUIC := flag.Bool("noquic", false, "drop outgoing quic so the browser falls back to tcp, which we can unblock")
 	wet := flag.Bool("wet", false, "actually send copies; off by default, only reports")
@@ -85,6 +86,17 @@ func run() error {
 	mode := "dry run, copies are only reported"
 	if *wet {
 		mode = "sending copies"
+	}
+
+	var pattern []byte
+
+	if *patternFile != "" {
+		pattern, err = os.ReadFile(*patternFile)
+		if err != nil {
+			return fmt.Errorf("cannot read the pattern: %w", err)
+		}
+
+		fmt.Printf("pattern: %d bytes from %s\n", len(pattern), *patternFile)
 	}
 
 	tries := attempt.New(20 * time.Second)
@@ -207,7 +219,7 @@ func run() error {
 
 		guard.Unlock()
 
-		sent, err := forward(h, packet, &addr, set, tries, health, hunt, *wet)
+		sent, err := forward(h, packet, &addr, set, tries, health, hunt, pattern, *wet)
 		if err != nil {
 			return err
 		}
@@ -230,7 +242,7 @@ type sender interface {
 
 // forward returns true when it already put the packet on the wire itself, which
 // happens for a cut: the original must not follow its own halves.
-func forward(h sender, packet []byte, addr *divert.Addr, set rules.Set, tries *attempt.Tracker, health *link.Health, watcher *sweep.Sweep, wet bool) (bool, error) {
+func forward(h sender, packet []byte, addr *divert.Addr, set rules.Set, tries *attempt.Tracker, health *link.Health, watcher *sweep.Sweep, pattern []byte, wet bool) (bool, error) {
 	found, ok := hello.Found(packet)
 	if !ok {
 		return false, nil
@@ -259,6 +271,10 @@ func forward(h sender, packet []byte, addr *divert.Addr, set rules.Set, tries *a
 		if err := fake(h, packet, addr, found, r, wet); err != nil {
 			return false, err
 		}
+	}
+
+	if r.Overlap != 0 {
+		return overlay(h, packet, addr, found, r, pattern, wet)
 	}
 
 	if r.Cut != "" {
@@ -500,6 +516,10 @@ func describe(r rules.Rule) string {
 		named = append(named, "cut at "+r.Cut)
 	}
 
+	if r.Overlap != 0 {
+		named = append(named, fmt.Sprintf("overlap keeping %d", r.Overlap))
+	}
+
 	return strings.Join(named, " + ")
 }
 
@@ -526,6 +546,10 @@ func asRule(r rules.Rule) string {
 		ways = append(ways, "cut:"+r.Cut)
 	}
 
+	if r.Overlap != 0 {
+		ways = append(ways, fmt.Sprintf("overlap:%d", r.Overlap))
+	}
+
 	return strings.Join(ways, ",")
 }
 
@@ -541,4 +565,29 @@ func withCandidate(base rules.Set, r rules.Rule) rules.Set {
 	}
 
 	return out
+}
+
+func overlay(h sender, packet []byte, addr *divert.Addr, found hello.Outgoing, r rules.Rule, pattern []byte, wet bool) (bool, error) {
+	first, second, err := cut.Overlap(packet, pattern, r.Overlap)
+	if err != nil {
+		fmt.Printf("  %s: cannot overlap: %v\n", found.Host, err)
+
+		return false, nil
+	}
+
+	if !wet {
+		fmt.Printf("  %s: would lay %d recorded bytes over the stream, then %d and %d bytes\n",
+			found.Host, len(pattern), len(first), len(second))
+
+		return false, nil
+	}
+
+	fmt.Printf("  %s: %d recorded bytes laid over, then %d and %d bytes\n",
+		found.Host, len(pattern), len(first), len(second))
+
+	if err := h.Send(first, addr); err != nil {
+		return false, err
+	}
+
+	return true, h.Send(second, addr)
 }

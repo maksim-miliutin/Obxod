@@ -166,3 +166,51 @@ func TestParseAllReportsWhichRuleIsWrong(t *testing.T) {
 		t.Errorf("err = %v, want it to carry %v", err, ErrNoHost)
 	}
 }
+
+func TestParseOverlap(t *testing.T) {
+	got, err := Parse("gateway.discord.gg=overlap:1")
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+
+	if got.Overlap != 1 {
+		t.Errorf("Overlap = %d, want 1", got.Overlap)
+	}
+}
+
+func TestParseOverlapRejectsNonsense(t *testing.T) {
+	for _, text := range []string{
+		"a=overlap:0",
+		"a=overlap:-1",
+		"a=overlap:some",
+		"a=overlap",
+	} {
+		t.Run(text, func(t *testing.T) {
+			if _, err := Parse(text); err == nil {
+				t.Error("nonsense was accepted")
+			}
+		})
+	}
+}
+
+func TestBlankCountsEveryWay(t *testing.T) {
+	if !(Rule{Host: "a"}).Blank() {
+		t.Error("a rule with nothing set was not called blank")
+	}
+
+	// Every way, one at a time: a new field forgotten in Blank shows up here.
+	filled := []Rule{
+		{TTL: 1},
+		{BadSeq: 1},
+		{BadSum: true},
+		{Decoy: "auto"},
+		{Cut: "name"},
+		{Overlap: 1},
+	}
+
+	for _, r := range filled {
+		if r.Blank() {
+			t.Errorf("%+v was called blank", r)
+		}
+	}
+}
