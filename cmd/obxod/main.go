@@ -25,7 +25,7 @@ func main() {
 }
 
 func run() error {
-	host := flag.String("host", "", "send a forged copy ahead of hellos for this site")
+	hosts := flag.String("host", "", "sites to work on, comma separated; a bare domain covers its subdomains, \"all\" covers everything")
 	ttl := flag.Int("ttl", 0, "hops the forged copy may live; zero leaves the original ttl alone")
 	badseq := flag.Uint("badseq", 0, "shift the copy's sequence number by this much")
 	badsum := flag.Bool("badsum", false, "give the copy a wrong tcp checksum")
@@ -34,8 +34,9 @@ func run() error {
 	wet := flag.Bool("wet", false, "actually send copies; off by default, only reports")
 	flag.Parse()
 
-	if *host == "" {
-		return fmt.Errorf("give -host, e.g. -host gateway.discord.gg")
+	watched := parseHosts(*hosts)
+	if len(watched) == 0 {
+		return fmt.Errorf("give -host, e.g. -host discord.com,discord.gg,discordapp.com")
 	}
 
 	// An untouched copy is a second identical hello: the server sees the payload
@@ -60,7 +61,7 @@ func run() error {
 		mode = "sending copies"
 	}
 
-	fmt.Printf("watching for %s, %s, %s\n", *host, spoils(uint8(*ttl), uint32(*badseq), *badsum), mode)
+	fmt.Printf("watching %s, %s, %s\n", strings.Join(watched, " "), spoils(uint8(*ttl), uint32(*badseq), *badsum), mode)
 
 	buf := make([]byte, maxPacket)
 
@@ -72,7 +73,7 @@ func run() error {
 
 		packet := buf[:n]
 
-		sent, err := forward(h, packet, &addr, *host, uint8(*ttl), uint32(*badseq), *badsum, *decoy, *where, *wet)
+		sent, err := forward(h, packet, &addr, watched, uint8(*ttl), uint32(*badseq), *badsum, *decoy, *where, *wet)
 		if err != nil {
 			return err
 		}
@@ -95,9 +96,9 @@ type sender interface {
 
 // forward returns true when it already put the packet on the wire itself, which
 // happens for a cut: the original must not follow its own halves.
-func forward(h sender, packet []byte, addr *divert.Addr, host string, ttl uint8, badseq uint32, badsum bool, decoy string, where string, wet bool) (bool, error) {
+func forward(h sender, packet []byte, addr *divert.Addr, watched []string, ttl uint8, badseq uint32, badsum bool, decoy string, where string, wet bool) (bool, error) {
 	found, ok := hello.Found(packet)
-	if !ok || !strings.EqualFold(found.Host, host) {
+	if !ok || !watches(watched, found.Host) {
 		return false, nil
 	}
 
@@ -234,4 +235,37 @@ func decoyFor(host string) string {
 	}
 
 	return strings.Repeat("x", len(host)-len(base)-1) + "." + base
+}
+
+func parseHosts(list string) []string {
+	var watched []string
+
+	for _, name := range strings.Split(list, ",") {
+		name = strings.TrimSpace(name)
+		if name == "" {
+			continue
+		}
+
+		watched = append(watched, strings.ToLower(name))
+	}
+
+	return watched
+}
+
+// watches takes a bare domain to cover its subdomains too, so one rule reaches
+// gateway, updates and cdn without naming each.
+func watches(watched []string, host string) bool {
+	host = strings.ToLower(host)
+
+	for _, rule := range watched {
+		if rule == "all" || rule == host {
+			return true
+		}
+
+		if strings.HasSuffix(host, "."+rule) {
+			return true
+		}
+	}
+
+	return false
 }

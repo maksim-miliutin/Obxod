@@ -219,7 +219,7 @@ func TestDecoyAndCutBothGoOut(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			r := &recorder{}
 
-			sent, err := forward(r, packet, addr, host, c.ttl, 0, false, c.decoy, c.where, true)
+			sent, err := forward(r, packet, addr, []string{host}, c.ttl, 0, false, c.decoy, c.where, true)
 			if err != nil {
 				t.Fatalf("forward: %v", err)
 			}
@@ -254,5 +254,53 @@ func TestDecoyAndCutBothGoOut(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestWatchesCoversSubdomains(t *testing.T) {
+	watched := parseHosts("discord.com, discord.gg ,discordapp.com")
+
+	hit := []string{
+		"discord.com",
+		"updates.discord.com",
+		"cdn.discord.com",
+		"gateway.discord.gg",
+		"DISCORD.COM",
+		"media.discordapp.com",
+	}
+
+	for _, host := range hit {
+		if !watches(watched, host) {
+			t.Errorf("%q went unwatched", host)
+		}
+	}
+
+	miss := []string{
+		"ya.ru",
+		"notdiscord.com",
+		"discord.com.evil.net",
+		"google.com",
+	}
+
+	for _, host := range miss {
+		if watches(watched, host) {
+			t.Errorf("%q was watched but should not be", host)
+		}
+	}
+}
+
+func TestWatchesAll(t *testing.T) {
+	watched := parseHosts("all")
+
+	for _, host := range []string{"ya.ru", "discord.com", "anything.example"} {
+		if !watches(watched, host) {
+			t.Errorf("%q went unwatched under all", host)
+		}
+	}
+}
+
+func TestParseHostsDropsBlanks(t *testing.T) {
+	if got := parseHosts(" , ,"); len(got) != 0 {
+		t.Errorf("parseHosts = %v, want nothing", got)
 	}
 }
