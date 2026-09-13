@@ -51,7 +51,6 @@ func TestRunReportsResetsAndData(t *testing.T) {
 		reply(443, 54321, tcp.FlagRST|tcp.FlagACK, nil),
 		reply(443, 54322, tcp.FlagPSH|tcp.FlagACK, []byte{0x16, 0x03, 0x03}),
 		reply(443, 54323, tcp.FlagACK, nil),
-		reply(80, 54324, tcp.FlagRST, nil),
 		reply(443, 54325, tcp.FlagRST, nil),
 		reply(443, 54326, tcp.FlagFIN|tcp.FlagACK, nil),
 	}}
@@ -89,7 +88,6 @@ func TestReadIgnoresWhatIsNotOurs(t *testing.T) {
 	}{
 		{"empty", nil},
 		{"not tcp", []byte{4<<4 | 5, 0, 0, 20, 0, 0, 0, 0, 64, ip.ProtocolUDP, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}},
-		{"another port", reply(80, 54321, tcp.FlagRST, nil)},
 		{"bare ack", reply(443, 54321, tcp.FlagACK, nil)},
 	}
 

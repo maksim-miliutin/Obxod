@@ -22,8 +22,6 @@ type Rule struct {
 	Decoy  string // empty, "auto", or a name of the very same length
 	Cut    string // empty, "name", "after" or "start"
 
-	// Overlap says how many real bytes ride in the first half, behind a recorded
-	// hello laid over earlier sequence numbers. Zero means no overlap.
 	Overlap int
 }
 
@@ -55,9 +53,7 @@ func Parse(text string) (Rule, error) {
 	return r, nil
 }
 
-// Blank reports a rule that would do nothing. It lives on the type so that every
-// place asking the question counts the same fields: a new way added to Rule and
-// forgotten here is a rule that silently does nothing.
+// On the type so every caller counts the same fields; a way forgotten here does nothing.
 func (r Rule) Blank() bool {
 	return r.TTL == 0 && r.BadSeq == 0 && !r.BadSum && r.Decoy == "" && r.Cut == "" && r.Overlap == 0
 }
@@ -134,8 +130,7 @@ func ParseAll(texts []string) (Set, error) {
 	return set, nil
 }
 
-// For picks the rule for a host. A bare domain covers its subdomains, and the
-// longest match wins, so gateway.discord.gg can differ from discord.com.
+// Longest match wins, so gateway.discord.gg can differ from discord.com.
 func (s Set) For(host string) (Rule, bool) {
 	host = strings.ToLower(host)
 

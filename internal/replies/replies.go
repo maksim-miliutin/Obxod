@@ -12,19 +12,13 @@ type Receiver interface {
 	Recv(buf []byte) (int, divert.Addr, error)
 }
 
-// Watch reports what comes back on port 443 for a connection we touched. A reset
-// says the way through failed after the handshake started, which no amount of
-// watching our own outgoing packets would ever show.
 type Watch struct {
 	Reset func(port uint16)
 	Data  func(port uint16)
 
-	// Closed marks a connection the other side ended politely with a fin. Without
-	// it every finished request looks exactly like a killed one: both go quiet.
 	Closed func(port uint16)
 
-	// Seen counts every reply the driver hands over, matched to a site or not:
-	// silence here and silence in Reset mean different faults.
+	// Counts every reply, matched or not: two different silences to tell apart.
 	Seen func(total int)
 }
 
@@ -75,8 +69,6 @@ const (
 	wasClosed
 )
 
-// read returns the port on our side, so the caller can tell which of its own
-// connections the reply belongs to.
 func read(packet []byte) (uint16, kind, bool) {
 	outer, err := ip.Parse(packet)
 	if err != nil || outer.Protocol != ip.ProtocolTCP {
@@ -84,7 +76,7 @@ func read(packet []byte) (uint16, kind, bool) {
 	}
 
 	segment, err := tcp.Parse(outer.Payload)
-	if err != nil || segment.SrcPort != 443 {
+	if err != nil {
 		return 0, wasData, false
 	}
 

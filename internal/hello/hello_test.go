@@ -94,7 +94,6 @@ func TestFoundRejects(t *testing.T) {
 		{"empty", nil},
 		{"udp voice", packetTo(50021, ip.ProtocolUDP, bytes.Repeat([]byte{0xcd}, 200))},
 		{"plain tcp data", packetTo(443, ip.ProtocolTCP, []byte{0x17, 0x03, 0x03, 0x00, 0x05})},
-		{"hello but not to 443", packetTo(8443, ip.ProtocolTCP, clientHello("example.com"))},
 		{"bare ack", packetTo(443, ip.ProtocolTCP, nil)},
 	}
 
@@ -155,5 +154,20 @@ func TestFoundNamesTheAttempt(t *testing.T) {
 
 	if out.Seq != 900100 {
 		t.Errorf("Seq = %d, want 900100", out.Seq)
+	}
+}
+
+// The port belongs to the filter, not here: a hello on 8443 is still a hello,
+// and Discord speaks TLS on 2053, 2083, 2087, 2096 and 8443 as well as 443.
+func TestFoundDoesNotCareAboutThePort(t *testing.T) {
+	for _, port := range []uint16{443, 2053, 8443} {
+		out, ok := Found(packetTo(port, ip.ProtocolTCP, clientHello("discord.media")))
+		if !ok {
+			t.Errorf("a hello to port %d went unrecognised", port)
+		}
+
+		if out.Host != "discord.media" {
+			t.Errorf("Host = %q, want discord.media", out.Host)
+		}
 	}
 }

@@ -5,8 +5,6 @@ import (
 	"time"
 )
 
-// Health follows single connections rather than sites: a site can have one
-// connection answering and the next one dying, and a per-site view hides that.
 type Health struct {
 	mu    sync.Mutex
 	links map[uint16]*state
@@ -39,8 +37,6 @@ func (h *Health) Hello(host string, port uint16, now time.Time) {
 	h.links[port] = &state{host: host, began: now}
 }
 
-// Data reports whether this is the first answer on the connection, so the caller
-// can say so once instead of on every packet.
 func (h *Health) Data(port uint16, now time.Time) (string, bool) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -56,9 +52,7 @@ func (h *Health) Data(port uint16, now time.Time) (string, bool) {
 	return s.host, s.packets == 1
 }
 
-// Closed marks a connection the other side ended on purpose. Such a connection
-// goes quiet like a killed one, and without this mark every finished request
-// would be reported as a casualty.
+// A finished request goes quiet exactly like a killed one; only a fin tells them apart.
 func (h *Health) Closed(port uint16) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -75,8 +69,6 @@ func (h *Health) Forget(port uint16) {
 	delete(h.links, port)
 }
 
-// WentQuiet names connections that answered and then stopped, which is what a
-// killed connection looks like when nothing bothers to send a reset.
 func (h *Health) WentQuiet(now time.Time, after time.Duration) []Report {
 	h.mu.Lock()
 	defer h.mu.Unlock()

@@ -61,8 +61,7 @@ func (s *Sweep) Saw(repeat bool) {
 	}
 }
 
-// Judge gives a verdict once the window is up, or once the client has already
-// asked again: a repeat settles the matter, no reason to keep waiting it out.
+// A repeat settles the matter early, no reason to wait the window out.
 func (s *Sweep) Judge(now time.Time) (Verdict, bool) {
 	if !s.sawRepeat && now.Sub(s.since) < s.window {
 		return Worked, false
@@ -81,7 +80,6 @@ func (s *Sweep) Judge(now time.Time) (Verdict, bool) {
 	return verdict, true
 }
 
-// Next moves to the following candidate and reports whether one was left.
 func (s *Sweep) Next(now time.Time) bool {
 	s.at++
 	s.since = now
@@ -91,9 +89,7 @@ func (s *Sweep) Next(now time.Time) bool {
 	return s.at < len(s.candidates)
 }
 
-// Candidates lists the ways worth trying, cheapest and most likely first. The
-// order comes from what beat updates.discord.com: a decoy with a wrong sequence
-// number, ahead of a hello cut through its own name.
+// Ordered by what has actually worked here, likeliest first.
 func Candidates(host string) []rules.Rule {
 	var out []rules.Rule
 

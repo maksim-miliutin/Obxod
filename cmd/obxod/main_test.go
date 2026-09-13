@@ -451,3 +451,32 @@ func TestOverlapWithoutAPatternIsRefused(t *testing.T) {
 		t.Error("an overlap with no pattern put something on the wire")
 	}
 }
+
+func TestParsePorts(t *testing.T) {
+	got, err := parsePorts("443, 2053 ,8443")
+	if err != nil {
+		t.Fatalf("parsePorts: %v", err)
+	}
+
+	want := []uint16{443, 2053, 8443}
+
+	if len(got) != len(want) {
+		t.Fatalf("parsePorts gave %v, want %v", got, want)
+	}
+
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("port %d = %d, want %d", i, got[i], want[i])
+		}
+	}
+}
+
+func TestParsePortsRejectsNonsense(t *testing.T) {
+	for _, text := range []string{"443,http", "70000", "-1"} {
+		t.Run(text, func(t *testing.T) {
+			if _, err := parsePorts(text); err == nil {
+				t.Error("nonsense was accepted")
+			}
+		})
+	}
+}

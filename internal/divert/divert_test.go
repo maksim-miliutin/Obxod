@@ -64,13 +64,18 @@ func TestOpenRefusesUnknownMode(t *testing.T) {
 }
 
 func TestFiltersWeBuildPassTheGuard(t *testing.T) {
-	outbound, err := filter.Outbound([]filter.PortRange{{From: 19294, To: 19344}}, false)
+	outbound, err := filter.Outbound(filter.Ports{TCP: []uint16{443}, Voice: []filter.PortRange{{From: 19294, To: 19344}}})
 	if err != nil {
 		t.Fatalf("filter.Outbound: %v", err)
 	}
 
 	// Open is not called here on purpose: on Windows it would install the driver.
-	for _, f := range []string{outbound, filter.Replies()} {
+	watching, err := filter.Replies([]uint16{443})
+	if err != nil {
+		t.Fatalf("filter.Replies: %v", err)
+	}
+
+	for _, f := range []string{outbound, watching} {
 		if f == "" {
 			t.Error("built an empty filter, which Open refuses")
 		}

@@ -24,9 +24,6 @@ var (
 	ErrNoPattern  = errors.New("cut: an overlap needs a recorded hello to lay over")
 )
 
-// Filler makes the block that rides ahead of the stream: the recorded hello as
-// far as it goes, then zeroes. The size is asked for separately because it has
-// no reason to match the file, and a longer overlap reaches further back.
 func Filler(pattern []byte, size int) []byte {
 	if size <= 0 {
 		return nil
@@ -38,16 +35,8 @@ func Filler(pattern []byte, size int) []byte {
 	return out
 }
 
-// Overlap splits the packet like At, but sends the first half from a sequence
-// number that many bytes earlier, filled with a hello recorded from another site.
-//
-// The server counts from where it left off, finds those bytes behind its window
-// and drops them, keeping only the real ones. An inspector that just stacks
-// payloads in the order they arrive reads the recorded hello instead, and stops
-// caring about the connection.
-//
-// Both halves together still carry the whole original payload, so nothing the
-// server rebuilds changes.
+// A server drops what lands behind its receive window, so the filler rides there
+// and only the real bytes are taken.
 func Overlap(packet []byte, pattern []byte, point int) ([]byte, []byte, error) {
 	if len(pattern) == 0 {
 		return nil, nil, ErrNoPattern
@@ -100,9 +89,6 @@ func layers(packet []byte) (ip.Header, tcp.Header, error) {
 	return outer, segment, nil
 }
 
-// At splits the packet in two at the given offset into the TCP payload. Both
-// halves are real data, not copies: together they carry exactly what the
-// original carried, so the server rebuilds the same stream.
 func At(packet []byte, point int) ([]byte, []byte, error) {
 	outer, segment, err := layers(packet)
 	if err != nil {
@@ -134,8 +120,7 @@ func build(packet []byte, headers int, payload []byte, seq uint32, outer ip.Head
 
 	segment := out[outer.HeaderLen:]
 
-	// The second half starts further along the stream, so its sequence number moves
-	// by as many bytes as the first half carried, or the server cannot rebuild the hello.
+	// Move the number by what the half before carried, or the stream has a hole.
 	binary.BigEndian.PutUint32(segment[tcpSeqAt:tcpSeqAt+4], seq)
 
 	header := out[:outer.HeaderLen]

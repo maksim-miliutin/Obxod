@@ -9,20 +9,14 @@ import (
 type Outgoing struct {
 	Host string
 
-	// NameStart and NameEnd bracket the host name inside the TCP payload. Split
-	// between them and no single packet carries the whole name.
 	NameStart int
 	NameEnd   int
 
-	// SrcPort and Seq name the attempt: the same pair seen twice is the client
-	// retransmitting because nothing came back.
 	SrcPort uint16
 	Seq     uint32
 }
 
-// Found reports a TLS client hello leaving for port 443 and the site it names.
-// A packet that is not such a hello yields ok false, not an error: most packets
-// on the wire are not client hellos, and that is the ordinary case, not a fault.
+// Not a hello is the ordinary case, not a fault, hence ok rather than an error.
 func Found(packet []byte) (Outgoing, bool) {
 	outer, err := ip.Parse(packet)
 	if err != nil {
@@ -35,10 +29,6 @@ func Found(packet []byte) (Outgoing, bool) {
 
 	segment, err := tcp.Parse(outer.Payload)
 	if err != nil {
-		return Outgoing{}, false
-	}
-
-	if segment.DstPort != 443 {
 		return Outgoing{}, false
 	}
 

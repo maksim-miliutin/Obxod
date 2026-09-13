@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -45,6 +46,7 @@ func run() error {
 	where := flag.String("cut", "", "split the real hello: name (through the middle of the host name), after (just past it), start (near the record start)")
 	sweepHost := flag.String("sweep", "", "try way after way for this site until one stops the retries")
 	seconds := flag.Int("seconds", 12, "how long to give each way while sweeping")
+	tcpPorts := flag.String("ports", "443,2053,2083,2087,2096,8443", "tcp ports where hellos are looked for")
 	patternFile := flag.String("pattern", "", "a recorded hello from an allowed site, used by overlap")
 	seqovl := flag.Int("seqovl", 0, "how many bytes the overlap reaches back; zero means the whole pattern")
 	silence := flag.Int("silence", 45, "seconds of silence after which a connection counts as killed")
@@ -73,7 +75,12 @@ func run() error {
 
 	// An untouched copy is a second identical hello: the server sees the payload
 	// twice and drops the connection, which looks like the bypass making things worse.
-	outbound, err := filter.Outbound(voice, *noQUIC)
+	ports, err := parsePorts(*tcpPorts)
+	if err != nil {
+		return err
+	}
+
+	outbound, err := filter.Outbound(filter.Ports{TCP: ports, Voice: voice, QUIC: *noQUIC})
 	if err != nil {
 		return err
 	}
@@ -109,7 +116,12 @@ func run() error {
 
 	tries := attempt.New(20 * time.Second)
 
-	eyes, err := divert.Open(filter.Replies(), divert.Sniff)
+	watching, err := filter.Replies(ports)
+	if err != nil {
+		return err
+	}
+
+	eyes, err := divert.Open(watching, divert.Sniff)
 	if err != nil {
 		return fmt.Errorf("cannot watch replies: %w", err)
 	}
@@ -598,4 +610,24 @@ func overlay(h sender, packet []byte, addr *divert.Addr, found hello.Outgoing, r
 	}
 
 	return true, h.Send(second, addr)
+}
+
+func parsePorts(list string) ([]uint16, error) {
+	var ports []uint16
+
+	for _, text := range strings.Split(list, ",") {
+		text = strings.TrimSpace(text)
+		if text == "" {
+			continue
+		}
+
+		port, err := strconv.ParseUint(text, 10, 16)
+		if err != nil {
+			return nil, fmt.Errorf("port %q: %w", text, err)
+		}
+
+		ports = append(ports, uint16(port))
+	}
+
+	return ports, nil
 }
