@@ -29,6 +29,7 @@ func run() error {
 	ttl := flag.Int("ttl", 0, "hops the forged copy may live; zero leaves the original ttl alone")
 	badseq := flag.Uint("badseq", 0, "shift the copy's sequence number by this much")
 	badsum := flag.Bool("badsum", false, "give the copy a wrong tcp checksum")
+	decoy := flag.String("decoy", "", "put another host name in the copy; \"auto\" makes one of the right length")
 	where := flag.String("cut", "", "split the real hello: name (through the middle of the host name), after (just past it), start (near the record start)")
 	wet := flag.Bool("wet", false, "actually send copies; off by default, only reports")
 	flag.Parse()
@@ -39,8 +40,8 @@ func run() error {
 
 	// An untouched copy is a second identical hello: the server sees the payload
 	// twice and drops the connection, which looks like the bypass making things worse.
-	if *wet && *ttl == 0 && *badseq == 0 && !*badsum && *where == "" {
-		return fmt.Errorf("give -ttl, -badseq, -badsum or -cut: a copy with nothing wrong would break the connection")
+	if *wet && *ttl == 0 && *badseq == 0 && !*badsum && *where == "" && *decoy == "" {
+		return fmt.Errorf("give -ttl, -badseq, -badsum, -decoy or -cut: a copy with nothing wrong would break the connection")
 	}
 
 	outbound, err := filter.Outbound(voice)
@@ -71,7 +72,7 @@ func run() error {
 
 		packet := buf[:n]
 
-		sent, err := forward(h, packet, &addr, *host, uint8(*ttl), uint32(*badseq), *badsum, *where, *wet)
+		sent, err := forward(h, packet, &addr, *host, uint8(*ttl), uint32(*badseq), *badsum, *decoy, *where, *wet)
 		if err != nil {
 			return err
 		}
@@ -88,7 +89,7 @@ func run() error {
 
 // forward returns true when it already put the packet on the wire itself, which
 // happens for a cut: the original must not follow its own halves.
-func forward(h *divert.Handle, packet []byte, addr *divert.Addr, host string, ttl uint8, badseq uint32, badsum bool, where string, wet bool) (bool, error) {
+func forward(h *divert.Handle, packet []byte, addr *divert.Addr, host string, ttl uint8, badseq uint32, badsum bool, decoy string, where string, wet bool) (bool, error) {
 	found, ok := hello.Found(packet)
 	if !ok || !strings.EqualFold(found.Host, host) {
 		return false, nil
@@ -98,7 +99,23 @@ func forward(h *divert.Handle, packet []byte, addr *divert.Addr, host string, tt
 		return split(h, packet, addr, found, where, wet)
 	}
 
-	copied, err := forge.Copy(packet, forge.Recipe{TTL: ttl, SeqDelta: badseq, BadSum: badsum})
+	recipe := forge.Recipe{TTL: ttl, SeqDelta: badseq, BadSum: badsum}
+
+	if decoy != "" {
+		name := decoy
+		if name == "auto" {
+			name = decoyFor(found.Host)
+		}
+
+		if len(name) != len(found.Host) {
+			return false, fmt.Errorf("decoy %q is %d bytes, the real name is %d: they must match", name, len(name), len(found.Host))
+		}
+
+		recipe.Name = name
+		recipe.NameAt = found.NameStart
+	}
+
+	copied, err := forge.Copy(packet, recipe)
 	if err != nil {
 		fmt.Printf("  %s: cannot copy: %v\n", found.Host, err)
 
@@ -106,12 +123,12 @@ func forward(h *divert.Handle, packet []byte, addr *divert.Addr, host string, tt
 	}
 
 	if !wet {
-		fmt.Printf("  %s: would send a %d byte copy (%s)\n", found.Host, len(copied), spoils(ttl, badseq, badsum))
+		fmt.Printf("  %s: would send a %d byte copy (%s%s)\n", found.Host, len(copied), spoils(ttl, badseq, badsum), wearing(recipe.Name))
 
 		return false, nil
 	}
 
-	fmt.Printf("  %s: copy sent ahead (%s)\n", found.Host, spoils(ttl, badseq, badsum))
+	fmt.Printf("  %s: copy sent ahead (%s%s)\n", found.Host, spoils(ttl, badseq, badsum), wearing(recipe.Name))
 
 	return false, h.Send(copied, addr)
 }
@@ -179,4 +196,24 @@ func pointFor(found hello.Outgoing, where string) (int, error) {
 	}
 
 	return 0, fmt.Errorf("unknown -cut %q: use name, after or start", where)
+}
+
+func wearing(name string) string {
+	if name == "" {
+		return ""
+	}
+
+	return ", wearing " + name
+}
+
+// decoyFor builds a harmless name exactly as long as the real one, because the
+// lengths inside a hello count the name and a copy must keep them true.
+func decoyFor(host string) string {
+	const base = "google.com"
+
+	if len(host) < len(base)+2 {
+		return strings.Repeat("a", len(host)-4) + ".com"
+	}
+
+	return strings.Repeat("x", len(host)-len(base)-1) + "." + base
 }

@@ -157,3 +157,28 @@ func TestCutPointRejectsNonsense(t *testing.T) {
 		t.Error("an unknown cut point was accepted")
 	}
 }
+
+func TestDecoyForKeepsTheLength(t *testing.T) {
+	hosts := []string{
+		"updates.discord.com",
+		"gateway.discord.gg",
+		"ya.ru",
+		"a.io",
+		"www.youtube.com",
+		"very-long-subdomain.example.co.uk",
+	}
+
+	for _, host := range hosts {
+		t.Run(host, func(t *testing.T) {
+			decoy := decoyFor(host)
+
+			if len(decoy) != len(host) {
+				t.Errorf("decoy %q is %d bytes, host %q is %d", decoy, len(decoy), host, len(host))
+			}
+
+			if decoy == host {
+				t.Error("the decoy is the very name we are hiding")
+			}
+		})
+	}
+}

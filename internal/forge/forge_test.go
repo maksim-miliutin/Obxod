@@ -351,3 +351,102 @@ func TestCopyBadSumLeavesIPHeaderValid(t *testing.T) {
 		t.Errorf("ip header checks out as %#04x, want 0", got)
 	}
 }
+
+func helloWithName(host string) []byte {
+	name := []byte(host)
+
+	list := binary.BigEndian.AppendUint16(nil, uint16(len(name)+3))
+	list = append(list, 0x00)
+	list = binary.BigEndian.AppendUint16(list, uint16(len(name)))
+	list = append(list, name...)
+
+	sni := binary.BigEndian.AppendUint16(nil, 0x0000)
+	sni = binary.BigEndian.AppendUint16(sni, uint16(len(list)))
+	sni = append(sni, list...)
+
+	extensions := binary.BigEndian.AppendUint16(nil, uint16(len(sni)))
+	extensions = append(extensions, sni...)
+
+	body := []byte{0x03, 0x03}
+	body = append(body, bytes.Repeat([]byte{0xab}, 32)...)
+	body = append(body, 0x00, 0x00, 0x02, 0x13, 0x01, 0x01, 0x00)
+	body = append(body, extensions...)
+
+	handshake := []byte{0x01, byte(len(body) >> 16), byte(len(body) >> 8), byte(len(body))}
+	handshake = append(handshake, body...)
+
+	record := []byte{0x16, 0x03, 0x01, 0x00, 0x00}
+	binary.BigEndian.PutUint16(record[3:5], uint16(len(handshake)))
+
+	return append(record, handshake...)
+}
+
+func TestCopyWearsTheDecoyName(t *testing.T) {
+	const real = "updates.discord.com"
+	const decoy = "xxxxxxxx.google.com"
+
+	payload := helloWithName(real)
+	at := bytes.Index(payload, []byte(real))
+
+	packet := build(ip.ProtocolTCP, 64, payload, 0)
+
+	copied, err := Copy(packet, Recipe{TTL: 4, Name: decoy, NameAt: at})
+	if err != nil {
+		t.Fatalf("Copy: %v", err)
+	}
+
+	if bytes.Contains(copied, []byte(real)) {
+		t.Error("the copy still carries the blocked name")
+	}
+
+	if !bytes.Contains(copied, []byte(decoy)) {
+		t.Error("the copy does not carry the decoy name")
+	}
+
+	if len(copied) != len(packet) {
+		t.Errorf("copy is %d bytes, original %d: a decoy must not change the length", len(copied), len(packet))
+	}
+
+	verify(t, copied)
+}
+
+func TestCopyLeavesTheRealHelloAlone(t *testing.T) {
+	const real = "updates.discord.com"
+
+	payload := helloWithName(real)
+	at := bytes.Index(payload, []byte(real))
+	packet := build(ip.ProtocolTCP, 64, payload, 0)
+	before := append([]byte(nil), packet...)
+
+	if _, err := Copy(packet, Recipe{Name: "xxxxxxxx.google.com", NameAt: at}); err != nil {
+		t.Fatalf("Copy: %v", err)
+	}
+
+	if !bytes.Equal(packet, before) {
+		t.Error("the real hello was rewritten; only the copy may carry a decoy")
+	}
+}
+
+func TestCopyDecoyMustFit(t *testing.T) {
+	payload := helloWithName("updates.discord.com")
+	at := bytes.Index(payload, []byte("updates.discord.com"))
+	packet := build(ip.ProtocolTCP, 64, payload, 0)
+
+	cases := []struct {
+		name   string
+		decoy  string
+		nameAt int
+	}{
+		{"past the end", "xxxxxxxx.google.com", len(payload) - 3},
+		{"negative offset", "xxxxxxxx.google.com", -1},
+		{"longer than the payload", bytes.NewBuffer(bytes.Repeat([]byte("a"), 5000)).String(), at},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if _, err := Copy(packet, Recipe{Name: c.decoy, NameAt: c.nameAt}); !errors.Is(err, ErrNameSpace) {
+				t.Errorf("err = %v, want %v", err, ErrNameSpace)
+			}
+		})
+	}
+}
