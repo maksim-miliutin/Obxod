@@ -25,13 +25,20 @@ func main() {
 
 func run() error {
 	host := flag.String("host", "", "send a forged copy ahead of hellos for this site")
-	ttl := flag.Int("ttl", 4, "hops the forged copy may live")
+	ttl := flag.Int("ttl", 0, "hops the forged copy may live; zero leaves the original ttl alone")
 	badseq := flag.Uint("badseq", 0, "shift the copy's sequence number by this much")
+	badsum := flag.Bool("badsum", false, "give the copy a wrong tcp checksum")
 	wet := flag.Bool("wet", false, "actually send copies; off by default, only reports")
 	flag.Parse()
 
 	if *host == "" {
 		return fmt.Errorf("give -host, e.g. -host gateway.discord.gg")
+	}
+
+	// An untouched copy is a second identical hello: the server sees the payload
+	// twice and drops the connection, which looks like the bypass making things worse.
+	if *wet && *ttl == 0 && *badseq == 0 && !*badsum {
+		return fmt.Errorf("give -ttl, -badseq or -badsum: a copy with nothing wrong would break the connection")
 	}
 
 	outbound, err := filter.Outbound(voice)
@@ -50,7 +57,7 @@ func run() error {
 		mode = "sending copies"
 	}
 
-	fmt.Printf("watching for %s, ttl %d, badseq %d, %s\n", *host, *ttl, *badseq, mode)
+	fmt.Printf("watching for %s, ttl %d, badseq %d, badsum %v, %s\n", *host, *ttl, *badseq, *badsum, mode)
 
 	buf := make([]byte, maxPacket)
 
@@ -62,7 +69,7 @@ func run() error {
 
 		packet := buf[:n]
 
-		if err := forward(h, packet, &addr, *host, uint8(*ttl), uint32(*badseq), *wet); err != nil {
+		if err := forward(h, packet, &addr, *host, uint8(*ttl), uint32(*badseq), *badsum, *wet); err != nil {
 			return err
 		}
 
@@ -72,13 +79,13 @@ func run() error {
 	}
 }
 
-func forward(h *divert.Handle, packet []byte, addr *divert.Addr, host string, ttl uint8, badseq uint32, wet bool) error {
+func forward(h *divert.Handle, packet []byte, addr *divert.Addr, host string, ttl uint8, badseq uint32, badsum bool, wet bool) error {
 	found, ok := hello.Found(packet)
 	if !ok || !strings.EqualFold(found.Host, host) {
 		return nil
 	}
 
-	copied, err := forge.Copy(packet, forge.Recipe{TTL: ttl, SeqDelta: badseq})
+	copied, err := forge.Copy(packet, forge.Recipe{TTL: ttl, SeqDelta: badseq, BadSum: badsum})
 	if err != nil {
 		fmt.Printf("  %s: cannot copy: %v\n", found.Host, err)
 

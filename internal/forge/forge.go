@@ -24,6 +24,7 @@ var (
 type Recipe struct {
 	TTL      uint8  // hops the copy may live; zero keeps whatever the original had
 	SeqDelta uint32 // added to the sequence number so the server drops the copy; zero leaves it
+	BadSum   bool   // leave a wrong TCP checksum so the copy is dropped past the inspector
 }
 
 func Copy(packet []byte, r Recipe) ([]byte, error) {
@@ -61,17 +62,25 @@ func Copy(packet []byte, r Recipe) ([]byte, error) {
 		binary.BigEndian.PutUint32(segment[tcpSeqAt:tcpSeqAt+4], seq+r.SeqDelta)
 	}
 
-	seal(copied, outer)
+	seal(copied, outer, r.BadSum)
 
 	return copied, nil
 }
 
-func seal(packet []byte, outer ip.Header) {
+func seal(packet []byte, outer ip.Header, badSum bool) {
 	header := packet[:outer.HeaderLen]
 	binary.BigEndian.PutUint16(header[ipChecksumAt:ipChecksumAt+2], checksum.IPv4(header))
 
 	// Offload can hand us more bytes than the header claims; those trailing bytes
 	// belong to no segment and must stay out of the sum.
 	segment := packet[outer.HeaderLen : outer.HeaderLen+len(outer.Payload)]
-	binary.BigEndian.PutUint16(segment[tcpChecksumAt:tcpChecksumAt+2], checksum.TCP(outer.Src, outer.Dst, segment))
+	sum := checksum.TCP(outer.Src, outer.Dst, segment)
+
+	// Flip the right sum rather than skip it: offload may leave the field
+	// uncomputed, and a "wrong" value left there could accidentally be right.
+	if badSum {
+		sum = ^sum
+	}
+
+	binary.BigEndian.PutUint16(segment[tcpChecksumAt:tcpChecksumAt+2], sum)
 }

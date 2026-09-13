@@ -276,3 +276,78 @@ func TestCopyTTLAndSeqTogether(t *testing.T) {
 
 	verify(t, copied)
 }
+
+func tcpSumField(packet []byte) uint16 {
+	return binary.BigEndian.Uint16(packet[20+tcpChecksumAt : 20+tcpChecksumAt+2])
+}
+
+func TestCopyBadSumIsWrong(t *testing.T) {
+	for _, size := range []int{1, 5, 40, 517, 1400} {
+		packet := build(ip.ProtocolTCP, 64, bytes.Repeat([]byte{0xab}, size), 0)
+
+		good, err := Copy(packet, Recipe{})
+		if err != nil {
+			t.Fatalf("Copy good: %v", err)
+		}
+
+		bad, err := Copy(packet, Recipe{BadSum: true})
+		if err != nil {
+			t.Fatalf("Copy bad: %v", err)
+		}
+
+		right := tcpSumField(good)
+		wrong := tcpSumField(bad)
+
+		if wrong == right {
+			t.Errorf("size %d: badsum left the right checksum %#04x", size, right)
+		}
+
+		// A bad checksum must never read as 0x0000: that means "no checksum" in TCP,
+		// which some stacks accept, so the copy could slip through to the server.
+		if wrong == 0 {
+			t.Errorf("size %d: badsum produced 0x0000, which reads as no checksum", size)
+		}
+	}
+}
+
+func TestCopyBadSumStillShiftsSequence(t *testing.T) {
+	packet := build(ip.ProtocolTCP, 64, []byte("hello"), 0)
+	before := seqOf(packet)
+
+	copied, err := Copy(packet, Recipe{SeqDelta: 77, BadSum: true})
+	if err != nil {
+		t.Fatalf("Copy: %v", err)
+	}
+
+	if got := seqOf(copied); got != before+77 {
+		t.Errorf("seq = %d, want %d", got, before+77)
+	}
+
+	// badsum touches only the TCP checksum: the IP header must still verify.
+	outer, err := ip.Parse(copied)
+	if err != nil {
+		t.Fatalf("ip.Parse: %v", err)
+	}
+
+	if got := checksum.Of(copied[:outer.HeaderLen]); got != 0 {
+		t.Errorf("ip checksum checks out as %#04x, want 0", got)
+	}
+}
+
+func TestCopyBadSumLeavesIPHeaderValid(t *testing.T) {
+	packet := build(ip.ProtocolTCP, 64, bytes.Repeat([]byte{0xcd}, 200), 0)
+
+	copied, err := Copy(packet, Recipe{BadSum: true})
+	if err != nil {
+		t.Fatalf("Copy: %v", err)
+	}
+
+	outer, err := ip.Parse(copied)
+	if err != nil {
+		t.Fatalf("ip.Parse: %v", err)
+	}
+
+	if got := checksum.Of(copied[:outer.HeaderLen]); got != 0 {
+		t.Errorf("ip header checks out as %#04x, want 0", got)
+	}
+}
