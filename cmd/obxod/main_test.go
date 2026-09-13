@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"obxod/internal/cut"
+	"obxod/internal/divert"
 	"obxod/internal/forge"
 	"obxod/internal/hello"
 	"obxod/internal/ip"
@@ -178,6 +179,79 @@ func TestDecoyForKeepsTheLength(t *testing.T) {
 
 			if decoy == host {
 				t.Error("the decoy is the very name we are hiding")
+			}
+		})
+	}
+}
+
+type recorder struct {
+	sent [][]byte
+}
+
+func (r *recorder) Send(packet []byte, addr *divert.Addr) error {
+	r.sent = append(r.sent, append([]byte(nil), packet...))
+
+	return nil
+}
+
+// The bug this guards: a cut used to return before the decoy was ever sent, so
+// asking for both quietly gave only the cut.
+func TestDecoyAndCutBothGoOut(t *testing.T) {
+	const host = "updates.discord.com"
+
+	packet := packet443(clientHello(host))
+	addr := &divert.Addr{}
+
+	cases := []struct {
+		name    string
+		ttl     uint8
+		decoy   string
+		where   string
+		want    int
+		ownSend bool
+	}{
+		{"decoy alone", 4, "auto", "", 1, false},
+		{"cut alone", 0, "", "name", 2, true},
+		{"decoy and cut", 4, "auto", "name", 3, true},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			r := &recorder{}
+
+			sent, err := forward(r, packet, addr, host, c.ttl, 0, false, c.decoy, c.where, true)
+			if err != nil {
+				t.Fatalf("forward: %v", err)
+			}
+
+			if len(r.sent) != c.want {
+				t.Fatalf("sent %d packets, want %d", len(r.sent), c.want)
+			}
+
+			if sent != c.ownSend {
+				t.Errorf("took over sending = %v, want %v", sent, c.ownSend)
+			}
+
+			if c.decoy != "" {
+				decoy := decoyFor(host)
+
+				if !bytes.Contains(r.sent[0], []byte(decoy)) {
+					t.Error("the first packet out is not the decoy")
+				}
+
+				if bytes.Contains(r.sent[0], []byte(host)) {
+					t.Error("the decoy still carries the blocked name")
+				}
+			}
+
+			if c.where != "" {
+				halves := r.sent[len(r.sent)-2:]
+
+				for _, half := range halves {
+					if bytes.Contains(half, []byte(host)) {
+						t.Error("a half carries the whole name")
+					}
+				}
 			}
 		})
 	}

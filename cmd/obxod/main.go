@@ -87,18 +87,36 @@ func run() error {
 	}
 }
 
+// sender is what the divert handle gives us, narrowed to the one call these take,
+// so the order they send in can be checked without a driver.
+type sender interface {
+	Send(packet []byte, addr *divert.Addr) error
+}
+
 // forward returns true when it already put the packet on the wire itself, which
 // happens for a cut: the original must not follow its own halves.
-func forward(h *divert.Handle, packet []byte, addr *divert.Addr, host string, ttl uint8, badseq uint32, badsum bool, decoy string, where string, wet bool) (bool, error) {
+func forward(h sender, packet []byte, addr *divert.Addr, host string, ttl uint8, badseq uint32, badsum bool, decoy string, where string, wet bool) (bool, error) {
 	found, ok := hello.Found(packet)
 	if !ok || !strings.EqualFold(found.Host, host) {
 		return false, nil
+	}
+
+	// The decoy goes first and the real hello follows, cut or whole: an inspector
+	// that reads the decoy and then finds no name in either half has nothing to match.
+	if ttl != 0 || badseq != 0 || badsum || decoy != "" {
+		if err := fake(h, packet, addr, found, ttl, badseq, badsum, decoy, wet); err != nil {
+			return false, err
+		}
 	}
 
 	if where != "" {
 		return split(h, packet, addr, found, where, wet)
 	}
 
+	return false, nil
+}
+
+func fake(h sender, packet []byte, addr *divert.Addr, found hello.Outgoing, ttl uint8, badseq uint32, badsum bool, decoy string, wet bool) error {
 	recipe := forge.Recipe{TTL: ttl, SeqDelta: badseq, BadSum: badsum}
 
 	if decoy != "" {
@@ -108,7 +126,7 @@ func forward(h *divert.Handle, packet []byte, addr *divert.Addr, host string, tt
 		}
 
 		if len(name) != len(found.Host) {
-			return false, fmt.Errorf("decoy %q is %d bytes, the real name is %d: they must match", name, len(name), len(found.Host))
+			return fmt.Errorf("decoy %q is %d bytes, the real name is %d: they must match", name, len(name), len(found.Host))
 		}
 
 		recipe.Name = name
@@ -119,21 +137,21 @@ func forward(h *divert.Handle, packet []byte, addr *divert.Addr, host string, tt
 	if err != nil {
 		fmt.Printf("  %s: cannot copy: %v\n", found.Host, err)
 
-		return false, nil
+		return nil
 	}
 
 	if !wet {
 		fmt.Printf("  %s: would send a %d byte copy (%s%s)\n", found.Host, len(copied), spoils(ttl, badseq, badsum), wearing(recipe.Name))
 
-		return false, nil
+		return nil
 	}
 
 	fmt.Printf("  %s: copy sent ahead (%s%s)\n", found.Host, spoils(ttl, badseq, badsum), wearing(recipe.Name))
 
-	return false, h.Send(copied, addr)
+	return h.Send(copied, addr)
 }
 
-func split(h *divert.Handle, packet []byte, addr *divert.Addr, found hello.Outgoing, where string, wet bool) (bool, error) {
+func split(h sender, packet []byte, addr *divert.Addr, found hello.Outgoing, where string, wet bool) (bool, error) {
 	point, err := pointFor(found, where)
 	if err != nil {
 		return false, err
