@@ -13,6 +13,11 @@ type Outgoing struct {
 	// between them and no single packet carries the whole name.
 	NameStart int
 	NameEnd   int
+
+	// SrcPort and Seq name the attempt: the same pair seen twice is the client
+	// retransmitting because nothing came back.
+	SrcPort uint16
+	Seq     uint32
 }
 
 // Found reports a TLS client hello leaving for port 443 and the site it names.
@@ -51,5 +56,7 @@ func Found(packet []byte) (Outgoing, bool) {
 		Host:      name.Host,
 		NameStart: name.Offset,
 		NameEnd:   name.Offset + len(name.Host),
+		SrcPort:   segment.SrcPort,
+		Seq:       segment.Seq,
 	}, true
 }

@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
+	"obxod/internal/attempt"
 	"obxod/internal/cut"
 	"obxod/internal/divert"
 	"obxod/internal/filter"
@@ -74,6 +76,8 @@ func run() error {
 
 	var dropped int
 
+	tries := attempt.New(20 * time.Second)
+
 	for {
 		n, addr, err := h.Recv(buf)
 		if err != nil {
@@ -92,7 +96,7 @@ func run() error {
 			continue
 		}
 
-		sent, err := forward(h, packet, &addr, set, *wet)
+		sent, err := forward(h, packet, &addr, set, tries, *wet)
 		if err != nil {
 			return err
 		}
@@ -115,7 +119,7 @@ type sender interface {
 
 // forward returns true when it already put the packet on the wire itself, which
 // happens for a cut: the original must not follow its own halves.
-func forward(h sender, packet []byte, addr *divert.Addr, set rules.Set, wet bool) (bool, error) {
+func forward(h sender, packet []byte, addr *divert.Addr, set rules.Set, tries *attempt.Tracker, wet bool) (bool, error) {
 	found, ok := hello.Found(packet)
 	if !ok {
 		return false, nil
@@ -124,6 +128,10 @@ func forward(h sender, packet []byte, addr *divert.Addr, set rules.Set, wet bool
 	r, ok := set.For(found.Host)
 	if !ok {
 		return false, nil
+	}
+
+	if tries.Saw(found.Host, found.SrcPort, found.Seq, time.Now()) == attempt.Again {
+		fmt.Printf("  %s: asking again, so this way is not getting through\n", found.Host)
 	}
 
 	// The decoy goes first and the real hello follows, cut or whole: an inspector
@@ -274,24 +282,6 @@ func parseHosts(list string) []string {
 	}
 
 	return watched
-}
-
-// watches takes a bare domain to cover its subdomains too, so one rule reaches
-// gateway, updates and cdn without naming each.
-func watches(watched []string, host string) bool {
-	host = strings.ToLower(host)
-
-	for _, rule := range watched {
-		if rule == "all" || rule == host {
-			return true
-		}
-
-		if strings.HasSuffix(host, "."+rule) {
-			return true
-		}
-	}
-
-	return false
 }
 
 // isQUIC reports a datagram heading for 443, which is how a browser tries HTTP/3

@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"encoding/binary"
 	"testing"
+	"time"
 
+	"obxod/internal/attempt"
 	"obxod/internal/cut"
 	"obxod/internal/divert"
 	"obxod/internal/forge"
@@ -225,7 +227,7 @@ func TestDecoyAndCutBothGoOut(t *testing.T) {
 				t.Fatalf("ParseAll: %v", err)
 			}
 
-			sent, err := forward(r, packet, addr, set, true)
+			sent, err := forward(r, packet, addr, set, attempt.New(time.Minute), true)
 			if err != nil {
 				t.Fatalf("forward: %v", err)
 			}
@@ -294,48 +296,6 @@ func TestPlanPrefersExplicitRules(t *testing.T) {
 func TestPlanNeedsSomething(t *testing.T) {
 	if _, err := plan(nil, "discord.com", 0, 0, false, "", ""); err == nil {
 		t.Error("a plan with no way to bypass was accepted")
-	}
-}
-
-func TestWatchesCoversSubdomains(t *testing.T) {
-	watched := parseHosts("discord.com, discord.gg ,discordapp.com")
-
-	hit := []string{
-		"discord.com",
-		"updates.discord.com",
-		"cdn.discord.com",
-		"gateway.discord.gg",
-		"DISCORD.COM",
-		"media.discordapp.com",
-	}
-
-	for _, host := range hit {
-		if !watches(watched, host) {
-			t.Errorf("%q went unwatched", host)
-		}
-	}
-
-	miss := []string{
-		"ya.ru",
-		"notdiscord.com",
-		"discord.com.evil.net",
-		"google.com",
-	}
-
-	for _, host := range miss {
-		if watches(watched, host) {
-			t.Errorf("%q was watched but should not be", host)
-		}
-	}
-}
-
-func TestWatchesAll(t *testing.T) {
-	watched := parseHosts("all")
-
-	for _, host := range []string{"ya.ru", "discord.com", "anything.example"} {
-		if !watches(watched, host) {
-			t.Errorf("%q went unwatched under all", host)
-		}
 	}
 }
 

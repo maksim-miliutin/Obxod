@@ -48,7 +48,9 @@ func packetTo(port uint16, protocol byte, payload []byte) []byte {
 
 	if protocol == ip.ProtocolTCP {
 		transport = make([]byte, 20)
+		binary.BigEndian.PutUint16(transport[0:2], 54321)
 		binary.BigEndian.PutUint16(transport[2:4], port)
+		binary.BigEndian.PutUint32(transport[4:8], 900100)
 		transport[12] = 5 << 4
 		transport[13] = 0x18
 	}
@@ -136,5 +138,22 @@ func TestFoundNameEnd(t *testing.T) {
 	// Everything before the split point ends with the name, nothing of it spills past.
 	if !bytes.HasSuffix(payload[:out.NameEnd], []byte(host)) {
 		t.Errorf("payload up to %d does not end with the host name", out.NameEnd)
+	}
+}
+
+func TestFoundNamesTheAttempt(t *testing.T) {
+	packet := packetTo(443, ip.ProtocolTCP, clientHello("gateway.discord.gg"))
+
+	out, ok := Found(packet)
+	if !ok {
+		t.Fatal("hello went unrecognised")
+	}
+
+	if out.SrcPort != 54321 {
+		t.Errorf("SrcPort = %d, want 54321", out.SrcPort)
+	}
+
+	if out.Seq != 900100 {
+		t.Errorf("Seq = %d, want 900100", out.Seq)
 	}
 }
