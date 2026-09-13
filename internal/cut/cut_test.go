@@ -459,3 +459,45 @@ func TestOverlapErrors(t *testing.T) {
 		})
 	}
 }
+
+func TestFiller(t *testing.T) {
+	pattern := []byte{1, 2, 3, 4}
+
+	cases := []struct {
+		name string
+		size int
+		want []byte
+	}{
+		{"shorter than the pattern", 2, []byte{1, 2}},
+		{"the whole pattern", 4, []byte{1, 2, 3, 4}},
+		{"longer, padded with zeroes", 7, []byte{1, 2, 3, 4, 0, 0, 0}},
+		{"nothing asked for", 0, nil},
+		{"nonsense size", -5, nil},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := Filler(pattern, c.size)
+
+			if !bytes.Equal(got, c.want) {
+				t.Errorf("Filler = %v, want %v", got, c.want)
+			}
+		})
+	}
+}
+
+func TestFillerKeepsTheHelloReadableAtTheStart(t *testing.T) {
+	pattern := hello("www.4pda.to")
+
+	filler := Filler(pattern, len(pattern)*2)
+
+	// What an inspector reads first must still be the recorded hello, whatever
+	// pads the rest.
+	if !bytes.HasPrefix(filler, pattern) {
+		t.Error("the recorded hello no longer opens the filler")
+	}
+
+	if len(filler) != len(pattern)*2 {
+		t.Errorf("filler is %d bytes, want %d", len(filler), len(pattern)*2)
+	}
+}

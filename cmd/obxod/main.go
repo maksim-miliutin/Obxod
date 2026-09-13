@@ -46,6 +46,7 @@ func run() error {
 	sweepHost := flag.String("sweep", "", "try way after way for this site until one stops the retries")
 	seconds := flag.Int("seconds", 12, "how long to give each way while sweeping")
 	patternFile := flag.String("pattern", "", "a recorded hello from an allowed site, used by overlap")
+	seqovl := flag.Int("seqovl", 0, "how many bytes the overlap reaches back; zero means the whole pattern")
 	silence := flag.Int("silence", 45, "seconds of silence after which a connection counts as killed")
 	noQUIC := flag.Bool("noquic", false, "drop outgoing quic so the browser falls back to tcp, which we can unblock")
 	wet := flag.Bool("wet", false, "actually send copies; off by default, only reports")
@@ -96,7 +97,14 @@ func run() error {
 			return fmt.Errorf("cannot read the pattern: %w", err)
 		}
 
-		fmt.Printf("pattern: %d bytes from %s\n", len(pattern), *patternFile)
+		size := *seqovl
+		if size == 0 {
+			size = len(pattern)
+		}
+
+		pattern = cut.Filler(pattern, size)
+
+		fmt.Printf("pattern: %d bytes from %s, laid over %d bytes\n", len(pattern), *patternFile, size)
 	}
 
 	tries := attempt.New(20 * time.Second)

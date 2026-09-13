@@ -24,6 +24,20 @@ var (
 	ErrNoPattern  = errors.New("cut: an overlap needs a recorded hello to lay over")
 )
 
+// Filler makes the block that rides ahead of the stream: the recorded hello as
+// far as it goes, then zeroes. The size is asked for separately because it has
+// no reason to match the file, and a longer overlap reaches further back.
+func Filler(pattern []byte, size int) []byte {
+	if size <= 0 {
+		return nil
+	}
+
+	out := make([]byte, size)
+	copy(out, pattern)
+
+	return out
+}
+
 // Overlap splits the packet like At, but sends the first half from a sequence
 // number that many bytes earlier, filled with a hello recorded from another site.
 //
