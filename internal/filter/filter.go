@@ -51,6 +51,8 @@ func Outbound(voice []PortRange, quic bool) (string, error) {
 }
 
 // Meant for a handle opened in sniffing mode: replies are watched, never held up.
+// A fin carries no payload, so it has to be named on its own or a connection
+// closing politely would look exactly like one killed in silence.
 func Replies() string {
-	return fmt.Sprintf("inbound and ip and tcp.SrcPort == %d and (tcp.Rst or tcp.PayloadLength > 0)", httpsPort)
+	return fmt.Sprintf("inbound and ip and tcp.SrcPort == %d and (tcp.Rst or tcp.Fin or tcp.PayloadLength > 0)", httpsPort)
 }

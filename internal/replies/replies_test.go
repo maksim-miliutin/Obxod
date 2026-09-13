@@ -53,13 +53,15 @@ func TestRunReportsResetsAndData(t *testing.T) {
 		reply(443, 54323, tcp.FlagACK, nil),
 		reply(80, 54324, tcp.FlagRST, nil),
 		reply(443, 54325, tcp.FlagRST, nil),
+		reply(443, 54326, tcp.FlagFIN|tcp.FlagACK, nil),
 	}}
 
-	var resets, data []uint16
+	var resets, data, closed []uint16
 
 	w := Watch{
-		Reset: func(port uint16) { resets = append(resets, port) },
-		Data:  func(port uint16) { data = append(data, port) },
+		Reset:  func(port uint16) { resets = append(resets, port) },
+		Data:   func(port uint16) { data = append(data, port) },
+		Closed: func(port uint16) { closed = append(closed, port) },
 	}
 
 	if err := w.Run(f); !errors.Is(err, errDone) {
@@ -72,6 +74,11 @@ func TestRunReportsResetsAndData(t *testing.T) {
 
 	if len(data) != 1 || data[0] != 54322 {
 		t.Errorf("data = %v, want just 54322", data)
+	}
+
+	// A polite close must not be counted as data, or a finished request looks alive.
+	if len(closed) != 1 || closed[0] != 54326 {
+		t.Errorf("closed = %v, want just 54326", closed)
 	}
 }
 

@@ -77,7 +77,7 @@ func TestOutboundErrors(t *testing.T) {
 }
 
 func TestReplies(t *testing.T) {
-	want := "inbound and ip and tcp.SrcPort == 443 and (tcp.Rst or tcp.PayloadLength > 0)"
+	want := "inbound and ip and tcp.SrcPort == 443 and (tcp.Rst or tcp.Fin or tcp.PayloadLength > 0)"
 
 	if got := Replies(); got != want {
 		t.Errorf("\n got %s\nwant %s", got, want)
@@ -150,5 +150,13 @@ func TestOutboundCatchesQUIC(t *testing.T) {
 
 	if strings.Contains(without, "udp.DstPort == 443") {
 		t.Error("quic was not asked for yet 443 over udp is in the filter")
+	}
+}
+
+// The bug this guards: the watcher learned to read fin while the filter still
+// dropped it, so every finished connection looked like a killed one.
+func TestRepliesLetsFinThrough(t *testing.T) {
+	if !strings.Contains(Replies(), "tcp.Fin") {
+		t.Error("a fin would never reach the watcher")
 	}
 }

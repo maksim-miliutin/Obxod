@@ -109,3 +109,34 @@ func TestForget(t *testing.T) {
 		t.Error("a forgotten connection still answers")
 	}
 }
+
+// The false alarm this guards: a finished request goes quiet exactly like a
+// killed one, and calling both killed made the report worthless.
+func TestPolitelyClosedIsNotCalledKilled(t *testing.T) {
+	h := New()
+	now := time.Now()
+
+	h.Hello("updates.discord.com", 54321, now)
+	h.Data(54321, now)
+	h.Closed(54321)
+
+	if got := h.WentQuiet(now.Add(time.Minute), 5*time.Second); len(got) != 0 {
+		t.Errorf("a connection closed on purpose was reported as killed: %+v", got)
+	}
+}
+
+func TestClosedOnAnUnknownPortIsHarmless(t *testing.T) {
+	New().Closed(9999)
+}
+
+func TestKilledIsStillReportedAfterTheFix(t *testing.T) {
+	h := New()
+	now := time.Now()
+
+	h.Hello("gateway.discord.gg", 54321, now)
+	h.Data(54321, now)
+
+	if got := h.WentQuiet(now.Add(time.Minute), 5*time.Second); len(got) != 1 {
+		t.Errorf("a connection that went quiet with no fin was not reported: %+v", got)
+	}
+}

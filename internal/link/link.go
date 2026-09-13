@@ -18,6 +18,7 @@ type state struct {
 	packets  int
 	lastData time.Time
 	reported bool
+	closed   bool
 }
 
 type Report struct {
@@ -55,6 +56,18 @@ func (h *Health) Data(port uint16, now time.Time) (string, bool) {
 	return s.host, s.packets == 1
 }
 
+// Closed marks a connection the other side ended on purpose. Such a connection
+// goes quiet like a killed one, and without this mark every finished request
+// would be reported as a casualty.
+func (h *Health) Closed(port uint16) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	if s, known := h.links[port]; known {
+		s.closed = true
+	}
+}
+
 func (h *Health) Forget(port uint16) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -71,7 +84,7 @@ func (h *Health) WentQuiet(now time.Time, after time.Duration) []Report {
 	var out []Report
 
 	for port, s := range h.links {
-		if s.packets == 0 || s.reported || now.Sub(s.lastData) < after {
+		if s.packets == 0 || s.reported || s.closed || now.Sub(s.lastData) < after {
 			continue
 		}
 

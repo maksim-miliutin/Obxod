@@ -45,6 +45,7 @@ func run() error {
 	where := flag.String("cut", "", "split the real hello: name (through the middle of the host name), after (just past it), start (near the record start)")
 	sweepHost := flag.String("sweep", "", "try way after way for this site until one stops the retries")
 	seconds := flag.Int("seconds", 12, "how long to give each way while sweeping")
+	silence := flag.Int("silence", 45, "seconds of silence after which a connection counts as killed")
 	noQUIC := flag.Bool("noquic", false, "drop outgoing quic so the browser falls back to tcp, which we can unblock")
 	wet := flag.Bool("wet", false, "actually send copies; off by default, only reports")
 	flag.Parse()
@@ -123,6 +124,9 @@ func run() error {
 					hunt.Saw(true)
 				}
 			},
+			Closed: func(port uint16) {
+				health.Closed(port)
+			},
 			Data: func(port uint16) {
 				host, first := health.Data(port, time.Now())
 				if !first {
@@ -196,7 +200,7 @@ func run() error {
 			}
 		}
 
-		for _, gone := range health.WentQuiet(time.Now(), 8*time.Second) {
+		for _, gone := range health.WentQuiet(time.Now(), time.Duration(*silence)*time.Second) {
 			fmt.Printf("  %s on port %d: answered %d times then went silent for %s, the connection was killed\n",
 				gone.Host, gone.Port, gone.Packets, gone.Silence.Round(time.Second))
 		}
