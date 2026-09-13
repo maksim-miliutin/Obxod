@@ -13,6 +13,7 @@ import (
 	"obxod/internal/hello"
 	"obxod/internal/ip"
 	"obxod/internal/rules"
+	"obxod/internal/sweep"
 	"strings"
 )
 
@@ -227,7 +228,7 @@ func TestDecoyAndCutBothGoOut(t *testing.T) {
 				t.Fatalf("ParseAll: %v", err)
 			}
 
-			sent, err := forward(r, packet, addr, set, attempt.New(time.Minute), true)
+			sent, err := forward(r, packet, addr, set, attempt.New(time.Minute), nil, true)
 			if err != nil {
 				t.Fatalf("forward: %v", err)
 			}
@@ -337,5 +338,65 @@ func TestIsQUIC(t *testing.T) {
 
 	if isQUIC(nil) {
 		t.Error("an empty packet was taken for quic")
+	}
+}
+
+// The sweep is only useful if what it prints can be pasted back as a rule.
+func TestAsRuleRoundTrips(t *testing.T) {
+	for _, r := range sweep.Candidates("gateway.discord.gg") {
+		text := asRule(r)
+
+		back, err := rules.Parse("gateway.discord.gg=" + text)
+		if err != nil {
+			t.Fatalf("%q does not parse back: %v", text, err)
+		}
+
+		if back != r {
+			t.Errorf("\n got %+v\nwant %+v\nfrom %q", back, r, text)
+		}
+	}
+}
+
+// The bug this guards: sweeping one host used to throw away the rules that made
+// the rest of the site work, so the swept host was never even asked for.
+func TestSweepKeepsTheOtherRules(t *testing.T) {
+	base, err := rules.ParseAll([]string{
+		"discord.com=decoy,badseq:100000,cut:name",
+		"gateway.discord.gg=badsum",
+	})
+	if err != nil {
+		t.Fatalf("ParseAll: %v", err)
+	}
+
+	candidate, err := rules.Parse("gateway.discord.gg=ttl:2,cut:start")
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+
+	set := withCandidate(base, candidate)
+
+	if len(set) != 2 {
+		t.Fatalf("set holds %d rules, want 2", len(set))
+	}
+
+	got, ok := set.For("updates.discord.com")
+	if !ok || got.Cut != "name" {
+		t.Error("the rule that already worked for discord.com was lost")
+	}
+
+	got, ok = set.For("gateway.discord.gg")
+	if !ok || got.TTL != 2 || got.Cut != "start" {
+		t.Errorf("the swept host got %+v, want the candidate", got)
+	}
+}
+
+func TestWithCandidateOnAnEmptyBase(t *testing.T) {
+	candidate, err := rules.Parse("gateway.discord.gg=badsum")
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+
+	if set := withCandidate(nil, candidate); len(set) != 1 {
+		t.Errorf("set holds %d rules, want just the candidate", len(set))
 	}
 }

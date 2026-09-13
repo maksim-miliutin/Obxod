@@ -15,6 +15,7 @@ import (
 	"obxod/internal/hello"
 	"obxod/internal/ip"
 	"obxod/internal/rules"
+	"obxod/internal/sweep"
 	"obxod/internal/udp"
 )
 
@@ -39,13 +40,29 @@ func run() error {
 	badsum := flag.Bool("badsum", false, "give the copy a wrong tcp checksum")
 	decoy := flag.String("decoy", "", "put another host name in the copy; \"auto\" makes one of the right length")
 	where := flag.String("cut", "", "split the real hello: name (through the middle of the host name), after (just past it), start (near the record start)")
+	sweepHost := flag.String("sweep", "", "try way after way for this site until one stops the retries")
+	seconds := flag.Int("seconds", 12, "how long to give each way while sweeping")
 	noQUIC := flag.Bool("noquic", false, "drop outgoing quic so the browser falls back to tcp, which we can unblock")
 	wet := flag.Bool("wet", false, "actually send copies; off by default, only reports")
 	flag.Parse()
 
-	set, err := plan(ruleTexts, *hosts, uint8(*ttl), uint32(*badseq), *badsum, *decoy, *where)
-	if err != nil {
+	var hunt *sweep.Sweep
+
+	base, err := plan(ruleTexts, *hosts, uint8(*ttl), uint32(*badseq), *badsum, *decoy, *where)
+
+	if *sweepHost == "" && err != nil {
 		return err
+	}
+
+	set := base
+
+	if *sweepHost != "" {
+		host := strings.ToLower(*sweepHost)
+		hunt = sweep.New(host, sweep.Candidates(host), time.Duration(*seconds)*time.Second, time.Now())
+
+		// The rules that already work stay on: without them the site never gets
+		// far enough to ask for the one being swept.
+		set = withCandidate(base, hunt.Current())
 	}
 
 	// An untouched copy is a second identical hello: the server sees the payload
@@ -75,6 +92,7 @@ func run() error {
 	buf := make([]byte, maxPacket)
 
 	var dropped int
+	var quiet int
 
 	tries := attempt.New(20 * time.Second)
 
@@ -96,7 +114,34 @@ func run() error {
 			continue
 		}
 
-		sent, err := forward(h, packet, &addr, set, tries, *wet)
+		if hunt != nil {
+			if verdict, done := hunt.Judge(time.Now()); done {
+				fmt.Printf("  %s: %s\n", describe(hunt.Current()), verdict)
+
+				if verdict == sweep.Worked {
+					fmt.Printf("\nthis one works, keeping it:\n  -rule \"%s=%s\"\n", hunt.Host(), asRule(hunt.Current()))
+
+					hunt = nil
+				} else if !hunt.Next(time.Now()) {
+					return fmt.Errorf("nothing left to try for %s", hunt.Host())
+				} else {
+					quiet++
+
+					if verdict != sweep.Quiet {
+						quiet = 0
+					}
+
+					if quiet == 4 {
+						fmt.Printf("\n%s has not asked for anything yet. Give the rules that already work with -rule, or the site never gets this far.\n\n", hunt.Host())
+					}
+
+					fmt.Printf("trying %s, %d left\n", describe(hunt.Current()), hunt.Left())
+					set = withCandidate(base, hunt.Current())
+				}
+			}
+		}
+
+		sent, err := forward(h, packet, &addr, set, tries, hunt, *wet)
 		if err != nil {
 			return err
 		}
@@ -119,7 +164,7 @@ type sender interface {
 
 // forward returns true when it already put the packet on the wire itself, which
 // happens for a cut: the original must not follow its own halves.
-func forward(h sender, packet []byte, addr *divert.Addr, set rules.Set, tries *attempt.Tracker, wet bool) (bool, error) {
+func forward(h sender, packet []byte, addr *divert.Addr, set rules.Set, tries *attempt.Tracker, watcher *sweep.Sweep, wet bool) (bool, error) {
 	found, ok := hello.Found(packet)
 	if !ok {
 		return false, nil
@@ -130,8 +175,14 @@ func forward(h sender, packet []byte, addr *divert.Addr, set rules.Set, tries *a
 		return false, nil
 	}
 
-	if tries.Saw(found.Host, found.SrcPort, found.Seq, time.Now()) == attempt.Again {
+	repeat := tries.Saw(found.Host, found.SrcPort, found.Seq, time.Now()) == attempt.Again
+
+	if repeat {
 		fmt.Printf("  %s: asking again, so this way is not getting through\n", found.Host)
+	}
+
+	if watcher != nil && watcher.Host() == found.Host {
+		watcher.Saw(repeat)
 	}
 
 	// The decoy goes first and the real hello follows, cut or whole: an inspector
@@ -382,4 +433,44 @@ func describe(r rules.Rule) string {
 	}
 
 	return strings.Join(named, " + ")
+}
+
+func asRule(r rules.Rule) string {
+	var ways []string
+
+	if r.TTL != 0 {
+		ways = append(ways, fmt.Sprintf("ttl:%d", r.TTL))
+	}
+
+	if r.BadSeq != 0 {
+		ways = append(ways, fmt.Sprintf("badseq:%d", r.BadSeq))
+	}
+
+	if r.BadSum {
+		ways = append(ways, "badsum")
+	}
+
+	if r.Decoy != "" {
+		ways = append(ways, "decoy:"+r.Decoy)
+	}
+
+	if r.Cut != "" {
+		ways = append(ways, "cut:"+r.Cut)
+	}
+
+	return strings.Join(ways, ",")
+}
+
+// withCandidate puts one rule in place of whatever covered the same host, leaving
+// every other rule alone.
+func withCandidate(base rules.Set, r rules.Rule) rules.Set {
+	out := rules.Set{r}
+
+	for _, had := range base {
+		if had.Host != r.Host {
+			out = append(out, had)
+		}
+	}
+
+	return out
 }
