@@ -162,7 +162,7 @@ func (e *Engine) judge(now time.Time) error {
 	host := e.hunt.Host()
 
 	if !e.hunt.Next(now) {
-		return fmt.Errorf("nothing left to try for %s", host)
+		return fmt.Errorf("bypass: nothing left to try for %s", host)
 	}
 
 	e.quiet++

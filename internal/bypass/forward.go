@@ -73,7 +73,7 @@ func (e *Engine) fake(h sender, packet []byte, addr *divert.Addr, found hello.Ou
 		}
 
 		if len(name) != len(found.Host) {
-			return fmt.Errorf("decoy %q is %d bytes, the real name is %d: they must match", name, len(name), len(found.Host))
+			return fmt.Errorf("bypass: decoy %q is %d bytes, the real name is %d: they must match", name, len(name), len(found.Host))
 		}
 
 		recipe.Name = name
@@ -171,7 +171,7 @@ func pointFor(found hello.Outgoing, where string) (int, error) {
 		return 2, nil
 	}
 
-	return 0, fmt.Errorf("unknown cut %q: use name, after or start", where)
+	return 0, fmt.Errorf("bypass: unknown cut %q: use name, after or start", where)
 }
 
 // decoyFor builds a harmless name exactly as long as the real one, because the
