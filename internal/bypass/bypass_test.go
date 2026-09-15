@@ -3,6 +3,7 @@ package bypass
 import (
 	"bytes"
 	"errors"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -55,6 +56,13 @@ func (l *lines) say(text string) {
 	l.said = append(l.said, text)
 }
 
+func (l *lines) all() []string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	return append([]string(nil), l.said...)
+}
+
 func runOver(t *testing.T, s Settings, packets ...[]byte) *fakeWire {
 	t.Helper()
 
@@ -79,6 +87,38 @@ func setOf(t *testing.T, texts ...string) rules.Set {
 	}
 
 	return set
+}
+
+// The bug this guards: a reset arriving more than 20s after the hello was
+// reported as a stranger's, because the port was looked up in the retry tracker.
+func TestResetOnOurPortNamesTheHost(t *testing.T) {
+	const host = "gateway.discord.gg"
+
+	out := &lines{}
+
+	e := New(Settings{Rules: setOf(t, host+"=badsum"), Wet: true, Report: out.say})
+
+	if _, err := e.forward(&recorder{}, packet443(clientHello(host)), &divert.Addr{}); err != nil {
+		t.Fatalf("forward: %v", err)
+	}
+
+	e.reset(0)
+
+	var named, stranger bool
+
+	for _, said := range out.all() {
+		if strings.Contains(said, host) && strings.Contains(said, "reset by the other side") {
+			named = true
+		}
+
+		if strings.Contains(said, "never touched") {
+			stranger = true
+		}
+	}
+
+	if !named || stranger {
+		t.Errorf("reset was reported as named=%v stranger=%v, want our host named", named, stranger)
+	}
 }
 
 func TestRunPassesWhatNoRuleCovers(t *testing.T) {

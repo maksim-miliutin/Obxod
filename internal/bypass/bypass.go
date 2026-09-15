@@ -205,7 +205,7 @@ func (e *Engine) watch(eyes Eyes) {
 }
 
 func (e *Engine) reset(port uint16) {
-	host, known := e.tries.HostOn(port)
+	host, known := e.health.Reset(port)
 	if !known {
 		e.say("  reset on port %d, which we never touched", port)
 
@@ -213,7 +213,6 @@ func (e *Engine) reset(port uint16) {
 	}
 
 	e.say("  %s on port %d: reset by the other side", host, port)
-	e.health.Forget(port)
 
 	e.guard.Lock()
 	defer e.guard.Unlock()

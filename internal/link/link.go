@@ -62,11 +62,20 @@ func (h *Health) Closed(port uint16) {
 	}
 }
 
-func (h *Health) Forget(port uint16) {
+// Reset drops the link and says whose it was: a connection the other side reset
+// must not also be reported as one that quietly died.
+func (h *Health) Reset(port uint16) (string, bool) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
+	s, known := h.links[port]
+	if !known {
+		return "", false
+	}
+
 	delete(h.links, port)
+
+	return s.host, true
 }
 
 func (h *Health) WentQuiet(now time.Time, after time.Duration) []Report {

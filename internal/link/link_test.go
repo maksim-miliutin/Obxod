@@ -98,15 +98,58 @@ func TestConnectionsThatNeverAnsweredAreNotCalledQuiet(t *testing.T) {
 	}
 }
 
-func TestForget(t *testing.T) {
+func TestResetNamesTheHostAndDropsTheLink(t *testing.T) {
 	h := New()
 	now := time.Now()
 
 	h.Hello("gateway.discord.gg", 54321, now)
-	h.Forget(54321)
+
+	host, known := h.Reset(54321)
+	if !known || host != "gateway.discord.gg" {
+		t.Fatalf("Reset(54321) = %q %v, want the host back", host, known)
+	}
 
 	if _, first := h.Data(54321, now); first {
-		t.Error("a forgotten connection still answers")
+		t.Error("a link dropped on reset still answers")
+	}
+
+	if _, known := h.Reset(54321); known {
+		t.Error("the same link was dropped twice")
+	}
+}
+
+func TestResetOnAPortWeNeverSaw(t *testing.T) {
+	if _, known := New().Reset(9999); known {
+		t.Error("a port we never touched was claimed as ours")
+	}
+}
+
+// The false alarm this guards: a link the other side reset used to stay in place
+// and get reported a second time as one that quietly died.
+func TestResetLinkIsNotReportedQuietLater(t *testing.T) {
+	h := New()
+	now := time.Now()
+
+	h.Hello("gateway.discord.gg", 54321, now)
+	h.Data(54321, now)
+	h.Reset(54321)
+
+	if got := h.WentQuiet(now.Add(time.Minute), 5*time.Second); len(got) != 0 {
+		t.Errorf("a reset link was also called killed: %+v", got)
+	}
+}
+
+// The bug this guards: the host on a port used to be kept a second time in the
+// retry tracker, which forgets after 20s, so long connections lost their name.
+func TestPortStaysKnownLongAfterTheHello(t *testing.T) {
+	h := New()
+	now := time.Now()
+
+	h.Hello("gateway.discord.gg", 54321, now)
+	h.Data(54321, now.Add(time.Hour))
+
+	if host, known := h.Reset(54321); !known || host != "gateway.discord.gg" {
+		t.Errorf("an hour later the port gave %q %v, want the host", host, known)
 	}
 }
 

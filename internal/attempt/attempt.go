@@ -9,7 +9,6 @@ import (
 type Tracker struct {
 	mu     sync.Mutex
 	seen   map[key]time.Time
-	byPort map[uint16]string
 	forget time.Duration
 }
 
@@ -27,7 +26,7 @@ const (
 )
 
 func New(forget time.Duration) *Tracker {
-	return &Tracker{seen: make(map[key]time.Time), byPort: make(map[uint16]string), forget: forget}
+	return &Tracker{seen: make(map[key]time.Time), forget: forget}
 }
 
 func (t *Tracker) Saw(host string, port uint16, seq uint32, now time.Time) Verdict {
@@ -35,8 +34,6 @@ func (t *Tracker) Saw(host string, port uint16, seq uint32, now time.Time) Verdi
 	defer t.mu.Unlock()
 
 	t.sweep(now)
-
-	t.byPort[port] = host
 
 	k := key{port: port, seq: seq, host: host}
 
@@ -55,7 +52,6 @@ func (t *Tracker) sweep(now time.Time) {
 	for k, at := range t.seen {
 		if now.Sub(at) > t.forget {
 			delete(t.seen, k)
-			delete(t.byPort, k.port)
 		}
 	}
 }
@@ -65,14 +61,4 @@ func (t *Tracker) Watching() int {
 	defer t.mu.Unlock()
 
 	return len(t.seen)
-}
-
-// Called from the reply watcher, which runs on its own, hence the lock.
-func (t *Tracker) HostOn(port uint16) (string, bool) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-
-	host, ok := t.byPort[port]
-
-	return host, ok
 }
