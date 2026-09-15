@@ -2,6 +2,7 @@ package sweep
 
 import (
 	"fmt"
+	"sync"
 	"time"
 
 	"obxod/internal/rules"
@@ -27,6 +28,8 @@ func (v Verdict) String() string {
 }
 
 type Sweep struct {
+	mu sync.Mutex
+
 	host       string
 	candidates []rules.Rule
 	at         int
@@ -35,6 +38,7 @@ type Sweep struct {
 
 	sawHello  bool
 	sawRepeat bool
+	done      bool
 }
 
 func New(host string, candidates []rules.Rule, window time.Duration, now time.Time) *Sweep {
@@ -46,14 +50,28 @@ func (s *Sweep) Host() string {
 }
 
 func (s *Sweep) Current() rules.Rule {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	return s.candidates[s.at]
 }
 
 func (s *Sweep) Left() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	return len(s.candidates) - s.at - 1
 }
 
+// Called from the loop and from the reply watcher, which run apart.
 func (s *Sweep) Saw(repeat bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.done {
+		return
+	}
+
 	s.sawHello = true
 
 	if repeat {
@@ -63,7 +81,10 @@ func (s *Sweep) Saw(repeat bool) {
 
 // A repeat settles the matter early, no reason to wait the window out.
 func (s *Sweep) Judge(now time.Time) (Verdict, bool) {
-	if !s.sawRepeat && now.Sub(s.since) < s.window {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.done || (!s.sawRepeat && now.Sub(s.since) < s.window) {
 		return Worked, false
 	}
 
@@ -77,10 +98,15 @@ func (s *Sweep) Judge(now time.Time) (Verdict, bool) {
 		verdict = Worked
 	}
 
+	s.done = verdict == Worked
+
 	return verdict, true
 }
 
 func (s *Sweep) Next(now time.Time) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	s.at++
 	s.since = now
 	s.sawHello = false

@@ -3,7 +3,6 @@ package bypass
 import (
 	"fmt"
 	"strings"
-	"sync"
 	"time"
 
 	"obxod/internal/attempt"
@@ -58,7 +57,6 @@ type Engine struct {
 	tries  *attempt.Tracker
 	health *link.Health
 
-	guard   sync.Mutex
 	quiet   int
 	dropped int
 }
@@ -131,9 +129,6 @@ func (e *Engine) Run(wire Wire, eyes Eyes) error {
 }
 
 func (e *Engine) step(now time.Time) error {
-	e.guard.Lock()
-	defer e.guard.Unlock()
-
 	if err := e.judge(now); err != nil {
 		return err
 	}
@@ -160,7 +155,6 @@ func (e *Engine) judge(now time.Time) error {
 
 	if verdict == sweep.Worked {
 		e.say("\nthis one works, keeping it:\n  -rule \"%s=%s\"", e.hunt.Host(), asRule(e.hunt.Current()))
-		e.hunt = nil
 
 		return nil
 	}
@@ -213,9 +207,6 @@ func (e *Engine) reset(port uint16) {
 	}
 
 	e.say("  %s on port %d: reset by the other side", host, port)
-
-	e.guard.Lock()
-	defer e.guard.Unlock()
 
 	if e.hunt != nil && e.hunt.Host() == host {
 		e.hunt.Saw(true)

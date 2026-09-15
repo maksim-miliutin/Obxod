@@ -1,6 +1,7 @@
 package sweep
 
 import (
+	"sync"
 	"testing"
 	"time"
 
@@ -133,5 +134,73 @@ func TestCandidatesAreAllUsable(t *testing.T) {
 		}
 
 		seen[r] = true
+	}
+}
+
+// The race this guards: the loop calls Saw while the reply watcher calls it too,
+// and the sweep used to carry no lock of its own.
+func TestSweepIsSafeFromTwoGoroutines(t *testing.T) {
+	s := New("gateway.discord.gg", Candidates("gateway.discord.gg"), time.Hour, time.Now())
+
+	var wg sync.WaitGroup
+
+	wg.Add(3)
+
+	go func() {
+		defer wg.Done()
+
+		for i := 0; i < 500; i++ {
+			s.Saw(i%3 == 0)
+		}
+	}()
+
+	go func() {
+		defer wg.Done()
+
+		for i := 0; i < 500; i++ {
+			s.Saw(true)
+		}
+	}()
+
+	go func() {
+		defer wg.Done()
+
+		now := time.Now()
+
+		for i := 0; i < 500; i++ {
+			if _, done := s.Judge(now); done {
+				s.Next(now)
+			}
+
+			s.Current()
+			s.Left()
+		}
+	}()
+
+	wg.Wait()
+}
+
+// Once something worked the sweep is over: judging again must not start it up.
+func TestWorkedEndsTheSweep(t *testing.T) {
+	now := time.Now()
+	s := New("gateway.discord.gg", Candidates("gateway.discord.gg"), time.Minute, now)
+
+	s.Saw(false)
+
+	verdict, done := s.Judge(now.Add(2 * time.Minute))
+	if !done || verdict != Worked {
+		t.Fatalf("Judge = %v %v, want a verdict of worked", verdict, done)
+	}
+
+	won := s.Current()
+
+	s.Saw(true)
+
+	if _, done := s.Judge(now.Add(time.Hour)); done {
+		t.Error("a finished sweep judged again")
+	}
+
+	if s.Current() != won {
+		t.Error("a finished sweep moved off the candidate that worked")
 	}
 }
