@@ -286,6 +286,61 @@ func TestDecoyAndCutBothGoOut(t *testing.T) {
 	}
 }
 
+// The trap this guards: asking for no repeats must still send exactly one copy,
+// not none, so a zero Repeats is never taken for a count.
+func TestCopiesGoOutAsManyTimesAsAsked(t *testing.T) {
+	const host = "gateway.discord.gg"
+
+	cases := map[string]struct {
+		rule string
+		want int
+	}{
+		"nothing asked":  {host + "=badseq:100000,decoy", 1},
+		"asked for one":  {host + "=badseq:100000,decoy,repeats:1", 1},
+		"asked for five": {host + "=badseq:100000,decoy,repeats:5", 5},
+	}
+
+	for name, c := range cases {
+		t.Run(name, func(t *testing.T) {
+			r := &recorder{}
+
+			if _, err := engineFor(t, true, nil, c.rule).forward(r, packet443(clientHello(host)), &divert.Addr{}); err != nil {
+				t.Fatalf("forward: %v", err)
+			}
+
+			if len(r.sent) != c.want {
+				t.Fatalf("sent %d copies, want %d", len(r.sent), c.want)
+			}
+
+			for i, out := range r.sent {
+				if !bytes.Equal(out, r.sent[0]) {
+					t.Errorf("copy %d differs from the first; repeats send the same packet again", i)
+				}
+			}
+		})
+	}
+}
+
+// Repeats multiply the copy, never the real hello or its halves.
+func TestRepeatsDoNotMultiplyTheCut(t *testing.T) {
+	const host = "gateway.discord.gg"
+
+	r := &recorder{}
+
+	sent, err := engineFor(t, true, nil, host+"=decoy,repeats:4,cut:name").forward(r, packet443(clientHello(host)), &divert.Addr{})
+	if err != nil {
+		t.Fatalf("forward: %v", err)
+	}
+
+	if !sent {
+		t.Error("the cut did not take over sending")
+	}
+
+	if len(r.sent) != 6 {
+		t.Fatalf("sent %d packets, want 4 copies and 2 halves", len(r.sent))
+	}
+}
+
 func TestDryRunPutsNothingOnTheWire(t *testing.T) {
 	const host = "updates.discord.com"
 

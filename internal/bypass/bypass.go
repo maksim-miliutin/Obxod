@@ -293,6 +293,10 @@ func describe(r rules.Rule) string {
 		named = append(named, fmt.Sprintf("overlap keeping %d", r.Overlap))
 	}
 
+	if r.Repeats != 0 {
+		named = append(named, fmt.Sprintf("%d copies", r.Repeats))
+	}
+
 	return strings.Join(named, " + ")
 }
 
@@ -321,6 +325,10 @@ func asRule(r rules.Rule) string {
 
 	if r.Overlap != 0 {
 		ways = append(ways, fmt.Sprintf("overlap:%d", r.Overlap))
+	}
+
+	if r.Repeats != 0 {
+		ways = append(ways, fmt.Sprintf("repeats:%d", r.Repeats))
 	}
 
 	return strings.Join(ways, ",")

@@ -23,6 +23,7 @@ type Rule struct {
 	Cut    string // empty, "name", "after" or "start"
 
 	Overlap int
+	Repeats int
 }
 
 // Parse reads one rule, written as host=way,way,way. A way is ttl:4, badseq:100000,
@@ -98,6 +99,15 @@ func (r *Rule) take(way string) error {
 		}
 
 		r.Overlap = at
+
+		return nil
+	case "repeats":
+		copies, err := strconv.Atoi(value)
+		if err != nil || copies < 1 || copies > 20 {
+			return fmt.Errorf("rules: repeats wants how many copies go out, 1 to 20")
+		}
+
+		r.Repeats = copies
 
 		return nil
 	case "cut":

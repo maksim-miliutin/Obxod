@@ -214,3 +214,43 @@ func TestBlankCountsEveryWay(t *testing.T) {
 		}
 	}
 }
+
+func TestRepeatsParses(t *testing.T) {
+	r, err := Parse("gateway.discord.gg=badseq:100000,repeats:5")
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+
+	if r.Repeats != 5 {
+		t.Errorf("Repeats = %d, want 5", r.Repeats)
+	}
+}
+
+func TestRepeatsRejectsNonsense(t *testing.T) {
+	for _, text := range []string{"repeats:0", "repeats:-1", "repeats:many", "repeats:21", "repeats"} {
+		t.Run(text, func(t *testing.T) {
+			if _, err := Parse("discord.com=badsum," + text); err == nil {
+				t.Error("nonsense was accepted")
+			}
+		})
+	}
+}
+
+// Repeats multiplies a copy, it does not make one: a rule that only repeats
+// spoils nothing and must not pass for a way to bypass anything.
+func TestRepeatsAloneIsNotAWay(t *testing.T) {
+	if _, err := Parse("discord.com=repeats:5"); !errors.Is(err, ErrNoWay) {
+		t.Errorf("Parse gave %v, want ErrNoWay", err)
+	}
+}
+
+func TestRepeatsIsAbsentByDefault(t *testing.T) {
+	r, err := Parse("discord.com=badsum")
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+
+	if r.Repeats != 0 {
+		t.Errorf("Repeats = %d, want nothing asked for", r.Repeats)
+	}
+}

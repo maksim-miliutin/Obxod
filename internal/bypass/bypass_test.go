@@ -274,3 +274,19 @@ func TestNewPutsTheFirstCandidateInPlace(t *testing.T) {
 		t.Errorf("the sweep starts on %+v, want %+v", got, first)
 	}
 }
+
+func TestAsRuleCarriesRepeats(t *testing.T) {
+	r, err := rules.Parse("gateway.discord.gg=badseq:100000,decoy,repeats:5")
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+
+	back, err := rules.Parse("gateway.discord.gg=" + asRule(r))
+	if err != nil {
+		t.Fatalf("%q does not parse back: %v", asRule(r), err)
+	}
+
+	if back != r {
+		t.Errorf("\n got %+v\nwant %+v", back, r)
+	}
+}

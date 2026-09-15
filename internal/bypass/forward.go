@@ -87,15 +87,23 @@ func (e *Engine) fake(h sender, packet []byte, addr *divert.Addr, found hello.Ou
 		return nil
 	}
 
+	copies := max(1, r.Repeats)
+
 	if !e.wet {
-		e.say("  %s: would send a %d byte copy (%s%s)", found.Host, len(copied), spoils(r.TTL, r.BadSeq, r.BadSum), wearing(recipe.Name))
+		e.say("  %s: would send a %d byte copy (%s%s%s)", found.Host, len(copied), spoils(r.TTL, r.BadSeq, r.BadSum), wearing(recipe.Name), times(copies))
 
 		return nil
 	}
 
-	e.say("  %s: copy sent ahead (%s%s)", found.Host, spoils(r.TTL, r.BadSeq, r.BadSum), wearing(recipe.Name))
+	e.say("  %s: copy sent ahead (%s%s%s)", found.Host, spoils(r.TTL, r.BadSeq, r.BadSum), wearing(recipe.Name), times(copies))
 
-	return h.Send(copied, addr)
+	for range copies {
+		if err := h.Send(copied, addr); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (e *Engine) split(h sender, packet []byte, addr *divert.Addr, found hello.Outgoing, where string) (bool, error) {
@@ -206,4 +214,12 @@ func wearing(name string) string {
 	}
 
 	return ", wearing " + name
+}
+
+func times(copies int) string {
+	if copies == 1 {
+		return ""
+	}
+
+	return fmt.Sprintf(", %d times", copies)
 }
