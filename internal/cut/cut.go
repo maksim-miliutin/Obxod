@@ -1,19 +1,11 @@
 package cut
 
 import (
-	"encoding/binary"
 	"errors"
 
-	"obxod/internal/checksum"
 	"obxod/internal/ip"
+	"obxod/internal/seal"
 	"obxod/internal/tcp"
-)
-
-const (
-	totalLenAt    = 2
-	ipChecksumAt  = 10
-	tcpSeqAt      = 4
-	tcpChecksumAt = 16
 )
 
 var (
@@ -42,7 +34,7 @@ func Overlap(packet []byte, pattern []byte, point int) ([]byte, []byte, error) {
 		return nil, nil, ErrNoPattern
 	}
 
-	outer, segment, err := layers(packet)
+	_, segment, err := layers(packet)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -55,16 +47,11 @@ func Overlap(packet []byte, pattern []byte, point int) ([]byte, []byte, error) {
 		return nil, nil, ErrNoRoomLeft
 	}
 
-	headers := outer.HeaderLen + segment.HeaderLen
-
 	ahead := make([]byte, 0, len(pattern)+point)
 	ahead = append(ahead, pattern...)
 	ahead = append(ahead, segment.Payload[:point]...)
 
-	first := build(packet, headers, ahead, segment.Seq-uint32(len(pattern)), outer)
-	second := build(packet, headers, segment.Payload[point:], segment.Seq+uint32(point), outer)
-
-	return first, second, nil
+	return both(packet, ahead, segment.Seq-uint32(len(pattern)), segment.Payload[point:], segment.Seq+uint32(point))
 }
 
 func layers(packet []byte) (ip.Header, tcp.Header, error) {
@@ -90,7 +77,7 @@ func layers(packet []byte) (ip.Header, tcp.Header, error) {
 }
 
 func At(packet []byte, point int) ([]byte, []byte, error) {
-	outer, segment, err := layers(packet)
+	_, segment, err := layers(packet)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -103,29 +90,19 @@ func At(packet []byte, point int) ([]byte, []byte, error) {
 		return nil, nil, ErrNoRoomLeft
 	}
 
-	headers := outer.HeaderLen + segment.HeaderLen
-
-	first := build(packet, headers, segment.Payload[:point], segment.Seq, outer)
-	second := build(packet, headers, segment.Payload[point:], segment.Seq+uint32(point), outer)
-
-	return first, second, nil
+	return both(packet, segment.Payload[:point], segment.Seq, segment.Payload[point:], segment.Seq+uint32(point))
 }
 
-func build(packet []byte, headers int, payload []byte, seq uint32, outer ip.Header) []byte {
-	out := make([]byte, headers+len(payload))
-	copy(out, packet[:headers])
-	copy(out[headers:], payload)
+func both(packet []byte, ahead []byte, aheadSeq uint32, rest []byte, restSeq uint32) ([]byte, []byte, error) {
+	first, err := seal.Remade(packet, ahead, aheadSeq)
+	if err != nil {
+		return nil, nil, err
+	}
 
-	binary.BigEndian.PutUint16(out[totalLenAt:totalLenAt+2], uint16(len(out)))
+	second, err := seal.Remade(packet, rest, restSeq)
+	if err != nil {
+		return nil, nil, err
+	}
 
-	segment := out[outer.HeaderLen:]
-
-	// Move the number by what the half before carried, or the stream has a hole.
-	binary.BigEndian.PutUint32(segment[tcpSeqAt:tcpSeqAt+4], seq)
-
-	header := out[:outer.HeaderLen]
-	binary.BigEndian.PutUint16(header[ipChecksumAt:ipChecksumAt+2], checksum.IPv4(header))
-	binary.BigEndian.PutUint16(segment[tcpChecksumAt:tcpChecksumAt+2], checksum.TCP(outer.Src, outer.Dst, segment))
-
-	return out
+	return first, second, nil
 }

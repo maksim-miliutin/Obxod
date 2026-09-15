@@ -12,6 +12,8 @@ import (
 	"obxod/internal/tcp"
 )
 
+const tcpChecksumAt = 16
+
 func hello(host string) []byte {
 	name := []byte(host)
 

@@ -11,6 +11,11 @@ import (
 	"obxod/internal/tcp"
 )
 
+const (
+	ipChecksumAt  = 10
+	tcpChecksumAt = 16
+)
+
 func build(protocol byte, ttl byte, payload []byte, trailing int) []byte {
 	transport := make([]byte, 20)
 	binary.BigEndian.PutUint16(transport[0:2], 54321)

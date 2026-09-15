@@ -1,0 +1,84 @@
+package seal
+
+import (
+	"encoding/binary"
+	"errors"
+
+	"obxod/internal/checksum"
+	"obxod/internal/ip"
+	"obxod/internal/tcp"
+)
+
+const (
+	totalLenAt    = 2
+	ipChecksumAt  = 10
+	tcpSeqAt      = 4
+	tcpChecksumAt = 16
+)
+
+var ErrNotTCP = errors.New("seal: only tcp packets are sealed")
+
+// Sums writes both checksums over a packet whose bytes are otherwise final.
+func Sums(packet []byte, badSum bool) error {
+	outer, err := ip.Parse(packet)
+	if err != nil {
+		return err
+	}
+
+	if outer.Protocol != ip.ProtocolTCP {
+		return ErrNotTCP
+	}
+
+	header := packet[:outer.HeaderLen]
+	binary.BigEndian.PutUint16(header[ipChecksumAt:ipChecksumAt+2], checksum.IPv4(header))
+
+	// Offload can hand us more bytes than the header claims; those trailing bytes
+	// belong to no segment and must stay out of the sum.
+	segment := packet[outer.HeaderLen : outer.HeaderLen+len(outer.Payload)]
+	sum := checksum.TCP(outer.Src, outer.Dst, segment)
+
+	// Flip the right sum rather than skip it: offload may leave the field
+	// uncomputed, and a "wrong" value left there could accidentally be right.
+	if badSum {
+		sum = ^sum
+	}
+
+	binary.BigEndian.PutUint16(segment[tcpChecksumAt:tcpChecksumAt+2], sum)
+
+	return nil
+}
+
+// Remade keeps the headers of packet, puts payload where the old one sat and
+// numbers it seq, then seals what it built.
+func Remade(packet []byte, payload []byte, seq uint32) ([]byte, error) {
+	outer, err := ip.Parse(packet)
+	if err != nil {
+		return nil, err
+	}
+
+	if outer.Protocol != ip.ProtocolTCP {
+		return nil, ErrNotTCP
+	}
+
+	segment, err := tcp.Parse(outer.Payload)
+	if err != nil {
+		return nil, err
+	}
+
+	headers := outer.HeaderLen + segment.HeaderLen
+
+	out := make([]byte, headers+len(payload))
+	copy(out, packet[:headers])
+	copy(out[headers:], payload)
+
+	binary.BigEndian.PutUint16(out[totalLenAt:totalLenAt+2], uint16(len(out)))
+
+	// Move the number by what went before, or the stream has a hole.
+	binary.BigEndian.PutUint32(out[outer.HeaderLen+tcpSeqAt:outer.HeaderLen+tcpSeqAt+4], seq)
+
+	if err := Sums(out, false); err != nil {
+		return nil, err
+	}
+
+	return out, nil
+}
