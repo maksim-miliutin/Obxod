@@ -22,8 +22,9 @@ type Rule struct {
 	Decoy  string // empty, "auto", or a name of the very same length
 	Cut    string // empty, "name", "after" or "start"
 
-	Overlap int
-	Repeats int
+	Overlap  int
+	Repeats  int
+	Recorded bool
 }
 
 // Parse reads one rule, written as host=way,way,way. A way is ttl:4, badseq:100000,
@@ -56,7 +57,7 @@ func Parse(text string) (Rule, error) {
 
 // On the type so every caller counts the same fields; a way forgotten here does nothing.
 func (r Rule) Blank() bool {
-	return r.TTL == 0 && r.BadSeq == 0 && !r.BadSum && r.Decoy == "" && r.Cut == "" && r.Overlap == 0
+	return r.TTL == 0 && r.BadSeq == 0 && !r.BadSum && r.Decoy == "" && r.Cut == "" && r.Overlap == 0 && !r.Recorded
 }
 
 func (r *Rule) take(way string) error {
@@ -99,6 +100,14 @@ func (r *Rule) take(way string) error {
 		}
 
 		r.Overlap = at
+
+		return nil
+	case "fake":
+		if value != "" {
+			return fmt.Errorf("rules: fake takes no value, the file comes from -fake")
+		}
+
+		r.Recorded = true
 
 		return nil
 	case "repeats":

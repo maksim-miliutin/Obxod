@@ -39,6 +39,7 @@ func run() error {
 	seconds := flag.Int("seconds", 12, "how long to give each way while sweeping")
 	tcpPorts := flag.String("ports", "443,2053,2083,2087,2096,8443", "tcp ports where hellos are looked for")
 	patternFile := flag.String("pattern", "", "a recorded hello from an allowed site, used by overlap")
+	fakeFile := flag.String("fake", "", "a recorded hello sent ahead in place of a forged copy, used by the fake way")
 	seqovl := flag.Int("seqovl", 0, "how many bytes the overlap reaches back; zero means the whole pattern")
 	silence := flag.Int("silence", 45, "seconds of silence after which a connection counts as killed")
 	noQUIC := flag.Bool("noquic", false, "drop outgoing quic so the browser falls back to tcp, which we can unblock")
@@ -76,6 +77,17 @@ func run() error {
 		fmt.Printf("pattern: %d bytes from %s, laid over %d bytes\n", len(raw), *patternFile, len(pattern))
 	}
 
+	var recorded []byte
+
+	if *fakeFile != "" {
+		recorded, err = os.ReadFile(*fakeFile)
+		if err != nil {
+			return fmt.Errorf("cannot read the recorded hello: %w", err)
+		}
+
+		fmt.Printf("fake: %d bytes from %s\n", len(recorded), *fakeFile)
+	}
+
 	outbound, err := filter.Outbound(filter.Ports{TCP: ports, Voice: voice, QUIC: *noQUIC})
 	if err != nil {
 		return err
@@ -102,6 +114,7 @@ func run() error {
 		Rules:    base,
 		Hunt:     hunt,
 		Pattern:  pattern,
+		Recorded: recorded,
 		Silence:  time.Duration(*silence) * time.Second,
 		DropQUIC: *noQUIC,
 		Wet:      *wet,

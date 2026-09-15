@@ -31,9 +31,10 @@ type Eyes interface {
 }
 
 type Settings struct {
-	Rules   rules.Set
-	Hunt    *sweep.Sweep
-	Pattern []byte
+	Rules    rules.Set
+	Hunt     *sweep.Sweep
+	Pattern  []byte
+	Recorded []byte
 
 	Silence  time.Duration
 	DropQUIC bool
@@ -43,10 +44,11 @@ type Settings struct {
 }
 
 type Engine struct {
-	base    rules.Set
-	set     rules.Set
-	hunt    *sweep.Sweep
-	pattern []byte
+	base     rules.Set
+	set      rules.Set
+	hunt     *sweep.Sweep
+	pattern  []byte
+	recorded []byte
 
 	silence  time.Duration
 	dropQUIC bool
@@ -67,6 +69,7 @@ func New(s Settings) *Engine {
 		set:      s.Rules,
 		hunt:     s.Hunt,
 		pattern:  s.Pattern,
+		recorded: s.Recorded,
 		silence:  s.Silence,
 		dropQUIC: s.DropQUIC,
 		wet:      s.Wet,
@@ -284,6 +287,10 @@ func describe(r rules.Rule) string {
 		named = append(named, fmt.Sprintf("overlap keeping %d", r.Overlap))
 	}
 
+	if r.Recorded {
+		named = append(named, "a recorded hello")
+	}
+
 	if r.Repeats != 0 {
 		named = append(named, fmt.Sprintf("%d copies", r.Repeats))
 	}
@@ -316,6 +323,10 @@ func asRule(r rules.Rule) string {
 
 	if r.Overlap != 0 {
 		ways = append(ways, fmt.Sprintf("overlap:%d", r.Overlap))
+	}
+
+	if r.Recorded {
+		ways = append(ways, "fake")
 	}
 
 	if r.Repeats != 0 {

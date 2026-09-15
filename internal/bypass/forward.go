@@ -46,7 +46,7 @@ func (e *Engine) forward(h sender, packet []byte, addr *divert.Addr) (bool, erro
 
 	// The decoy goes first and the real hello follows, cut or whole: an inspector
 	// that reads the decoy and then finds no name in either half has nothing to match.
-	if r.TTL != 0 || r.BadSeq != 0 || r.BadSum || r.Decoy != "" {
+	if r.Recorded || r.TTL != 0 || r.BadSeq != 0 || r.BadSum || r.Decoy != "" {
 		if err := e.fake(h, packet, addr, found, r); err != nil {
 			return false, err
 		}
@@ -65,6 +65,10 @@ func (e *Engine) forward(h sender, packet []byte, addr *divert.Addr) (bool, erro
 
 func (e *Engine) fake(h sender, packet []byte, addr *divert.Addr, found hello.Outgoing, r rules.Rule) error {
 	recipe := forge.Recipe{TTL: r.TTL, SeqDelta: r.BadSeq, BadSum: r.BadSum}
+
+	if r.Recorded {
+		return e.canned(h, packet, addr, found, r, recipe)
+	}
 
 	if r.Decoy != "" {
 		name := r.Decoy
@@ -222,4 +226,31 @@ func times(copies int) string {
 	}
 
 	return fmt.Sprintf(", %d times", copies)
+}
+
+func (e *Engine) canned(h sender, packet []byte, addr *divert.Addr, found hello.Outgoing, r rules.Rule, recipe forge.Recipe) error {
+	made, err := forge.Instead(packet, e.recorded, recipe)
+	if err != nil {
+		e.say("  %s: cannot use the recorded hello: %v", found.Host, err)
+
+		return nil
+	}
+
+	copies := max(1, r.Repeats)
+
+	if !e.wet {
+		e.say("  %s: would send %d recorded bytes (%s%s)", found.Host, len(e.recorded), spoils(r.TTL, r.BadSeq, r.BadSum), times(copies))
+
+		return nil
+	}
+
+	e.say("  %s: %d recorded bytes sent ahead (%s%s)", found.Host, len(e.recorded), spoils(r.TTL, r.BadSeq, r.BadSum), times(copies))
+
+	for range copies {
+		if err := h.Send(made, addr); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

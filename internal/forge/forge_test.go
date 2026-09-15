@@ -455,3 +455,52 @@ func TestCopyDecoyMustFit(t *testing.T) {
 		})
 	}
 }
+
+func TestInsteadCarriesTheRecordedHello(t *testing.T) {
+	packet := build(ip.ProtocolTCP, 64, helloWithName("updates.discord.com"), 0)
+	recorded := []byte("a hello recorded from somewhere else entirely")
+
+	made, err := Instead(packet, recorded, Recipe{})
+	if err != nil {
+		t.Fatalf("Instead: %v", err)
+	}
+
+	if !bytes.Contains(made, recorded) {
+		t.Error("the recorded bytes are not in the packet")
+	}
+
+	if bytes.Contains(made, []byte("updates.discord.com")) {
+		t.Error("the real name survived into the fake")
+	}
+}
+
+func TestInsteadNeedsARecording(t *testing.T) {
+	if _, err := Instead(build(ip.ProtocolTCP, 64, helloWithName("discord.com"), 0), nil, Recipe{}); !errors.Is(err, ErrNoRecording) {
+		t.Errorf("Instead with no recording gave %v, want ErrNoRecording", err)
+	}
+}
+
+// The trap this guards: spoiling happens after the packet is built, so ttl and
+// badsum must not be left out of the second sealing.
+func TestInsteadSpoilsWhatItWasAskedTo(t *testing.T) {
+	packet := build(ip.ProtocolTCP, 64, helloWithName("discord.com"), 0)
+	recorded := []byte("somebody else's hello")
+
+	made, err := Instead(packet, recorded, Recipe{TTL: 4, BadSum: true})
+	if err != nil {
+		t.Fatalf("Instead: %v", err)
+	}
+
+	if made[8] != 4 {
+		t.Errorf("ttl = %d, want 4", made[8])
+	}
+
+	plain, err := Instead(packet, recorded, Recipe{TTL: 4})
+	if err != nil {
+		t.Fatalf("Instead: %v", err)
+	}
+
+	if bytes.Equal(made[tcpChecksumAt:], plain[tcpChecksumAt:]) {
+		t.Error("badsum left the same checksum as a clean copy")
+	}
+}

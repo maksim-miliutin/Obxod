@@ -254,3 +254,22 @@ func TestRepeatsIsAbsentByDefault(t *testing.T) {
 		t.Errorf("Repeats = %d, want nothing asked for", r.Repeats)
 	}
 }
+
+func TestFakeIsAWayOnItsOwn(t *testing.T) {
+	r, err := Parse("discord.com=fake")
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+
+	if !r.Recorded {
+		t.Error("fake did not ask for the recorded hello")
+	}
+}
+
+// The file comes from -fake, not from the rule: a windows path carries a colon
+// and would be read as another way.
+func TestFakeTakesNoValue(t *testing.T) {
+	if _, err := Parse(`discord.com=fake:C:\hello.bin`); err == nil {
+		t.Error("a path inside the rule was accepted")
+	}
+}

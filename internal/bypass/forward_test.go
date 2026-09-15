@@ -394,3 +394,56 @@ func TestOverlapWithoutAPatternIsRefused(t *testing.T) {
 		t.Error("an overlap with no pattern put something on the wire")
 	}
 }
+
+// The whole point of the recorded fake: what goes ahead is somebody else's
+// hello, not the real one with its name painted over.
+func TestRecordedHelloGoesAheadInsteadOfACopy(t *testing.T) {
+	const host = "updates.discord.com"
+
+	recorded := clientHello("www.google.com")
+	r := &recorder{}
+
+	set, err := rules.ParseAll([]string{host + "=fake,badsum,repeats:3,cut:start"})
+	if err != nil {
+		t.Fatalf("ParseAll: %v", err)
+	}
+
+	e := New(Settings{Rules: set, Recorded: recorded, Wet: true})
+
+	sent, err := e.forward(r, packet443(clientHello(host)), &divert.Addr{})
+	if err != nil {
+		t.Fatalf("forward: %v", err)
+	}
+
+	if !sent {
+		t.Error("the cut did not take over sending")
+	}
+
+	if len(r.sent) != 5 {
+		t.Fatalf("sent %d packets, want 3 fakes and 2 halves", len(r.sent))
+	}
+
+	for i, fake := range r.sent[:3] {
+		if !bytes.Contains(fake, []byte("www.google.com")) {
+			t.Errorf("fake %d does not carry the recorded name", i)
+		}
+
+		if bytes.Contains(fake, []byte(host)) {
+			t.Errorf("fake %d still carries the real name", i)
+		}
+	}
+}
+
+func TestRecordedFakeWithoutAFileIsRefused(t *testing.T) {
+	const host = "updates.discord.com"
+
+	r := &recorder{}
+
+	if _, err := engineFor(t, true, nil, host+"=fake").forward(r, packet443(clientHello(host)), &divert.Addr{}); err != nil {
+		t.Fatalf("forward: %v", err)
+	}
+
+	if len(r.sent) != 0 {
+		t.Errorf("sent %d packets with no recording loaded", len(r.sent))
+	}
+}
