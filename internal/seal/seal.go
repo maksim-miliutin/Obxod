@@ -13,6 +13,7 @@ const (
 	totalLenAt    = 2
 	ipChecksumAt  = 10
 	tcpSeqAt      = 4
+	tcpAckAt      = 8
 	tcpChecksumAt = 16
 )
 
@@ -81,4 +82,31 @@ func Remade(packet []byte, payload []byte, seq uint32) ([]byte, error) {
 	}
 
 	return out, nil
+}
+
+// Shift moves the numbers of a tcp segment by as much as asked, wrapping as tcp
+// does. Sums has to follow: both numbers feed the checksum.
+func Shift(packet []byte, seq uint32, ack int32) error {
+	outer, err := ip.Parse(packet)
+	if err != nil {
+		return err
+	}
+
+	if outer.Protocol != ip.ProtocolTCP {
+		return ErrNotTCP
+	}
+
+	segment := packet[outer.HeaderLen:]
+
+	if seq != 0 {
+		was := binary.BigEndian.Uint32(segment[tcpSeqAt : tcpSeqAt+4])
+		binary.BigEndian.PutUint32(segment[tcpSeqAt:tcpSeqAt+4], was+seq)
+	}
+
+	if ack != 0 {
+		was := binary.BigEndian.Uint32(segment[tcpAckAt : tcpAckAt+4])
+		binary.BigEndian.PutUint32(segment[tcpAckAt:tcpAckAt+4], was+uint32(ack))
+	}
+
+	return nil
 }

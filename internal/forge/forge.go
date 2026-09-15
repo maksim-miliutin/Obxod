@@ -1,23 +1,19 @@
 package forge
 
 import (
-	"encoding/binary"
 	"errors"
 
+	"obxod/internal/clienthello"
 	"obxod/internal/ip"
 	"obxod/internal/seal"
 	"obxod/internal/tcp"
 )
 
-const (
-	ttlAt    = 8
-	tcpSeqAt = 4
-)
+const ttlAt = 8
 
 var (
 	ErrNotTCP    = errors.New("forge: only tcp packets are copied")
 	ErrNoPayload = errors.New("forge: the packet carries nothing to copy")
-	ErrNameSpace = errors.New("forge: the decoy name does not fit where the real one sits")
 
 	ErrNoRecording = errors.New("forge: a recorded hello is needed, give one with -fake")
 )
@@ -25,11 +21,11 @@ var (
 type Recipe struct {
 	TTL      uint8  // hops the copy may live; zero keeps whatever the original had
 	SeqDelta uint32 // added to the sequence number so the server drops the copy; zero leaves it
+	AckDelta int32  // added to the acknowledgement number, usually backwards; zero leaves it
 	BadSum   bool   // leave a wrong TCP checksum so the copy is dropped past the inspector
 
 	// Must match the real name in length: a hello counts the name in three places.
-	Name   string
-	NameAt int // where the real name starts inside the TCP payload
+	Name string
 }
 
 func Copy(packet []byte, r Recipe) ([]byte, error) {
@@ -51,28 +47,17 @@ func Copy(packet []byte, r Recipe) ([]byte, error) {
 		return nil, ErrNoPayload
 	}
 
-	copied := make([]byte, len(packet))
-	copy(copied, packet)
+	copied, err := dressed(packet, segment, r.Name)
+	if err != nil {
+		return nil, err
+	}
 
 	if r.TTL != 0 {
 		copied[ttlAt] = r.TTL
 	}
 
-	// Before sealing: the number feeds the checksum.
-	if r.SeqDelta != 0 {
-		segment := copied[outer.HeaderLen:]
-		seq := binary.BigEndian.Uint32(segment[tcpSeqAt : tcpSeqAt+4])
-		binary.BigEndian.PutUint32(segment[tcpSeqAt:tcpSeqAt+4], seq+r.SeqDelta)
-	}
-
-	if r.Name != "" {
-		payloadAt := outer.HeaderLen + segment.HeaderLen
-
-		if r.NameAt < 0 || r.NameAt+len(r.Name) > len(segment.Payload) {
-			return nil, ErrNameSpace
-		}
-
-		copy(copied[payloadAt+r.NameAt:], r.Name)
+	if err := seal.Shift(copied, r.SeqDelta, r.AckDelta); err != nil {
+		return nil, err
 	}
 
 	if err := seal.Sums(copied, r.BadSum); err != nil {
@@ -80,6 +65,29 @@ func Copy(packet []byte, r Recipe) ([]byte, error) {
 	}
 
 	return copied, nil
+}
+
+// A name of another length moves six declared lengths inside the hello, so the
+// packet is rebuilt rather than painted over.
+func dressed(packet []byte, segment tcp.Header, name string) ([]byte, error) {
+	if name == "" {
+		out := make([]byte, len(packet))
+		copy(out, packet)
+
+		return out, nil
+	}
+
+	parsed, err := clienthello.Parse(segment.Payload)
+	if err != nil {
+		return nil, err
+	}
+
+	renamed, err := parsed.Renamed(name)
+	if err != nil {
+		return nil, err
+	}
+
+	return seal.Remade(packet, renamed, segment.Seq)
 }
 
 // Instead builds a fake out of recorded bytes: the headers of the real packet,
@@ -103,17 +111,17 @@ func Instead(packet []byte, recorded []byte, r Recipe) ([]byte, error) {
 		return nil, err
 	}
 
-	made, err := seal.Remade(packet, recorded, segment.Seq+r.SeqDelta)
+	made, err := seal.Remade(packet, recorded, segment.Seq)
 	if err != nil {
 		return nil, err
 	}
 
-	if r.TTL == 0 && !r.BadSum {
-		return made, nil
-	}
-
 	if r.TTL != 0 {
 		made[ttlAt] = r.TTL
+	}
+
+	if err := seal.Shift(made, r.SeqDelta, r.AckDelta); err != nil {
+		return nil, err
 	}
 
 	if err := seal.Sums(made, r.BadSum); err != nil {

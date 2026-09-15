@@ -25,6 +25,7 @@ type Rule struct {
 	Overlap  int
 	Repeats  int
 	Recorded bool
+	BadAck   int32
 }
 
 // Parse reads one rule, written as host=way,way,way. A way is ttl:4, badseq:100000,
@@ -57,7 +58,7 @@ func Parse(text string) (Rule, error) {
 
 // On the type so every caller counts the same fields; a way forgotten here does nothing.
 func (r Rule) Blank() bool {
-	return r.TTL == 0 && r.BadSeq == 0 && !r.BadSum && r.Decoy == "" && r.Cut == "" && r.Overlap == 0 && !r.Recorded
+	return r.TTL == 0 && r.BadSeq == 0 && !r.BadSum && r.Decoy == "" && r.Cut == "" && r.Overlap == 0 && !r.Recorded && r.BadAck == 0
 }
 
 func (r *Rule) take(way string) error {
@@ -100,6 +101,15 @@ func (r *Rule) take(way string) error {
 		}
 
 		r.Overlap = at
+
+		return nil
+	case "badack":
+		shift, err := strconv.ParseInt(value, 10, 32)
+		if err != nil || shift == 0 {
+			return fmt.Errorf("rules: badack wants how far to move the acknowledgement, usually back, e.g. -66000")
+		}
+
+		r.BadAck = int32(shift)
 
 		return nil
 	case "fake":

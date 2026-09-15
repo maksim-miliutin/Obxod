@@ -25,6 +25,8 @@ type Hello struct {
 	RecordLen int    // bytes, as the record header declares, not as captured
 	Record    []byte // record header and body, aliases payload
 	Body      []byte // hello itself, past the handshake header, aliases payload
+
+	payload []byte
 }
 
 func Parse(payload []byte) (Hello, error) {
@@ -62,6 +64,7 @@ func Parse(payload []byte) (Hello, error) {
 	}
 
 	h := Hello{
+		payload:   payload,
 		RecordLen: recordLen,
 		Record:    payload[:recordEnd],
 		Body:      payload[recordHeaderLen+handshakeHeaderLen : bodyEnd],

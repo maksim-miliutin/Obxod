@@ -271,6 +271,10 @@ func describe(r rules.Rule) string {
 		named = append(named, fmt.Sprintf("badseq %d", r.BadSeq))
 	}
 
+	if r.BadAck != 0 {
+		named = append(named, fmt.Sprintf("badack %d", r.BadAck))
+	}
+
 	if r.BadSum {
 		named = append(named, "badsum")
 	}
@@ -307,6 +311,10 @@ func asRule(r rules.Rule) string {
 
 	if r.BadSeq != 0 {
 		ways = append(ways, fmt.Sprintf("badseq:%d", r.BadSeq))
+	}
+
+	if r.BadAck != 0 {
+		ways = append(ways, fmt.Sprintf("badack:%d", r.BadAck))
 	}
 
 	if r.BadSum {

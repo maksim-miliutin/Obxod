@@ -179,3 +179,67 @@ func TestOnlyTCPIsSealed(t *testing.T) {
 		t.Errorf("Remade on udp gave %v, want ErrNotTCP", err)
 	}
 }
+
+func numbers(t *testing.T, packet []byte) (uint32, uint32) {
+	t.Helper()
+
+	outer, err := ip.Parse(packet)
+	if err != nil {
+		t.Fatalf("ip.Parse: %v", err)
+	}
+
+	segment := packet[outer.HeaderLen:]
+
+	return binary.BigEndian.Uint32(segment[4:8]), binary.BigEndian.Uint32(segment[8:12])
+}
+
+func TestShiftMovesEachNumberOnItsOwn(t *testing.T) {
+	packet := packetWith([]byte("hello"), 0)
+	binary.BigEndian.PutUint32(packet[20+8:20+12], 70000)
+
+	if err := Shift(packet, 0, 0); err != nil {
+		t.Fatalf("Shift: %v", err)
+	}
+
+	if seq, ack := numbers(t, packet); seq != 1000 || ack != 70000 {
+		t.Errorf("asking for no shift moved them to %d and %d", seq, ack)
+	}
+
+	if err := Shift(packet, 2, 0); err != nil {
+		t.Fatalf("Shift: %v", err)
+	}
+
+	if seq, ack := numbers(t, packet); seq != 1002 || ack != 70000 {
+		t.Errorf("a seq shift gave %d and %d, want 1002 and 70000", seq, ack)
+	}
+}
+
+// Backwards is the useful direction: an old acknowledgement is ignored, while a
+// future one makes the server answer instead of staying quiet.
+func TestShiftTakesTheAckBackwards(t *testing.T) {
+	packet := packetWith([]byte("hello"), 0)
+	binary.BigEndian.PutUint32(packet[20+8:20+12], 70000)
+
+	if err := Shift(packet, 0, -66000); err != nil {
+		t.Fatalf("Shift: %v", err)
+	}
+
+	if _, ack := numbers(t, packet); ack != 4000 {
+		t.Errorf("ack = %d, want 4000", ack)
+	}
+}
+
+// The trap this guards: tcp numbers wrap, and a shift past zero must wrap with
+// them rather than clamp.
+func TestShiftWrapsLikeTCPDoes(t *testing.T) {
+	packet := packetWith([]byte("hello"), 0)
+	binary.BigEndian.PutUint32(packet[20+8:20+12], 100)
+
+	if err := Shift(packet, 0, -200); err != nil {
+		t.Fatalf("Shift: %v", err)
+	}
+
+	if _, ack := numbers(t, packet); ack != 0xffffff9c {
+		t.Errorf("ack = %d, want it wrapped to 4294967196", ack)
+	}
+}

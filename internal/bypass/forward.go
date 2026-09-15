@@ -46,7 +46,7 @@ func (e *Engine) forward(h sender, packet []byte, addr *divert.Addr) (bool, erro
 
 	// The decoy goes first and the real hello follows, cut or whole: an inspector
 	// that reads the decoy and then finds no name in either half has nothing to match.
-	if r.Recorded || r.TTL != 0 || r.BadSeq != 0 || r.BadSum || r.Decoy != "" {
+	if r.Recorded || r.TTL != 0 || r.BadSeq != 0 || r.BadAck != 0 || r.BadSum || r.Decoy != "" {
 		if err := e.fake(h, packet, addr, found, r); err != nil {
 			return false, err
 		}
@@ -64,7 +64,7 @@ func (e *Engine) forward(h sender, packet []byte, addr *divert.Addr) (bool, erro
 }
 
 func (e *Engine) fake(h sender, packet []byte, addr *divert.Addr, found hello.Outgoing, r rules.Rule) error {
-	recipe := forge.Recipe{TTL: r.TTL, SeqDelta: r.BadSeq, BadSum: r.BadSum}
+	recipe := forge.Recipe{TTL: r.TTL, SeqDelta: r.BadSeq, AckDelta: r.BadAck, BadSum: r.BadSum}
 
 	if r.Recorded {
 		return e.canned(h, packet, addr, found, r, recipe)
@@ -81,7 +81,6 @@ func (e *Engine) fake(h sender, packet []byte, addr *divert.Addr, found hello.Ou
 		}
 
 		recipe.Name = name
-		recipe.NameAt = found.NameStart
 	}
 
 	copied, err := forge.Copy(packet, recipe)
@@ -94,12 +93,12 @@ func (e *Engine) fake(h sender, packet []byte, addr *divert.Addr, found hello.Ou
 	copies := max(1, r.Repeats)
 
 	if !e.wet {
-		e.say("  %s: would send a %d byte copy (%s%s%s)", found.Host, len(copied), spoils(r.TTL, r.BadSeq, r.BadSum), wearing(recipe.Name), times(copies))
+		e.say("  %s: would send a %d byte copy (%s%s%s)", found.Host, len(copied), spoils(r), wearing(recipe.Name), times(copies))
 
 		return nil
 	}
 
-	e.say("  %s: copy sent ahead (%s%s%s)", found.Host, spoils(r.TTL, r.BadSeq, r.BadSum), wearing(recipe.Name), times(copies))
+	e.say("  %s: copy sent ahead (%s%s%s)", found.Host, spoils(r), wearing(recipe.Name), times(copies))
 
 	for range copies {
 		if err := h.Send(copied, addr); err != nil {
@@ -190,18 +189,22 @@ func decoyFor(host string) string {
 	return strings.Repeat("x", len(host)-len(base)-1) + "." + base
 }
 
-func spoils(ttl uint8, badseq uint32, badsum bool) string {
+func spoils(r rules.Rule) string {
 	var named []string
 
-	if ttl != 0 {
-		named = append(named, fmt.Sprintf("ttl %d", ttl))
+	if r.TTL != 0 {
+		named = append(named, fmt.Sprintf("ttl %d", r.TTL))
 	}
 
-	if badseq != 0 {
-		named = append(named, fmt.Sprintf("badseq %d", badseq))
+	if r.BadSeq != 0 {
+		named = append(named, fmt.Sprintf("badseq %d", r.BadSeq))
 	}
 
-	if badsum {
+	if r.BadAck != 0 {
+		named = append(named, fmt.Sprintf("badack %d", r.BadAck))
+	}
+
+	if r.BadSum {
 		named = append(named, "badsum")
 	}
 
@@ -239,12 +242,12 @@ func (e *Engine) canned(h sender, packet []byte, addr *divert.Addr, found hello.
 	copies := max(1, r.Repeats)
 
 	if !e.wet {
-		e.say("  %s: would send %d recorded bytes (%s%s)", found.Host, len(e.recorded), spoils(r.TTL, r.BadSeq, r.BadSum), times(copies))
+		e.say("  %s: would send %d recorded bytes (%s%s)", found.Host, len(e.recorded), spoils(r), times(copies))
 
 		return nil
 	}
 
-	e.say("  %s: %d recorded bytes sent ahead (%s%s)", found.Host, len(e.recorded), spoils(r.TTL, r.BadSeq, r.BadSum), times(copies))
+	e.say("  %s: %d recorded bytes sent ahead (%s%s)", found.Host, len(e.recorded), spoils(r), times(copies))
 
 	for range copies {
 		if err := h.Send(made, addr); err != nil {

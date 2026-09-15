@@ -28,12 +28,12 @@ func main() {
 func run() error {
 	var ruleTexts repeated
 
-	flag.Var(&ruleTexts, "rule", "a rule per site, repeatable: host=way,way (ways: ttl:4 badseq:100000 badsum decoy decoy:name cut:name|after|start)")
+	flag.Var(&ruleTexts, "rule", "a rule per site, repeatable: host=way,way (ways: ttl:4 badseq:2 badack:-66000 badsum decoy decoy:name fake cut:name|after|start overlap:1 repeats:5)")
 	hosts := flag.String("host", "", "sites to work on, comma separated; a bare domain covers its subdomains, \"all\" covers everything")
 	ttl := flag.Int("ttl", 0, "hops the forged copy may live; zero leaves the original ttl alone")
 	badseq := flag.Uint("badseq", 0, "shift the copy's sequence number by this much")
 	badsum := flag.Bool("badsum", false, "give the copy a wrong tcp checksum")
-	decoy := flag.String("decoy", "", "put another host name in the copy; \"auto\" makes one of the right length")
+	decoy := flag.String("decoy", "", "put another host name in the copy; any length, the hello is rebuilt; \"auto\" makes one the same size")
 	where := flag.String("cut", "", "split the real hello: name (through the middle of the host name), after (just past it), start (near the record start)")
 	sweepHost := flag.String("sweep", "", "try way after way for this site until one stops the retries")
 	seconds := flag.Int("seconds", 12, "how long to give each way while sweeping")

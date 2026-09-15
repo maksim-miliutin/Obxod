@@ -273,3 +273,30 @@ func TestFakeTakesNoValue(t *testing.T) {
 		t.Error("a path inside the rule was accepted")
 	}
 }
+
+func TestBadAckTakesEitherDirection(t *testing.T) {
+	cases := map[string]int32{"badack:-66000": -66000, "badack:66000": 66000}
+
+	for text, want := range cases {
+		t.Run(text, func(t *testing.T) {
+			r, err := Parse("discord.com=" + text)
+			if err != nil {
+				t.Fatalf("Parse: %v", err)
+			}
+
+			if r.BadAck != want {
+				t.Errorf("BadAck = %d, want %d", r.BadAck, want)
+			}
+		})
+	}
+}
+
+func TestBadAckRejectsNonsense(t *testing.T) {
+	for _, text := range []string{"badack:0", "badack:far", "badack", "badack:5000000000"} {
+		t.Run(text, func(t *testing.T) {
+			if _, err := Parse("discord.com=badsum," + text); err == nil {
+				t.Error("nonsense was accepted")
+			}
+		})
+	}
+}

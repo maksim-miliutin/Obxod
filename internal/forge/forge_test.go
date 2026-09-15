@@ -12,6 +12,8 @@ import (
 )
 
 const (
+	tcpSeqAt      = 4
+	tcpAckAt      = 8
 	ipChecksumAt  = 10
 	tcpChecksumAt = 16
 )
@@ -391,11 +393,10 @@ func TestCopyWearsTheDecoyName(t *testing.T) {
 	const decoy = "xxxxxxxx.google.com"
 
 	payload := helloWithName(real)
-	at := bytes.Index(payload, []byte(real))
 
 	packet := build(ip.ProtocolTCP, 64, payload, 0)
 
-	copied, err := Copy(packet, Recipe{TTL: 4, Name: decoy, NameAt: at})
+	copied, err := Copy(packet, Recipe{TTL: 4, Name: decoy})
 	if err != nil {
 		t.Fatalf("Copy: %v", err)
 	}
@@ -419,11 +420,10 @@ func TestCopyLeavesTheRealHelloAlone(t *testing.T) {
 	const real = "updates.discord.com"
 
 	payload := helloWithName(real)
-	at := bytes.Index(payload, []byte(real))
 	packet := build(ip.ProtocolTCP, 64, payload, 0)
 	before := append([]byte(nil), packet...)
 
-	if _, err := Copy(packet, Recipe{Name: "xxxxxxxx.google.com", NameAt: at}); err != nil {
+	if _, err := Copy(packet, Recipe{Name: "xxxxxxxx.google.com"}); err != nil {
 		t.Fatalf("Copy: %v", err)
 	}
 
@@ -432,27 +432,38 @@ func TestCopyLeavesTheRealHelloAlone(t *testing.T) {
 	}
 }
 
-func TestCopyDecoyMustFit(t *testing.T) {
-	payload := helloWithName("updates.discord.com")
-	at := bytes.Index(payload, []byte("updates.discord.com"))
-	packet := build(ip.ProtocolTCP, 64, payload, 0)
+// The restriction this replaces: a decoy used to have to match the real name byte
+// for byte, because nothing rewrote the lengths that count the name in.
+func TestCopyWearsANameOfAnyLength(t *testing.T) {
+	const was = "updates.discord.com"
 
-	cases := []struct {
-		name   string
-		decoy  string
-		nameAt int
-	}{
-		{"past the end", "xxxxxxxx.google.com", len(payload) - 3},
-		{"negative offset", "xxxxxxxx.google.com", -1},
-		{"longer than the payload", bytes.NewBuffer(bytes.Repeat([]byte("a"), 5000)).String(), at},
-	}
+	packet := build(ip.ProtocolTCP, 64, helloWithName(was), 0)
 
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			if _, err := Copy(packet, Recipe{Name: c.decoy, NameAt: c.nameAt}); !errors.Is(err, ErrNameSpace) {
-				t.Errorf("err = %v, want %v", err, ErrNameSpace)
+	for _, name := range []string{"mail.ru", "a.io", "xxxxxxxx.google.com", "a-long-one.example.co.uk"} {
+		t.Run(name, func(t *testing.T) {
+			copied, err := Copy(packet, Recipe{Name: name})
+			if err != nil {
+				t.Fatalf("Copy: %v", err)
 			}
+
+			if !bytes.Contains(copied, []byte(name)) {
+				t.Error("the copy does not wear the new name")
+			}
+
+			if bytes.Contains(copied, []byte(was)) {
+				t.Error("the copy still carries the real name")
+			}
+
+			verify(t, copied)
 		})
+	}
+}
+
+func TestCopyRefusesANameTooLongForTheFields(t *testing.T) {
+	packet := build(ip.ProtocolTCP, 64, helloWithName("updates.discord.com"), 0)
+
+	if _, err := Copy(packet, Recipe{Name: string(bytes.Repeat([]byte("a"), 70000))}); err == nil {
+		t.Error("a name that overflows the length fields was accepted")
 	}
 }
 
@@ -503,4 +514,54 @@ func TestInsteadSpoilsWhatItWasAskedTo(t *testing.T) {
 	if bytes.Equal(made[tcpChecksumAt:], plain[tcpChecksumAt:]) {
 		t.Error("badsum left the same checksum as a clean copy")
 	}
+}
+
+func ackOf(packet []byte) uint32 {
+	return binary.BigEndian.Uint32(packet[20+tcpAckAt : 20+tcpAckAt+4])
+}
+
+// The trap this guards: the copy has to be sealed after its numbers move, or the
+// server drops it on the checksum instead of on the acknowledgement.
+func TestCopyShiftsAckAndStaysSealed(t *testing.T) {
+	packet := build(ip.ProtocolTCP, 64, []byte("hello there"), 0)
+	binary.BigEndian.PutUint32(packet[20+tcpAckAt:20+tcpAckAt+4], 70000)
+
+	copied, err := Copy(packet, Recipe{AckDelta: -66000})
+	if err != nil {
+		t.Fatalf("Copy: %v", err)
+	}
+
+	if got := ackOf(copied); got != 4000 {
+		t.Errorf("ack = %d, want 4000", got)
+	}
+
+	if seqOf(copied) != seqOf(packet) {
+		t.Error("an ack shift moved the sequence number too")
+	}
+
+	verify(t, copied)
+
+	if ackOf(packet) != 70000 {
+		t.Error("the original packet was modified")
+	}
+}
+
+func TestInsteadShiftsAckAndStaysSealed(t *testing.T) {
+	packet := build(ip.ProtocolTCP, 64, helloWithName("discord.com"), 0)
+	binary.BigEndian.PutUint32(packet[20+tcpAckAt:20+tcpAckAt+4], 70000)
+
+	made, err := Instead(packet, []byte("somebody else's hello"), Recipe{AckDelta: -66000, SeqDelta: 2})
+	if err != nil {
+		t.Fatalf("Instead: %v", err)
+	}
+
+	if got := ackOf(made); got != 4000 {
+		t.Errorf("ack = %d, want 4000", got)
+	}
+
+	if got, was := seqOf(made), seqOf(packet); got != was+2 {
+		t.Errorf("seq = %d, want %d", got, was+2)
+	}
+
+	verify(t, made)
 }

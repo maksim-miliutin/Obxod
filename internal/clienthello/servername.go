@@ -23,6 +23,12 @@ var (
 type ServerName struct {
 	Host   string
 	Offset int // bytes from the start of the payload, points at the name itself
+
+	// Every length that counts the name in, so renaming can shrink them together.
+	extensionsLenAt int
+	extLenAt        int
+	listLenAt       int
+	nameLenAt       int
 }
 
 func (h Hello) ServerName() (ServerName, error) {
@@ -51,6 +57,8 @@ func (h Hello) ServerName() (ServerName, error) {
 		return ServerName{}, ErrNoServerName
 	}
 
+	extensionsLenAt := r.offset() - 2
+
 	for {
 		kind, ok := r.u16()
 		if !ok {
@@ -70,12 +78,22 @@ func (h Hello) ServerName() (ServerName, error) {
 			continue
 		}
 
+		extLenAt := r.offset() - 2
+
 		list, ok := r.take(size)
 		if !ok {
 			return ServerName{}, ErrMalformed
 		}
 
-		return hostIn(reader{data: list, base: r.offset() - size})
+		found, err := hostIn(reader{data: list, base: r.offset() - size})
+		if err != nil {
+			return ServerName{}, err
+		}
+
+		found.extensionsLenAt = extensionsLenAt
+		found.extLenAt = extLenAt
+
+		return found, nil
 	}
 }
 
@@ -83,6 +101,8 @@ func hostIn(r reader) (ServerName, error) {
 	if _, ok := r.u16(); !ok {
 		return ServerName{}, ErrMalformed
 	}
+
+	listLenAt := r.offset() - 2
 
 	for {
 		kind, ok := r.u8()
@@ -95,6 +115,8 @@ func hostIn(r reader) (ServerName, error) {
 			return ServerName{}, ErrMalformed
 		}
 
+		nameLenAt := r.offset() - 2
+
 		name, ok := r.take(size)
 		if !ok {
 			return ServerName{}, ErrMalformed
@@ -104,7 +126,12 @@ func hostIn(r reader) (ServerName, error) {
 			continue
 		}
 
-		return ServerName{Host: string(name), Offset: r.offset() - size}, nil
+		return ServerName{
+			Host:      string(name),
+			Offset:    r.offset() - size,
+			listLenAt: listLenAt,
+			nameLenAt: nameLenAt,
+		}, nil
 	}
 }
 

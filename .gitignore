@@ -2,3 +2,7 @@
 /obxod.exe
 /WinDivert*
 /run.ps1
+*.log
+*.ps1
+cap.etl
+cap.txt
