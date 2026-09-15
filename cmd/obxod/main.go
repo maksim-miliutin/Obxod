@@ -63,9 +63,17 @@ func run() error {
 		return err
 	}
 
-	pattern, err := loadPattern(*patternFile, *seqovl)
-	if err != nil {
-		return err
+	var pattern []byte
+
+	if *patternFile != "" {
+		raw, err := os.ReadFile(*patternFile)
+		if err != nil {
+			return fmt.Errorf("cannot read the pattern: %w", err)
+		}
+
+		pattern = spread(raw, *seqovl)
+
+		fmt.Printf("pattern: %d bytes from %s, laid over %d bytes\n", len(raw), *patternFile, len(pattern))
 	}
 
 	outbound, err := filter.Outbound(filter.Ports{TCP: ports, Voice: voice, QUIC: *noQUIC})
@@ -103,26 +111,13 @@ func run() error {
 	return engine.Run(wire, eyes)
 }
 
-func loadPattern(name string, seqovl int) ([]byte, error) {
-	if name == "" {
-		return nil, nil
+// A zero seqovl means the overlap reaches back over the whole recording.
+func spread(raw []byte, seqovl int) []byte {
+	if seqovl == 0 {
+		return cut.Filler(raw, len(raw))
 	}
 
-	raw, err := os.ReadFile(name)
-	if err != nil {
-		return nil, fmt.Errorf("cannot read the pattern: %w", err)
-	}
-
-	size := seqovl
-	if size == 0 {
-		size = len(raw)
-	}
-
-	pattern := cut.Filler(raw, size)
-
-	fmt.Printf("pattern: %d bytes from %s, laid over %d bytes\n", len(pattern), name, size)
-
-	return pattern, nil
+	return cut.Filler(raw, seqovl)
 }
 
 type repeated []string

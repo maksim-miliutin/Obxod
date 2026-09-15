@@ -1,8 +1,6 @@
 package main
 
 import (
-	"os"
-	"path/filepath"
 	"testing"
 )
 
@@ -75,38 +73,34 @@ func TestParsePortsRejectsNonsense(t *testing.T) {
 	}
 }
 
-// Without a pattern there is nothing to lay over, and an overlap rule must not
-// silently get an empty one that reaches back zero bytes.
-func TestLoadPatternWithoutAFileGivesNothing(t *testing.T) {
-	pattern, err := loadPattern("", 0)
-	if err != nil || pattern != nil {
-		t.Errorf("loadPattern gave %v, %v, want nothing", pattern, err)
+// The overlap reaches back over the whole recording unless told how far, and a
+// zero there used to mean zero bytes.
+func TestSpreadCoversTheWholeRecordingByDefault(t *testing.T) {
+	if got := spread([]byte("abcd"), 0); string(got) != "abcd" {
+		t.Errorf("spread gave %q, want the recording whole", got)
 	}
 }
 
-func TestLoadPatternStretchesToSeqovl(t *testing.T) {
-	name := filepath.Join(t.TempDir(), "hello.bin")
+func TestSpreadStretchesToSeqovl(t *testing.T) {
+	got := spread([]byte("abcd"), 9)
 
-	if err := os.WriteFile(name, []byte("abcd"), 0o600); err != nil {
-		t.Fatalf("WriteFile: %v", err)
+	if len(got) != 9 {
+		t.Fatalf("spread gave %d bytes, want the 9 asked for", len(got))
 	}
 
-	pattern, err := loadPattern(name, 9)
-	if err != nil {
-		t.Fatalf("loadPattern: %v", err)
-	}
-
-	if len(pattern) != 9 {
-		t.Errorf("pattern is %d bytes, want the 9 asked for", len(pattern))
-	}
-
-	if string(pattern[:4]) != "abcd" {
-		t.Errorf("pattern starts with %q, want the recorded bytes", pattern[:4])
+	if string(got[:4]) != "abcd" {
+		t.Errorf("spread starts with %q, want the recorded bytes", got[:4])
 	}
 }
 
-func TestLoadPatternReportsAMissingFile(t *testing.T) {
-	if _, err := loadPattern(filepath.Join(t.TempDir(), "gone.bin"), 0); err == nil {
-		t.Error("a missing pattern file was accepted")
+func TestSpreadCutsWhenSeqovlIsShorter(t *testing.T) {
+	if got := spread([]byte("abcdefgh"), 3); string(got) != "abc" {
+		t.Errorf("spread gave %q, want only as far back as asked", got)
+	}
+}
+
+func TestSpreadOnNothingRecorded(t *testing.T) {
+	if got := spread(nil, 0); len(got) != 0 {
+		t.Errorf("spread gave %d bytes from nothing", len(got))
 	}
 }
