@@ -28,7 +28,7 @@ func main() {
 func run() error {
 	var ruleTexts repeated
 
-	flag.Var(&ruleTexts, "rule", "a rule per site, repeatable: host=way,way (ways: ttl:4 badseq:2 badack:-66000 ts badsum decoy decoy:name fake cut:name|after|start overlap:1 repeats:5)")
+	flag.Var(&ruleTexts, "rule", "a rule per site, repeatable: host=way,way (ways: ttl:4 badseq:2 badack:-66000 ts badsum decoy decoy:name fake cut:name|after|start disorder overlap:1 repeats:5)")
 	hosts := flag.String("host", "", "sites to work on, comma separated; a bare domain covers its subdomains, \"all\" covers everything")
 	ttl := flag.Int("ttl", 0, "hops the forged copy may live; zero leaves the original ttl alone")
 	badseq := flag.Uint("badseq", 0, "shift the copy's sequence number by this much")

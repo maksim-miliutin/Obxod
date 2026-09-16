@@ -34,6 +34,7 @@ type Rule struct {
 	Recorded bool
 	BadAck   int32
 	Stale    uint32
+	Disorder bool
 }
 
 // Parse reads one rule, written as host=way,way,way. A way is ttl:4, badseq:100000,
@@ -141,6 +142,14 @@ func (r *Rule) take(way string) error {
 		}
 
 		r.Recorded = true
+
+		return nil
+	case "disorder":
+		if value != "" {
+			return fmt.Errorf("rules: disorder takes no value")
+		}
+
+		r.Disorder = true
 
 		return nil
 	case "repeats":

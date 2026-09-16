@@ -447,3 +447,58 @@ func TestRecordedFakeWithoutAFileIsRefused(t *testing.T) {
 		t.Errorf("sent %d packets with no recording loaded", len(r.sent))
 	}
 }
+
+// The point of disorder: the halves reach the wire back to front, so an inspector
+// reading them in arrival order never sees the hello start where it should.
+func TestDisorderSendsTheHalvesBackToFront(t *testing.T) {
+	const host = "updates.discord.com"
+
+	packet := packet443(clientHello(host))
+
+	inOrder := &recorder{}
+	if _, err := engineFor(t, true, nil, host+"=cut:name").forward(inOrder, packet, &divert.Addr{}); err != nil {
+		t.Fatalf("forward: %v", err)
+	}
+
+	backwards := &recorder{}
+	if _, err := engineFor(t, true, nil, host+"=cut:name,disorder").forward(backwards, packet, &divert.Addr{}); err != nil {
+		t.Fatalf("forward: %v", err)
+	}
+
+	if len(inOrder.sent) != 2 || len(backwards.sent) != 2 {
+		t.Fatalf("sent %d and %d packets, want two halves each", len(inOrder.sent), len(backwards.sent))
+	}
+
+	if !bytes.Equal(backwards.sent[0], inOrder.sent[1]) || !bytes.Equal(backwards.sent[1], inOrder.sent[0]) {
+		t.Error("the halves went out in the same order as without disorder")
+	}
+}
+
+// Disorder without a cut has nothing to turn around, and must not quietly pass
+// for a way to bypass anything on its own.
+func TestDisorderAloneIsNotAWay(t *testing.T) {
+	if _, err := rules.Parse("discord.com=disorder"); err == nil {
+		t.Error("a rule that only turns nothing around was accepted")
+	}
+}
+
+func TestOverlapGoesOutBackToFrontToo(t *testing.T) {
+	const host = "updates.discord.com"
+
+	packet := packet443(clientHello(host))
+	pattern := clientHello("www.4pda.to")
+
+	inOrder := &recorder{}
+	if _, err := engineFor(t, true, pattern, host+"=overlap:1").forward(inOrder, packet, &divert.Addr{}); err != nil {
+		t.Fatalf("forward: %v", err)
+	}
+
+	backwards := &recorder{}
+	if _, err := engineFor(t, true, pattern, host+"=overlap:1,disorder").forward(backwards, packet, &divert.Addr{}); err != nil {
+		t.Fatalf("forward: %v", err)
+	}
+
+	if !bytes.Equal(backwards.sent[0], inOrder.sent[1]) {
+		t.Error("the recorded hello still went first")
+	}
+}

@@ -299,6 +299,10 @@ func describe(r rules.Rule) string {
 		named = append(named, "a recorded hello")
 	}
 
+	if r.Disorder {
+		named = append(named, "halves back to front")
+	}
+
 	if r.Repeats != 0 {
 		named = append(named, fmt.Sprintf("%d copies", r.Repeats))
 	}
@@ -343,6 +347,10 @@ func asRule(r rules.Rule) string {
 
 	if r.Recorded {
 		ways = append(ways, "fake")
+	}
+
+	if r.Disorder {
+		ways = append(ways, "disorder")
 	}
 
 	if r.Repeats != 0 {

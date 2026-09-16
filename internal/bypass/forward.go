@@ -57,7 +57,7 @@ func (e *Engine) forward(h sender, packet []byte, addr *divert.Addr) (bool, erro
 	}
 
 	if r.Cut != "" {
-		return e.split(h, packet, addr, found, r.Cut)
+		return e.split(h, packet, addr, found, r)
 	}
 
 	return false, nil
@@ -109,8 +109,8 @@ func (e *Engine) fake(h sender, packet []byte, addr *divert.Addr, found hello.Ou
 	return nil
 }
 
-func (e *Engine) split(h sender, packet []byte, addr *divert.Addr, found hello.Outgoing, where string) (bool, error) {
-	point, err := pointFor(found, where)
+func (e *Engine) split(h sender, packet []byte, addr *divert.Addr, found hello.Outgoing, r rules.Rule) (bool, error) {
+	point, err := pointFor(found, r.Cut)
 	if err != nil {
 		return false, err
 	}
@@ -123,12 +123,14 @@ func (e *Engine) split(h sender, packet []byte, addr *divert.Addr, found hello.O
 	}
 
 	if !e.wet {
-		e.say("  %s: would split into %d and %d bytes at %s", found.Host, len(first), len(second), where)
+		e.say("  %s: would split into %d and %d bytes at %s", found.Host, len(first), len(second), r.Cut)
 
 		return false, nil
 	}
 
-	e.say("  %s: split into %d and %d bytes at %s", found.Host, len(first), len(second), where)
+	e.say("  %s: split into %d and %d bytes at %s%s", found.Host, len(first), len(second), r.Cut, backwards(r.Disorder))
+
+	first, second = ordered(first, second, r.Disorder)
 
 	if err := h.Send(first, addr); err != nil {
 		return false, err
@@ -152,8 +154,10 @@ func (e *Engine) overlay(h sender, packet []byte, addr *divert.Addr, found hello
 		return false, nil
 	}
 
-	e.say("  %s: %d recorded bytes laid over, then %d and %d bytes",
-		found.Host, len(e.pattern), len(first), len(second))
+	e.say("  %s: %d recorded bytes laid over, then %d and %d bytes%s",
+		found.Host, len(e.pattern), len(first), len(second), backwards(r.Disorder))
+
+	first, second = ordered(first, second, r.Disorder)
 
 	if err := h.Send(first, addr); err != nil {
 		return false, err
@@ -260,4 +264,22 @@ func (e *Engine) canned(h sender, packet []byte, addr *divert.Addr, found hello.
 	}
 
 	return nil
+}
+
+// An inspector reads the halves in the order they arrive and finds the hello cut
+// open at the wrong end; the server puts them back by sequence number regardless.
+func ordered(first, second []byte, backwards bool) ([]byte, []byte) {
+	if backwards {
+		return second, first
+	}
+
+	return first, second
+}
+
+func backwards(on bool) string {
+	if !on {
+		return ""
+	}
+
+	return ", back to front"
 }
