@@ -11,12 +11,12 @@ func TestDataSaysOnlyTheFirstTime(t *testing.T) {
 
 	h.Hello("gateway.discord.gg", 54321, now)
 
-	host, first := h.Data(54321, now.Add(time.Millisecond))
+	host, first := h.Data(54321, 100, now.Add(time.Millisecond))
 	if !first || host != "gateway.discord.gg" {
 		t.Fatalf("first answer came back %q %v", host, first)
 	}
 
-	if _, first := h.Data(54321, now.Add(2*time.Millisecond)); first {
+	if _, first := h.Data(54321, 100, now.Add(2*time.Millisecond)); first {
 		t.Error("the second packet was called the first")
 	}
 }
@@ -30,11 +30,11 @@ func TestEveryConnectionIsFollowedApart(t *testing.T) {
 	h.Hello("gateway.discord.gg", 54321, now)
 	h.Hello("gateway.discord.gg", 54322, now)
 
-	if _, first := h.Data(54321, now); !first {
+	if _, first := h.Data(54321, 100, now); !first {
 		t.Error("the first connection was not reported")
 	}
 
-	if _, first := h.Data(54322, now); !first {
+	if _, first := h.Data(54322, 100, now); !first {
 		t.Error("the second connection to the same site was passed over")
 	}
 }
@@ -42,7 +42,7 @@ func TestEveryConnectionIsFollowedApart(t *testing.T) {
 func TestDataOnAnUnknownPort(t *testing.T) {
 	h := New()
 
-	if _, first := h.Data(9999, time.Now()); first {
+	if _, first := h.Data(9999, 100, time.Now()); first {
 		t.Error("a port we never saw a hello on was reported as answering")
 	}
 }
@@ -52,8 +52,8 @@ func TestWentQuiet(t *testing.T) {
 	now := time.Now()
 
 	h.Hello("gateway.discord.gg", 54321, now)
-	h.Data(54321, now)
-	h.Data(54321, now.Add(time.Second))
+	h.Data(54321, 100, now)
+	h.Data(54321, 100, now.Add(time.Second))
 
 	if got := h.WentQuiet(now.Add(3*time.Second), 5*time.Second); len(got) != 0 {
 		t.Errorf("called quiet too early: %+v", got)
@@ -74,7 +74,7 @@ func TestQuietIsReportedOnce(t *testing.T) {
 	now := time.Now()
 
 	h.Hello("gateway.discord.gg", 54321, now)
-	h.Data(54321, now)
+	h.Data(54321, 100, now)
 
 	if got := h.WentQuiet(now.Add(10*time.Second), 5*time.Second); len(got) != 1 {
 		t.Fatalf("reports = %d, want 1", len(got))
@@ -109,7 +109,7 @@ func TestResetNamesTheHostAndDropsTheLink(t *testing.T) {
 		t.Fatalf("Reset(54321) = %q %v, want the host back", host, known)
 	}
 
-	if _, first := h.Data(54321, now); first {
+	if _, first := h.Data(54321, 100, now); first {
 		t.Error("a link dropped on reset still answers")
 	}
 
@@ -131,7 +131,7 @@ func TestResetLinkIsNotReportedQuietLater(t *testing.T) {
 	now := time.Now()
 
 	h.Hello("gateway.discord.gg", 54321, now)
-	h.Data(54321, now)
+	h.Data(54321, 100, now)
 	h.Reset(54321)
 
 	if got := h.WentQuiet(now.Add(time.Minute), 5*time.Second); len(got) != 0 {
@@ -146,7 +146,7 @@ func TestPortStaysKnownLongAfterTheHello(t *testing.T) {
 	now := time.Now()
 
 	h.Hello("gateway.discord.gg", 54321, now)
-	h.Data(54321, now.Add(time.Hour))
+	h.Data(54321, 100, now.Add(time.Hour))
 
 	if host, known := h.Reset(54321); !known || host != "gateway.discord.gg" {
 		t.Errorf("an hour later the port gave %q %v, want the host", host, known)
@@ -160,7 +160,7 @@ func TestPolitelyClosedIsNotCalledKilled(t *testing.T) {
 	now := time.Now()
 
 	h.Hello("updates.discord.com", 54321, now)
-	h.Data(54321, now)
+	h.Data(54321, 100, now)
 	h.Closed(54321)
 
 	if got := h.WentQuiet(now.Add(time.Minute), 5*time.Second); len(got) != 0 {
@@ -177,9 +177,51 @@ func TestKilledIsStillReportedAfterTheFix(t *testing.T) {
 	now := time.Now()
 
 	h.Hello("gateway.discord.gg", 54321, now)
-	h.Data(54321, now)
+	h.Data(54321, 100, now)
 
 	if got := h.WentQuiet(now.Add(time.Minute), 5*time.Second); len(got) != 1 {
 		t.Errorf("a connection that went quiet with no fin was not reported: %+v", got)
+	}
+}
+
+// What the bytes are for: packets before silence say nothing about how far a
+// stream got, and a stream cut at a fixed size is what a throttled link looks like.
+func TestBytesAddUpAcrossPackets(t *testing.T) {
+	h := New()
+	now := time.Now()
+
+	h.Hello("discord.com", 54321, now)
+	h.Data(54321, 1460, now)
+	h.Data(54321, 1460, now)
+	h.Data(54321, 700, now)
+
+	got := h.WentQuiet(now.Add(time.Minute), time.Second)
+	if len(got) != 1 {
+		t.Fatalf("reported %d links, want 1", len(got))
+	}
+
+	if got[0].Bytes != 3620 {
+		t.Errorf("Bytes = %d, want 3620", got[0].Bytes)
+	}
+
+	if got[0].Packets != 3 {
+		t.Errorf("Packets = %d, want 3", got[0].Packets)
+	}
+}
+
+func TestBytesStayApartPerPort(t *testing.T) {
+	h := New()
+	now := time.Now()
+
+	h.Hello("discord.com", 1111, now)
+	h.Hello("discord.com", 2222, now)
+	h.Data(1111, 500, now)
+	h.Data(2222, 9000, now)
+
+	for _, r := range h.WentQuiet(now.Add(time.Minute), time.Second) {
+		want := map[uint16]int{1111: 500, 2222: 9000}[r.Port]
+		if r.Bytes != want {
+			t.Errorf("port %d carried %d bytes, want %d", r.Port, r.Bytes, want)
+		}
 	}
 }

@@ -14,6 +14,7 @@ type state struct {
 	host     string
 	began    time.Time
 	packets  int
+	bytes    int
 	lastData time.Time
 	reported bool
 	closed   bool
@@ -23,6 +24,7 @@ type Report struct {
 	Host    string
 	Port    uint16
 	Packets int
+	Bytes   int
 	Silence time.Duration
 }
 
@@ -37,7 +39,7 @@ func (h *Health) Hello(host string, port uint16, now time.Time) {
 	h.links[port] = &state{host: host, began: now}
 }
 
-func (h *Health) Data(port uint16, now time.Time) (string, bool) {
+func (h *Health) Data(port uint16, bytes int, now time.Time) (string, bool) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
@@ -47,6 +49,7 @@ func (h *Health) Data(port uint16, now time.Time) (string, bool) {
 	}
 
 	s.packets++
+	s.bytes += bytes
 	s.lastData = now
 
 	return s.host, s.packets == 1
@@ -95,6 +98,7 @@ func (h *Health) WentQuiet(now time.Time, after time.Duration) []Report {
 			Host:    s.host,
 			Port:    port,
 			Packets: s.packets,
+			Bytes:   s.bytes,
 			Silence: now.Sub(s.lastData),
 		})
 	}

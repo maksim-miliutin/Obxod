@@ -56,10 +56,11 @@ func TestRunReportsResetsAndData(t *testing.T) {
 	}}
 
 	var resets, data, closed []uint16
+	var sizes []int
 
 	w := Watch{
 		Reset:  func(port uint16) { resets = append(resets, port) },
-		Data:   func(port uint16) { data = append(data, port) },
+		Data:   func(port uint16, bytes int) { data = append(data, port); sizes = append(sizes, bytes) },
 		Closed: func(port uint16) { closed = append(closed, port) },
 	}
 
@@ -93,7 +94,7 @@ func TestReadIgnoresWhatIsNotOurs(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			if _, _, ok := read(c.packet); ok {
+			if _, _, _, ok := read(c.packet); ok {
 				t.Error("a packet that is none of our business was reported")
 			}
 		})
@@ -108,5 +109,24 @@ func TestRunSurvivesMissingCallbacks(t *testing.T) {
 
 	if err := (Watch{}).Run(f); !errors.Is(err, errDone) {
 		t.Fatalf("Run: %v", err)
+	}
+}
+
+// Only the payload counts: headers are not what the stream carried.
+func TestDataReportsThePayloadSize(t *testing.T) {
+	for _, size := range []int{1, 100, 1460} {
+		f := &feed{packets: [][]byte{reply(443, 54321, 0, make([]byte, size))}}
+
+		var got []int
+
+		w := Watch{Data: func(port uint16, bytes int) { got = append(got, bytes) }}
+
+		if err := w.Run(f); !errors.Is(err, errDone) {
+			t.Fatalf("Run: %v", err)
+		}
+
+		if len(got) != 1 || got[0] != size {
+			t.Errorf("a %d byte payload was reported as %v", size, got)
+		}
 	}
 }

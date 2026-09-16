@@ -137,8 +137,8 @@ func (e *Engine) step(now time.Time) error {
 	}
 
 	for _, gone := range e.health.WentQuiet(now, e.silence) {
-		e.say("  %s on port %d: answered %d times then went silent for %s, the connection was killed",
-			gone.Host, gone.Port, gone.Packets, gone.Silence.Round(time.Second))
+		e.say("  %s on port %d: %d bytes in %d packets, then quiet for %s",
+			gone.Host, gone.Port, gone.Bytes, gone.Packets, gone.Silence.Round(time.Second))
 	}
 
 	return nil
@@ -216,8 +216,8 @@ func (e *Engine) reset(port uint16) {
 	}
 }
 
-func (e *Engine) answered(port uint16) {
-	host, first := e.health.Data(port, time.Now())
+func (e *Engine) answered(port uint16, bytes int) {
+	host, first := e.health.Data(port, bytes, time.Now())
 	if !first {
 		return
 	}

@@ -14,7 +14,7 @@ type Receiver interface {
 
 type Watch struct {
 	Reset func(port uint16)
-	Data  func(port uint16)
+	Data  func(port uint16, bytes int)
 
 	Closed func(port uint16)
 
@@ -39,7 +39,7 @@ func (w Watch) Run(h Receiver) error {
 			w.Seen(total)
 		}
 
-		port, kind, ok := read(buf[:n])
+		port, kind, size, ok := read(buf[:n])
 		if !ok {
 			continue
 		}
@@ -55,7 +55,7 @@ func (w Watch) Run(h Receiver) error {
 			}
 		case wasData:
 			if w.Data != nil {
-				w.Data(port)
+				w.Data(port, size)
 			}
 		}
 	}
@@ -69,28 +69,28 @@ const (
 	wasClosed
 )
 
-func read(packet []byte) (uint16, kind, bool) {
+func read(packet []byte) (uint16, kind, int, bool) {
 	outer, err := ip.Parse(packet)
 	if err != nil || outer.Protocol != ip.ProtocolTCP {
-		return 0, wasData, false
+		return 0, wasData, 0, false
 	}
 
 	segment, err := tcp.Parse(outer.Payload)
 	if err != nil {
-		return 0, wasData, false
+		return 0, wasData, 0, false
 	}
 
 	if segment.Flags&tcp.FlagRST != 0 {
-		return segment.DstPort, wasReset, true
+		return segment.DstPort, wasReset, 0, true
 	}
 
 	if segment.Flags&tcp.FlagFIN != 0 {
-		return segment.DstPort, wasClosed, true
+		return segment.DstPort, wasClosed, 0, true
 	}
 
 	if len(segment.Payload) == 0 {
-		return 0, wasData, false
+		return 0, wasData, 0, false
 	}
 
-	return segment.DstPort, wasData, true
+	return segment.DstPort, wasData, len(segment.Payload), true
 }
