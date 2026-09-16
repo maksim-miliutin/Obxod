@@ -110,3 +110,66 @@ func Shift(packet []byte, seq uint32, ack int32) error {
 
 	return nil
 }
+
+const (
+	optionEnd       = 0
+	optionNop       = 1
+	optionTimestamp = 8
+	timestampLen    = 10
+)
+
+var (
+	ErrNoTimestamp = errors.New("seal: the packet carries no timestamp option to age")
+	ErrBadOptions  = errors.New("seal: a tcp option runs past the header")
+)
+
+// Stale moves the timestamp of a tcp segment back, so the server rejects the copy
+// as an old duplicate while its sequence number keeps it inside the stream.
+func Stale(packet []byte, back uint32) error {
+	outer, err := ip.Parse(packet)
+	if err != nil {
+		return err
+	}
+
+	if outer.Protocol != ip.ProtocolTCP {
+		return ErrNotTCP
+	}
+
+	segment, err := tcp.Parse(outer.Payload)
+	if err != nil {
+		return err
+	}
+
+	options := packet[outer.HeaderLen+20 : outer.HeaderLen+segment.HeaderLen]
+
+	for at := 0; at < len(options); {
+		switch options[at] {
+		case optionEnd:
+			return ErrNoTimestamp
+		case optionNop:
+			at++
+
+			continue
+		}
+
+		if at+1 >= len(options) {
+			return ErrBadOptions
+		}
+
+		size := int(options[at+1])
+		if size < 2 || at+size > len(options) {
+			return ErrBadOptions
+		}
+
+		if options[at] == optionTimestamp && size == timestampLen {
+			value := binary.BigEndian.Uint32(options[at+2 : at+6])
+			binary.BigEndian.PutUint32(options[at+2:at+6], value-back)
+
+			return nil
+		}
+
+		at += size
+	}
+
+	return ErrNoTimestamp
+}

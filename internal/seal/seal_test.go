@@ -243,3 +243,112 @@ func TestShiftWrapsLikeTCPDoes(t *testing.T) {
 		t.Errorf("ack = %d, want it wrapped to 4294967196", ack)
 	}
 }
+
+// Options are laid out as kind, length, data — except the two one-byte kinds,
+// which carry no length at all and walking over them as if they did runs wild.
+func withOptions(options []byte) []byte {
+	segment := make([]byte, 20)
+	binary.BigEndian.PutUint16(segment[0:2], 51000)
+	binary.BigEndian.PutUint16(segment[2:4], 443)
+	binary.BigEndian.PutUint32(segment[4:8], 1000)
+	// The header length counts whole words, so options are padded up to one.
+	for len(options)%4 != 0 {
+		options = append(options, optionEnd)
+	}
+
+	segment[12] = byte((20+len(options))/4) << 4
+	segment[13] = 0x18
+	segment = append(segment, options...)
+	segment = append(segment, []byte("hello")...)
+
+	out := make([]byte, 20)
+	out[0] = 4<<4 | 5
+	out[8] = 64
+	out[9] = ip.ProtocolTCP
+	copy(out[12:16], []byte{192, 168, 1, 2})
+	copy(out[16:20], []byte{93, 184, 216, 34})
+	out = append(out, segment...)
+	binary.BigEndian.PutUint16(out[2:4], uint16(len(out)))
+
+	return out
+}
+
+func timestamps(value, echo uint32) []byte {
+	o := []byte{optionNop, optionNop, optionTimestamp, timestampLen}
+	o = binary.BigEndian.AppendUint32(o, value)
+
+	return binary.BigEndian.AppendUint32(o, echo)
+}
+
+func tsvalOf(t *testing.T, packet []byte) uint32 {
+	t.Helper()
+
+	return binary.BigEndian.Uint32(packet[20+20+4 : 20+20+8])
+}
+
+// Timestamps wrap like every other tcp number, so moving one back past zero has
+// to wrap with it rather than clamp.
+func TestStaleSetsTheTimestampBack(t *testing.T) {
+	var was, back uint32 = 5_000_000, 1 << 30
+
+	packet := withOptions(timestamps(was, 77))
+
+	if err := Stale(packet, back); err != nil {
+		t.Fatalf("Stale: %v", err)
+	}
+
+	if got := tsvalOf(t, packet); got != was-back {
+		t.Errorf("tsval = %d, want %d", got, was-back)
+	}
+
+	if echo := binary.BigEndian.Uint32(packet[20+20+8 : 20+20+12]); echo != 77 {
+		t.Errorf("the echoed timestamp changed to %d, want it left alone", echo)
+	}
+}
+
+// The trap this guards: nop and end carry no length byte, so a walk that reads
+// one steps into the middle of the next option and never finds the timestamp.
+func TestStaleWalksPastOneByteOptions(t *testing.T) {
+	windowScale := []byte{3, 3, 7}
+	options := append([]byte{optionNop, optionNop, optionNop}, windowScale...)
+	options = append(options, timestamps(9_000_000, 1)...)
+	options = append(options, optionNop, optionEnd)
+
+	packet := withOptions(options)
+
+	if err := Stale(packet, 1000); err != nil {
+		t.Fatalf("Stale: %v", err)
+	}
+
+	// three nops, a three byte window scale, then what timestamps builds: two more
+	// nops, the option kind and its length
+	at := 20 + 20 + 3 + 3 + 4
+
+	if got := binary.BigEndian.Uint32(packet[at : at+4]); got != 9_000_000-1000 {
+		t.Errorf("tsval = %d, want 8999000", got)
+	}
+}
+
+// Windows sends no timestamps unless told to, and a way that silently does
+// nothing is worse than one that says it cannot.
+func TestStaleSaysWhenThereIsNoTimestamp(t *testing.T) {
+	cases := map[string][]byte{
+		"no options at all":   nil,
+		"only a window scale": {3, 3, 7, optionEnd},
+		"padding then end":    {optionNop, optionNop, optionNop, optionEnd},
+	}
+
+	for name, options := range cases {
+		t.Run(name, func(t *testing.T) {
+			if err := Stale(withOptions(options), 1000); err != ErrNoTimestamp {
+				t.Errorf("Stale gave %v, want ErrNoTimestamp", err)
+			}
+		})
+	}
+}
+
+func TestStaleRefusesOptionsThatRunPastTheHeader(t *testing.T) {
+	if err := Stale(withOptions([]byte{optionTimestamp, 40, 0, 0}), 1000); err != ErrBadOptions {
+		t.Error("an option longer than the header was walked into")
+	}
+}

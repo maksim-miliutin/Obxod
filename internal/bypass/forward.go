@@ -46,7 +46,7 @@ func (e *Engine) forward(h sender, packet []byte, addr *divert.Addr) (bool, erro
 
 	// The decoy goes first and the real hello follows, cut or whole: an inspector
 	// that reads the decoy and then finds no name in either half has nothing to match.
-	if r.Recorded || r.TTL != 0 || r.BadSeq != 0 || r.BadAck != 0 || r.BadSum || r.Decoy != "" {
+	if r.Recorded || r.TTL != 0 || r.BadSeq != 0 || r.BadAck != 0 || r.Stale != 0 || r.BadSum || r.Decoy != "" {
 		if err := e.fake(h, packet, addr, found, r); err != nil {
 			return false, err
 		}
@@ -64,7 +64,7 @@ func (e *Engine) forward(h sender, packet []byte, addr *divert.Addr) (bool, erro
 }
 
 func (e *Engine) fake(h sender, packet []byte, addr *divert.Addr, found hello.Outgoing, r rules.Rule) error {
-	recipe := forge.Recipe{TTL: r.TTL, SeqDelta: r.BadSeq, AckDelta: r.BadAck, BadSum: r.BadSum}
+	recipe := forge.Recipe{TTL: r.TTL, SeqDelta: r.BadSeq, AckDelta: r.BadAck, Stale: r.Stale, BadSum: r.BadSum}
 
 	if r.Recorded {
 		return e.canned(h, packet, addr, found, r, recipe)
@@ -202,6 +202,10 @@ func spoils(r rules.Rule) string {
 
 	if r.BadAck != 0 {
 		named = append(named, fmt.Sprintf("badack %d", r.BadAck))
+	}
+
+	if r.Stale != 0 {
+		named = append(named, "old timestamp")
 	}
 
 	if r.BadSum {

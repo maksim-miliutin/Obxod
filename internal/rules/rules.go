@@ -13,6 +13,13 @@ var (
 	ErrCutWhere = errors.New("rules: cut takes name, after or start")
 )
 
+// Far enough back for the server to call the copy old, and short of half the
+// timestamp space, past which the subtraction wraps into the future instead.
+const (
+	staleDefault = 1 << 30
+	staleMost    = 1<<31 - 1
+)
+
 type Rule struct {
 	Host string
 
@@ -26,6 +33,7 @@ type Rule struct {
 	Repeats  int
 	Recorded bool
 	BadAck   int32
+	Stale    uint32
 }
 
 // Parse reads one rule, written as host=way,way,way. A way is ttl:4, badseq:100000,
@@ -58,7 +66,7 @@ func Parse(text string) (Rule, error) {
 
 // On the type so every caller counts the same fields; a way forgotten here does nothing.
 func (r Rule) Blank() bool {
-	return r.TTL == 0 && r.BadSeq == 0 && !r.BadSum && r.Decoy == "" && r.Cut == "" && r.Overlap == 0 && !r.Recorded && r.BadAck == 0
+	return r.TTL == 0 && r.BadSeq == 0 && !r.BadSum && r.Decoy == "" && r.Cut == "" && r.Overlap == 0 && !r.Recorded && r.BadAck == 0 && r.Stale == 0
 }
 
 func (r *Rule) take(way string) error {
@@ -101,6 +109,21 @@ func (r *Rule) take(way string) error {
 		}
 
 		r.Overlap = at
+
+		return nil
+	case "ts":
+		if value == "" {
+			r.Stale = staleDefault
+
+			return nil
+		}
+
+		back, err := strconv.ParseUint(value, 10, 32)
+		if err != nil || back == 0 || back > staleMost {
+			return fmt.Errorf("rules: ts wants how far back to set the timestamp, 1 to %d", staleMost)
+		}
+
+		r.Stale = uint32(back)
 
 		return nil
 	case "badack":

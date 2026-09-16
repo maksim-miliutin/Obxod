@@ -22,6 +22,7 @@ type Recipe struct {
 	TTL      uint8  // hops the copy may live; zero keeps whatever the original had
 	SeqDelta uint32 // added to the sequence number so the server drops the copy; zero leaves it
 	AckDelta int32  // added to the acknowledgement number, usually backwards; zero leaves it
+	Stale    uint32 // taken off the timestamp so the server calls the copy old; zero leaves it
 	BadSum   bool   // leave a wrong TCP checksum so the copy is dropped past the inspector
 
 	// Must match the real name in length: a hello counts the name in three places.
@@ -58,6 +59,12 @@ func Copy(packet []byte, r Recipe) ([]byte, error) {
 
 	if err := seal.Shift(copied, r.SeqDelta, r.AckDelta); err != nil {
 		return nil, err
+	}
+
+	if r.Stale != 0 {
+		if err := seal.Stale(copied, r.Stale); err != nil {
+			return nil, err
+		}
 	}
 
 	if err := seal.Sums(copied, r.BadSum); err != nil {
@@ -122,6 +129,12 @@ func Instead(packet []byte, recorded []byte, r Recipe) ([]byte, error) {
 
 	if err := seal.Shift(made, r.SeqDelta, r.AckDelta); err != nil {
 		return nil, err
+	}
+
+	if r.Stale != 0 {
+		if err := seal.Stale(made, r.Stale); err != nil {
+			return nil, err
+		}
 	}
 
 	if err := seal.Sums(made, r.BadSum); err != nil {

@@ -300,3 +300,37 @@ func TestBadAckRejectsNonsense(t *testing.T) {
 		})
 	}
 }
+
+func TestTsWithoutAValueTakesTheDefault(t *testing.T) {
+	r, err := Parse("discord.com=ts")
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+
+	if r.Stale != staleDefault {
+		t.Errorf("Stale = %d, want the default %d", r.Stale, staleDefault)
+	}
+}
+
+func TestTsTakesAnExplicitShift(t *testing.T) {
+	r, err := Parse("discord.com=ts:10000")
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+
+	if r.Stale != 10000 {
+		t.Errorf("Stale = %d, want 10000", r.Stale)
+	}
+}
+
+// Past half the timestamp space the subtraction wraps into the future, and a
+// copy from the future is not old at all.
+func TestTsRefusesAShiftThatWrapsForward(t *testing.T) {
+	for _, text := range []string{"ts:0", "ts:2147483648", "ts:soon", "ts:-5"} {
+		t.Run(text, func(t *testing.T) {
+			if _, err := Parse("discord.com=badsum," + text); err == nil {
+				t.Error("nonsense was accepted")
+			}
+		})
+	}
+}
