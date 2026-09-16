@@ -502,3 +502,72 @@ func TestOverlapGoesOutBackToFrontToo(t *testing.T) {
 		t.Error("the recorded hello still went first")
 	}
 }
+
+// A hello too big for one packet declares a record longer than it carries.
+func splitHello(host string) []byte {
+	payload := clientHello(host)
+	binary.BigEndian.PutUint16(payload[3:5], binary.BigEndian.Uint16(payload[3:5])+20)
+
+	return packet443(payload)
+}
+
+// The check this replaces lived here and turned a decoy of another size into a
+// fatal error, so the whole point of rebuilding the hello never ran once.
+func TestDecoyMayBeShorterThanTheRealName(t *testing.T) {
+	const host = "updates.discord.com"
+
+	for _, name := range []string{"mail.ru", "ya.ru", "a.io", "xxxxxxxx.google.com"} {
+		t.Run(name, func(t *testing.T) {
+			r := &recorder{}
+
+			if _, err := engineFor(t, true, nil, host+"=decoy:"+name).forward(r, packet443(clientHello(host)), &divert.Addr{}); err != nil {
+				t.Fatalf("forward: %v", err)
+			}
+
+			if len(r.sent) != 1 {
+				t.Fatalf("sent %d packets, want the one copy", len(r.sent))
+			}
+
+			if !bytes.Contains(r.sent[0], []byte(name)) {
+				t.Error("the copy does not wear the decoy")
+			}
+		})
+	}
+}
+
+// A rule the engine cannot apply is reported and skipped: one bad site must not
+// take the whole run down with it.
+func TestARuleThatCannotBeAppliedDoesNotStopTheRun(t *testing.T) {
+	const host = "updates.discord.com"
+
+	r := &recorder{}
+
+	sent, err := engineFor(t, true, nil, host+"=decoy:mail.ru").forward(r, splitHello(host), &divert.Addr{})
+	if err != nil {
+		t.Fatalf("forward returned %v, want the run to carry on", err)
+	}
+
+	if sent || len(r.sent) != 0 {
+		t.Errorf("sent %d packets for a hello it cannot rebuild", len(r.sent))
+	}
+}
+
+// A same size decoy needs no rebuilding, so it works even on a hello we see only
+// part of. That is the case discord.com actually presents.
+func TestSameSizeDecoyWorksOnASplitHello(t *testing.T) {
+	const host = "updates.discord.com"
+
+	r := &recorder{}
+
+	if _, err := engineFor(t, true, nil, host+"=decoy").forward(r, splitHello(host), &divert.Addr{}); err != nil {
+		t.Fatalf("forward: %v", err)
+	}
+
+	if len(r.sent) != 1 {
+		t.Fatalf("sent %d packets, want the one copy", len(r.sent))
+	}
+
+	if bytes.Contains(r.sent[0], []byte(host)) {
+		t.Error("the copy still carries the real name")
+	}
+}

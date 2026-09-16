@@ -76,10 +76,6 @@ func (e *Engine) fake(h sender, packet []byte, addr *divert.Addr, found hello.Ou
 			name = decoyFor(found.Host)
 		}
 
-		if len(name) != len(found.Host) {
-			return fmt.Errorf("bypass: decoy %q is %d bytes, the real name is %d: they must match", name, len(name), len(found.Host))
-		}
-
 		recipe.Name = name
 	}
 
