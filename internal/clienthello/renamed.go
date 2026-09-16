@@ -11,12 +11,8 @@ var (
 )
 
 // Renamed returns the payload with another host name in place of the real one.
-// Unlike a same-length swap, six declared lengths count the name in and move with it.
+// Six declared lengths count the name in and move with it when its size changes.
 func (h Hello) Renamed(name string) ([]byte, error) {
-	if len(h.Record) != recordHeaderLen+h.RecordLen {
-		return nil, ErrTruncated
-	}
-
 	found, err := h.ServerName()
 	if err != nil {
 		return nil, err
@@ -24,10 +20,20 @@ func (h Hello) Renamed(name string) ([]byte, error) {
 
 	delta := len(name) - len(found.Host)
 
+	// Only a size change writes those lengths, and writing them for bytes we never
+	// saw would leave the hello claiming more than it carries.
+	if delta != 0 && len(h.Record) != recordHeaderLen+h.RecordLen {
+		return nil, ErrTruncated
+	}
+
 	out := make([]byte, 0, len(h.payload)+delta)
 	out = append(out, h.payload[:found.Offset]...)
 	out = append(out, name...)
 	out = append(out, h.payload[found.Offset+len(found.Host):]...)
+
+	if delta == 0 {
+		return out, nil
+	}
 
 	for _, at := range []int{recordLenAt, found.extensionsLenAt, found.extLenAt, found.listLenAt, found.nameLenAt} {
 		if err := bump16(out, at, delta); err != nil {
