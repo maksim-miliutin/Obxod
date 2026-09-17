@@ -38,7 +38,7 @@ func (e *Engine) forward(h sender, packet []byte, addr *divert.Addr) (bool, erro
 		e.say("  %s: asking again, so this way is not getting through", found.Host)
 	}
 
-	e.health.Hello(found.Host, found.SrcPort, time.Now())
+	e.health.Hello(found.Host, found.SrcPort)
 
 	if e.hunt != nil && e.hunt.Host() == found.Host {
 		e.hunt.Saw(repeat)

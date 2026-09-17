@@ -9,7 +9,7 @@ func TestDataSaysOnlyTheFirstTime(t *testing.T) {
 	h := New()
 	now := time.Now()
 
-	h.Hello("gateway.discord.gg", 54321, now)
+	h.Hello("gateway.discord.gg", 54321)
 
 	host, first := h.Data(54321, 100, now.Add(time.Millisecond))
 	if !first || host != "gateway.discord.gg" {
@@ -27,8 +27,8 @@ func TestEveryConnectionIsFollowedApart(t *testing.T) {
 	h := New()
 	now := time.Now()
 
-	h.Hello("gateway.discord.gg", 54321, now)
-	h.Hello("gateway.discord.gg", 54322, now)
+	h.Hello("gateway.discord.gg", 54321)
+	h.Hello("gateway.discord.gg", 54322)
 
 	if _, first := h.Data(54321, 100, now); !first {
 		t.Error("the first connection was not reported")
@@ -51,7 +51,7 @@ func TestWentQuiet(t *testing.T) {
 	h := New()
 	now := time.Now()
 
-	h.Hello("gateway.discord.gg", 54321, now)
+	h.Hello("gateway.discord.gg", 54321)
 	h.Data(54321, 100, now)
 	h.Data(54321, 100, now.Add(time.Second))
 
@@ -73,7 +73,7 @@ func TestQuietIsReportedOnce(t *testing.T) {
 	h := New()
 	now := time.Now()
 
-	h.Hello("gateway.discord.gg", 54321, now)
+	h.Hello("gateway.discord.gg", 54321)
 	h.Data(54321, 100, now)
 
 	if got := h.WentQuiet(now.Add(10*time.Second), 5*time.Second); len(got) != 1 {
@@ -89,7 +89,7 @@ func TestConnectionsThatNeverAnsweredAreNotCalledQuiet(t *testing.T) {
 	h := New()
 	now := time.Now()
 
-	h.Hello("gateway.discord.gg", 54321, now)
+	h.Hello("gateway.discord.gg", 54321)
 
 	// Never answering is a different fault from answering and stopping, and the
 	// hello watcher already covers it.
@@ -102,7 +102,7 @@ func TestResetNamesTheHostAndDropsTheLink(t *testing.T) {
 	h := New()
 	now := time.Now()
 
-	h.Hello("gateway.discord.gg", 54321, now)
+	h.Hello("gateway.discord.gg", 54321)
 
 	host, known := h.Reset(54321)
 	if !known || host != "gateway.discord.gg" {
@@ -130,7 +130,7 @@ func TestResetLinkIsNotReportedQuietLater(t *testing.T) {
 	h := New()
 	now := time.Now()
 
-	h.Hello("gateway.discord.gg", 54321, now)
+	h.Hello("gateway.discord.gg", 54321)
 	h.Data(54321, 100, now)
 	h.Reset(54321)
 
@@ -145,7 +145,7 @@ func TestPortStaysKnownLongAfterTheHello(t *testing.T) {
 	h := New()
 	now := time.Now()
 
-	h.Hello("gateway.discord.gg", 54321, now)
+	h.Hello("gateway.discord.gg", 54321)
 	h.Data(54321, 100, now.Add(time.Hour))
 
 	if host, known := h.Reset(54321); !known || host != "gateway.discord.gg" {
@@ -159,7 +159,7 @@ func TestPolitelyClosedIsNotCalledKilled(t *testing.T) {
 	h := New()
 	now := time.Now()
 
-	h.Hello("updates.discord.com", 54321, now)
+	h.Hello("updates.discord.com", 54321)
 	h.Data(54321, 100, now)
 	h.Closed(54321)
 
@@ -176,7 +176,7 @@ func TestKilledIsStillReportedAfterTheFix(t *testing.T) {
 	h := New()
 	now := time.Now()
 
-	h.Hello("gateway.discord.gg", 54321, now)
+	h.Hello("gateway.discord.gg", 54321)
 	h.Data(54321, 100, now)
 
 	if got := h.WentQuiet(now.Add(time.Minute), 5*time.Second); len(got) != 1 {
@@ -190,7 +190,7 @@ func TestBytesAddUpAcrossPackets(t *testing.T) {
 	h := New()
 	now := time.Now()
 
-	h.Hello("discord.com", 54321, now)
+	h.Hello("discord.com", 54321)
 	h.Data(54321, 1460, now)
 	h.Data(54321, 1460, now)
 	h.Data(54321, 700, now)
@@ -213,8 +213,8 @@ func TestBytesStayApartPerPort(t *testing.T) {
 	h := New()
 	now := time.Now()
 
-	h.Hello("discord.com", 1111, now)
-	h.Hello("discord.com", 2222, now)
+	h.Hello("discord.com", 1111)
+	h.Hello("discord.com", 2222)
 	h.Data(1111, 500, now)
 	h.Data(2222, 9000, now)
 
@@ -232,7 +232,7 @@ func TestALinkIsForgottenOnceToldAbout(t *testing.T) {
 	h := New()
 	now := time.Now()
 
-	h.Hello("discord.com", 54321, now)
+	h.Hello("discord.com", 54321)
 	h.Data(54321, 1460, now)
 
 	if got := h.WentQuiet(now.Add(time.Minute), time.Second); len(got) != 1 {
@@ -248,7 +248,7 @@ func TestAPolitelyClosedLinkIsForgotten(t *testing.T) {
 	h := New()
 	now := time.Now()
 
-	h.Hello("discord.com", 54321, now)
+	h.Hello("discord.com", 54321)
 	h.Data(54321, 1460, now)
 	h.Closed(54321)
 
@@ -267,7 +267,7 @@ func TestALiveLinkIsKept(t *testing.T) {
 	h := New()
 	now := time.Now()
 
-	h.Hello("discord.com", 54321, now)
+	h.Hello("discord.com", 54321)
 	h.Data(54321, 1460, now)
 
 	if got := h.WentQuiet(now.Add(time.Second), time.Minute); len(got) != 0 {
@@ -285,7 +285,7 @@ func TestNothingIsHeldAfterEveryLinkEnds(t *testing.T) {
 	now := time.Now()
 
 	for port := uint16(1000); port < 1100; port++ {
-		h.Hello("discord.com", port, now)
+		h.Hello("discord.com", port)
 		h.Data(port, 500, now)
 	}
 

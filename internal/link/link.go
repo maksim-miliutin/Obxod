@@ -12,7 +12,6 @@ type Health struct {
 
 type state struct {
 	host     string
-	began    time.Time
 	packets  int
 	bytes    int
 	lastData time.Time
@@ -30,11 +29,11 @@ func New() *Health {
 	return &Health{links: make(map[uint16]*state)}
 }
 
-func (h *Health) Hello(host string, port uint16, now time.Time) {
+func (h *Health) Hello(host string, port uint16) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	h.links[port] = &state{host: host, began: now}
+	h.links[port] = &state{host: host}
 }
 
 func (h *Health) Data(port uint16, bytes int, now time.Time) (string, bool) {
