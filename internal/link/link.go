@@ -16,8 +16,6 @@ type state struct {
 	packets  int
 	bytes    int
 	lastData time.Time
-	reported bool
-	closed   bool
 }
 
 type Report struct {
@@ -55,14 +53,13 @@ func (h *Health) Data(port uint16, bytes int, now time.Time) (string, bool) {
 	return s.host, s.packets == 1
 }
 
-// A finished request goes quiet exactly like a killed one; only a fin tells them apart.
+// A finished request goes quiet exactly like a killed one; only a fin tells them
+// apart, and a link that closed politely has nothing left to be said about it.
 func (h *Health) Closed(port uint16) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	if s, known := h.links[port]; known {
-		s.closed = true
-	}
+	delete(h.links, port)
 }
 
 // Reset drops the link and says whose it was: a connection the other side reset
@@ -88,11 +85,13 @@ func (h *Health) WentQuiet(now time.Time, after time.Duration) []Report {
 	var out []Report
 
 	for port, s := range h.links {
-		if s.packets == 0 || s.reported || s.closed || now.Sub(s.lastData) < after {
+		if s.packets == 0 || now.Sub(s.lastData) < after {
 			continue
 		}
 
-		s.reported = true
+		// Said once and dropped. The loop asks this on every packet, so a link kept
+		// past its report would slow the run down as the day goes on.
+		delete(h.links, port)
 
 		out = append(out, Report{
 			Host:    s.host,

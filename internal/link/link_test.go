@@ -225,3 +225,77 @@ func TestBytesStayApartPerPort(t *testing.T) {
 		}
 	}
 }
+
+// The leak this guards: a link was marked as told about and kept forever, while
+// the loop walks this map on every packet that goes by.
+func TestALinkIsForgottenOnceToldAbout(t *testing.T) {
+	h := New()
+	now := time.Now()
+
+	h.Hello("discord.com", 54321, now)
+	h.Data(54321, 1460, now)
+
+	if got := h.WentQuiet(now.Add(time.Minute), time.Second); len(got) != 1 {
+		t.Fatalf("reported %d links, want 1", len(got))
+	}
+
+	if _, known := h.Reset(54321); known {
+		t.Error("the link is still held after it was reported")
+	}
+}
+
+func TestAPolitelyClosedLinkIsForgotten(t *testing.T) {
+	h := New()
+	now := time.Now()
+
+	h.Hello("discord.com", 54321, now)
+	h.Data(54321, 1460, now)
+	h.Closed(54321)
+
+	if _, known := h.Reset(54321); known {
+		t.Error("the link is still held after a fin")
+	}
+
+	if got := h.WentQuiet(now.Add(time.Minute), time.Second); len(got) != 0 {
+		t.Errorf("a closed link was called quiet: %+v", got)
+	}
+}
+
+// Live links stay: only terminal ones go, or the run would stop watching what it
+// is watching.
+func TestALiveLinkIsKept(t *testing.T) {
+	h := New()
+	now := time.Now()
+
+	h.Hello("discord.com", 54321, now)
+	h.Data(54321, 1460, now)
+
+	if got := h.WentQuiet(now.Add(time.Second), time.Minute); len(got) != 0 {
+		t.Fatalf("a link quiet for a second was reported: %+v", got)
+	}
+
+	if _, known := h.Reset(54321); !known {
+		t.Error("a live link was dropped")
+	}
+}
+
+// Nothing accumulates over a long run: every link ends one of three ways.
+func TestNothingIsHeldAfterEveryLinkEnds(t *testing.T) {
+	h := New()
+	now := time.Now()
+
+	for port := uint16(1000); port < 1100; port++ {
+		h.Hello("discord.com", port, now)
+		h.Data(port, 500, now)
+	}
+
+	h.Closed(1000)
+	h.Reset(1001)
+	h.WentQuiet(now.Add(time.Minute), time.Second)
+
+	for port := uint16(1000); port < 1100; port++ {
+		if _, known := h.Reset(port); known {
+			t.Fatalf("port %d is still held", port)
+		}
+	}
+}
