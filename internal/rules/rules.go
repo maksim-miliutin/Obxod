@@ -23,7 +23,7 @@ type Rule struct {
 	Host string
 
 	TTL    uint8
-	BadSeq uint32
+	BadSeq int32
 	BadSum bool
 	Decoy  string // empty, "auto", or a name of the very same length
 	Cut    string // empty, "name", "after" or "start"

@@ -352,3 +352,20 @@ func TestStaleRefusesOptionsThatRunPastTheHeader(t *testing.T) {
 		t.Error("an option longer than the header was walked into")
 	}
 }
+
+// A sequence number moved back wraps like every other tcp number, and the
+// reference moves it back by default.
+func TestShiftTakesTheSequenceBackwards(t *testing.T) {
+	var was uint32 = 5000
+
+	packet := packetWith([]byte("hello"), 0)
+	binary.BigEndian.PutUint32(packet[20+4:20+8], was)
+
+	if err := Shift(packet, -10000, 0); err != nil {
+		t.Fatalf("Shift: %v", err)
+	}
+
+	if seq, _ := numbers(t, packet); seq != was-10000 {
+		t.Errorf("seq = %d, want %d", seq, was-10000)
+	}
+}

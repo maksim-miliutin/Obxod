@@ -82,7 +82,6 @@ func TestParseErrors(t *testing.T) {
 func TestParseRejectsNonsense(t *testing.T) {
 	for _, text := range []string{
 		"discord.com=ttl:many",
-		"discord.com=badseq:-1",
 		"discord.com=ttl:999",
 		"discord.com=flip",
 	} {
@@ -398,6 +397,25 @@ func TestOnlyTheRightWaysCountAsOne(t *testing.T) {
 
 			if blank != errors.Is(err, ErrNoWay) {
 				t.Errorf("%q alone: err = %v, blank expected = %v", text, err, blank)
+			}
+		})
+	}
+}
+
+// Backwards is the direction the reference uses by default, and it was not
+// expressible at all while the field was unsigned.
+func TestBadSeqGoesEitherWay(t *testing.T) {
+	cases := map[string]int32{"badseq:-10000": -10000, "badseq:100000": 100000, "badseq:-1": -1}
+
+	for text, want := range cases {
+		t.Run(text, func(t *testing.T) {
+			r, err := Parse("discord.com=" + text)
+			if err != nil {
+				t.Fatalf("Parse: %v", err)
+			}
+
+			if r.BadSeq != want {
+				t.Errorf("BadSeq = %d, want %d", r.BadSeq, want)
 			}
 		})
 	}

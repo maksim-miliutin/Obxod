@@ -20,7 +20,7 @@ var (
 
 type Recipe struct {
 	TTL      uint8  // hops the copy may live; zero keeps whatever the original had
-	SeqDelta uint32 // added to the sequence number so the server drops the copy; zero leaves it
+	SeqDelta int32  // added to the sequence number so the server drops the copy; zero leaves it
 	AckDelta int32  // added to the acknowledgement number, usually backwards; zero leaves it
 	Stale    uint32 // taken off the timestamp so the server calls the copy old; zero leaves it
 	BadSum   bool   // leave a wrong TCP checksum so the copy is dropped past the inspector

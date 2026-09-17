@@ -42,14 +42,14 @@ var ways = []way{
 		say:   func(r Rule) string { return words("ttl", int64(r.TTL), r.TTL == 0) },
 	},
 	{
-		name: "badseq", hint: "badseq:100000", kind: counts | forges | spoils,
+		name: "badseq", hint: "badseq:-10000", kind: counts | forges | spoils,
 		read: func(r *Rule, value string, _ bool) error {
-			shift, err := strconv.ParseUint(value, 10, 32)
+			shift, err := strconv.ParseInt(value, 10, 32)
 			if err != nil || shift == 0 {
-				return fmt.Errorf("rules: badseq wants how far to move the sequence number")
+				return fmt.Errorf("rules: badseq wants how far to move the sequence number, either way, e.g. -10000")
 			}
 
-			r.BadSeq = uint32(shift)
+			r.BadSeq = int32(shift)
 
 			return nil
 		},

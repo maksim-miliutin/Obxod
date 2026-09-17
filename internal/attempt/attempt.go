@@ -56,6 +56,7 @@ func (t *Tracker) sweep(now time.Time) {
 	}
 }
 
+// The map has to stay small over a long run, and this is how a test can see that.
 func (t *Tracker) Watching() int {
 	t.mu.Lock()
 	defer t.mu.Unlock()
