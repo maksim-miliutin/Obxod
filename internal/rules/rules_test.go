@@ -420,3 +420,20 @@ func TestBadSeqGoesEitherWay(t *testing.T) {
 		})
 	}
 }
+
+// The number matters: too far back and the copy stops reading as a real
+// timestamp, too far and it wraps into the future and is not old at all.
+func TestTheDefaultTimestampShiftIsTenMinutesOfTicks(t *testing.T) {
+	r, err := Parse("discord.com=ts")
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+
+	if r.Stale != 600000 {
+		t.Errorf("Stale = %d, want 600000", r.Stale)
+	}
+
+	if r.Stale > staleMost {
+		t.Error("the default shift wraps forward")
+	}
+}

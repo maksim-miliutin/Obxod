@@ -12,10 +12,11 @@ var (
 	ErrCutWhere = errors.New("rules: cut takes name, after or start")
 )
 
-// Far enough back for the server to call the copy old, and short of half the
+// Ten minutes of ticks: old enough for the server to call the copy a stale
+// duplicate, recent enough to still read as a real timestamp. Short of half the
 // timestamp space, past which the subtraction wraps into the future instead.
 const (
-	staleDefault = 1 << 30
+	staleDefault = 600000
 	staleMost    = 1<<31 - 1
 )
 
