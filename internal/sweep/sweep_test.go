@@ -204,3 +204,43 @@ func TestWorkedEndsTheSweep(t *testing.T) {
 		t.Error("a finished sweep moved off the candidate that worked")
 	}
 }
+
+// Every candidate has to be a rule the engine will act on: one that parses is not
+// enough, a blank one would be tried for nothing.
+func TestEveryCandidateIsAWorkingRule(t *testing.T) {
+	const host = "gateway.discord.gg"
+
+	seen := map[string]bool{}
+
+	for i, r := range Candidates(host) {
+		if r.Host != host {
+			t.Errorf("candidate %d is for %q, want %q", i, r.Host, host)
+		}
+
+		if r.Blank() {
+			t.Errorf("candidate %d does nothing", i)
+		}
+
+		if seen[r.Text()] {
+			t.Errorf("candidate %d repeats %q", i, r.Text())
+		}
+
+		seen[r.Text()] = true
+	}
+}
+
+// What the sweep prints as its answer has to be pastable back as a rule.
+func TestEveryCandidateWritesBackAndParses(t *testing.T) {
+	const host = "gateway.discord.gg"
+
+	for _, r := range Candidates(host) {
+		back, err := rules.Parse(host + "=" + r.Text())
+		if err != nil {
+			t.Fatalf("%q does not parse back: %v", r.Text(), err)
+		}
+
+		if back != r {
+			t.Errorf("\n got %+v\nwant %+v\nvia %q", back, r, r.Text())
+		}
+	}
+}

@@ -1,7 +1,6 @@
 package sweep
 
 import (
-	"fmt"
 	"sync"
 	"time"
 
@@ -115,42 +114,39 @@ func (s *Sweep) Next(now time.Time) bool {
 	return s.at < len(s.candidates)
 }
 
-// Ordered by what has actually worked here, likeliest first.
+// Ordered by what has actually worked here, likeliest first. Built as rules
+// rather than written out and parsed back, so a candidate cannot fail to parse.
 func Candidates(host string) []rules.Rule {
 	var out []rules.Rule
 
-	add := func(text string) {
-		r, err := rules.Parse(host + "=" + text)
-		if err != nil {
-			panic(fmt.Sprintf("sweep: built a rule that will not parse: %v", err))
-		}
-
+	add := func(r rules.Rule) {
+		r.Host = host
 		out = append(out, r)
 	}
 
 	// An overlap only works when a pattern was loaded; without one these come back
 	// as "cannot overlap" and cost a few seconds each.
-	add("overlap:1")
-	add("overlap:2")
-	add("overlap:1,badseq:100000,decoy")
+	add(rules.Rule{Overlap: 1})
+	add(rules.Rule{Overlap: 2})
+	add(rules.Rule{Overlap: 1, BadSeq: 100000, Decoy: "auto"})
 
-	add("decoy,badseq:100000,cut:name")
-	add("decoy,badseq:100000,cut:after")
-	add("decoy,badseq:100000,cut:start")
-	add("decoy,badseq:100000")
-	add("decoy,badsum,cut:name")
-	add("decoy,badsum")
+	add(rules.Rule{Decoy: "auto", BadSeq: 100000, Cut: "name"})
+	add(rules.Rule{Decoy: "auto", BadSeq: 100000, Cut: "after"})
+	add(rules.Rule{Decoy: "auto", BadSeq: 100000, Cut: "start"})
+	add(rules.Rule{Decoy: "auto", BadSeq: 100000})
+	add(rules.Rule{Decoy: "auto", BadSum: true, Cut: "name"})
+	add(rules.Rule{Decoy: "auto", BadSum: true})
 
-	for _, hops := range []int{1, 2, 3, 4, 6, 8} {
-		add(fmt.Sprintf("decoy,ttl:%d,cut:name", hops))
-		add(fmt.Sprintf("decoy,ttl:%d", hops))
+	for _, hops := range []uint8{1, 2, 3, 4, 6, 8} {
+		add(rules.Rule{Decoy: "auto", TTL: hops, Cut: "name"})
+		add(rules.Rule{Decoy: "auto", TTL: hops})
 	}
 
-	add("cut:name")
-	add("cut:start")
-	add("cut:after")
-	add("badseq:100000,cut:name")
-	add("badsum,cut:name")
+	add(rules.Rule{Cut: "name"})
+	add(rules.Rule{Cut: "start"})
+	add(rules.Rule{Cut: "after"})
+	add(rules.Rule{BadSeq: 100000, Cut: "name"})
+	add(rules.Rule{BadSum: true, Cut: "name"})
 
 	return out
 }
