@@ -118,6 +118,23 @@ var ways = []way{
 		say:   func(r Rule) string { return text("decoy", r.Decoy) },
 	},
 	{
+		name: "hostfake", hint: "hostfake or hostfake:mail.ru", kind: counts,
+		read: func(r *Rule, value string, given bool) error {
+			r.HostFake = "auto"
+			if given {
+				if value == "" {
+					return fmt.Errorf("rules: hostfake wants a host name, or nothing at all for one made up")
+				}
+
+				r.HostFake = value
+			}
+
+			return nil
+		},
+		write: func(r Rule) string { return text("hostfake", r.HostFake) },
+		say:   func(r Rule) string { return text("a name swapped in place", r.HostFake) },
+	},
+	{
 		name: "fake", hint: "fake", kind: counts | forges,
 		read:  func(r *Rule, _ string, given bool) error { return bare(&r.Recorded, "fake", given) },
 		write: func(r Rule) string { return flag("fake", r.Recorded) },

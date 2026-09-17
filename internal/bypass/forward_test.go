@@ -571,3 +571,167 @@ func TestSameSizeDecoyWorksOnASplitHello(t *testing.T) {
 		t.Error("the copy still carries the real name")
 	}
 }
+
+// The order is the whole trick: the wrong name arrives where the real one sits,
+// and the real one is written over it afterwards.
+func TestHostFakeSendsFourPartsInOrder(t *testing.T) {
+	const host = "updates.discord.com"
+
+	r := &recorder{}
+
+	sent, err := engineFor(t, true, nil, host+"=hostfake:mail.ru").forward(r, packet443(clientHello(host)), &divert.Addr{})
+	if err != nil {
+		t.Fatalf("forward: %v", err)
+	}
+
+	if !sent {
+		t.Fatal("hostfake did not take over sending")
+	}
+
+	if len(r.sent) != 4 {
+		t.Fatalf("sent %d packets, want before, wrong name, real name, after", len(r.sent))
+	}
+
+	wrong := worn(host, "mail.ru")
+
+	if !bytes.Contains(r.sent[1], []byte(wrong)) {
+		t.Errorf("packet 2 does not carry the made up name %q", wrong)
+	}
+
+	if bytes.Contains(r.sent[1], []byte(host)) {
+		t.Error("packet 2 still carries the real name")
+	}
+
+	if !bytes.Contains(r.sent[2], []byte(host)) {
+		t.Error("packet 3 does not write the real name back")
+	}
+}
+
+// The name has to keep its size: the lengths inside a hello count it, and nothing
+// here rewrites them.
+func TestTheSwappedNameKeepsTheSize(t *testing.T) {
+	cases := map[string]string{
+		"mail.ru":           "updates.discord.com",
+		"a.io":              "updates.discord.com",
+		"www.google.com":    "ya.ru",
+		"auto":              "updates.discord.com",
+		"a-very-long.co.uk": "a.io",
+	}
+
+	for want, real := range cases {
+		t.Run(want, func(t *testing.T) {
+			if got := worn(real, want); len(got) != len(real) {
+				t.Errorf("worn(%q, %q) = %q, %d bytes, want %d", real, want, got, len(got), len(real))
+			}
+		})
+	}
+}
+
+// A longer name keeps its tail, the way the reference does it.
+func TestALongerNameIsCutFromTheFront(t *testing.T) {
+	if got := worn("gle.com", "google.com"); got != "gle.com" {
+		t.Errorf("worn = %q, want the tail %q", got, "gle.com")
+	}
+}
+
+func TestHostFakePutsTheRestBeforeTheRealNameWhenAsked(t *testing.T) {
+	const host = "updates.discord.com"
+
+	packet := packet443(clientHello(host))
+
+	inOrder := &recorder{}
+	if _, err := engineFor(t, true, nil, host+"=hostfake:mail.ru").forward(inOrder, packet, &divert.Addr{}); err != nil {
+		t.Fatalf("forward: %v", err)
+	}
+
+	swapped := &recorder{}
+	if _, err := engineFor(t, true, nil, host+"=hostfake:mail.ru,disorder").forward(swapped, packet, &divert.Addr{}); err != nil {
+		t.Fatalf("forward: %v", err)
+	}
+
+	if !bytes.Equal(swapped.sent[2], inOrder.sent[3]) || !bytes.Equal(swapped.sent[3], inOrder.sent[2]) {
+		t.Error("disorder did not move what follows the name ahead of the real name")
+	}
+}
+
+func TestHostFakeRepeatsOnlyTheWrongName(t *testing.T) {
+	const host = "updates.discord.com"
+
+	r := &recorder{}
+
+	if _, err := engineFor(t, true, nil, host+"=hostfake,repeats:3").forward(r, packet443(clientHello(host)), &divert.Addr{}); err != nil {
+		t.Fatalf("forward: %v", err)
+	}
+
+	if len(r.sent) != 6 {
+		t.Fatalf("sent %d packets, want before, three wrong names, real name, after", len(r.sent))
+	}
+
+	for i := 1; i <= 3; i++ {
+		if !bytes.Equal(r.sent[i], r.sent[1]) {
+			t.Errorf("repeat %d differs from the first", i)
+		}
+	}
+}
+
+// The bug this guards: spoiling a rule counts as wanting a forged copy, so a
+// swapped name used to go out behind a whole fake hello nobody asked for.
+func TestHostFakeSendsNoCopyOnTopOfItsParts(t *testing.T) {
+	const host = "updates.discord.com"
+
+	packet := packet443(clientHello(host))
+
+	for _, rule := range []string{
+		host + "=hostfake:mail.ru,badack:-66000",
+		host + "=hostfake,badseq:100000",
+		host + "=hostfake:mail.ru,badsum,ttl:4",
+	} {
+		t.Run(rule, func(t *testing.T) {
+			r := &recorder{}
+
+			if _, err := engineFor(t, true, nil, rule).forward(r, packet, &divert.Addr{}); err != nil {
+				t.Fatalf("forward: %v", err)
+			}
+
+			if len(r.sent) != 4 {
+				t.Fatalf("sent %d packets, want the four parts alone", len(r.sent))
+			}
+		})
+	}
+}
+
+// Windows sends no timestamps unless told to. A rule asking to age one on a packet
+// that carries none has to say so and leave the hello alone, not send it half done.
+func TestHostFakeSaysWhenThereIsNoTimestampToAge(t *testing.T) {
+	const host = "updates.discord.com"
+
+	out := &lines{}
+
+	set, err := rules.ParseAll([]string{host + "=hostfake:mail.ru,ts"})
+	if err != nil {
+		t.Fatalf("ParseAll: %v", err)
+	}
+
+	r := &recorder{}
+
+	sent, err := New(Settings{Rules: set, Wet: true, Report: out.say}).forward(r, packet443(clientHello(host)), &divert.Addr{})
+	if err != nil {
+		t.Fatalf("forward returned %v, want the run to carry on", err)
+	}
+
+	if sent || len(r.sent) != 0 {
+		t.Errorf("sent %d packets for a hello it cannot age", len(r.sent))
+	}
+
+	var told bool
+
+	for _, said := range out.all() {
+		if strings.Contains(said, "cannot swap the name") {
+			told = true
+		}
+	}
+
+	if !told {
+		t.Error("nothing was said about why the name was not swapped")
+	}
+}

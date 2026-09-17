@@ -35,6 +35,7 @@ type Rule struct {
 	BadAck   int32
 	Stale    uint32
 	Disorder bool
+	HostFake string
 }
 
 // Parse reads one rule, written as host=way,way,way.

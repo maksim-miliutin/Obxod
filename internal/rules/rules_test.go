@@ -341,7 +341,7 @@ func TestEveryWayWritesBackAndParsesAgain(t *testing.T) {
 	samples := map[string]string{
 		"ttl": "ttl:4", "badseq": "badseq:100000", "badack": "badack:-66000",
 		"ts": "ts:1000", "badsum": "badsum", "decoy": "decoy:mail.ru",
-		"fake": "fake", "cut": "cut:name", "overlap": "overlap:1",
+		"fake": "fake", "hostfake": "hostfake:mail.ru", "cut": "cut:name", "overlap": "overlap:1",
 		"disorder": "disorder", "repeats": "repeats:5",
 	}
 
@@ -387,7 +387,7 @@ func TestWaysListsThemAll(t *testing.T) {
 func TestOnlyTheRightWaysCountAsOne(t *testing.T) {
 	cases := map[string]bool{
 		"ttl:4": false, "badseq:2": false, "badack:-1": false, "ts": false,
-		"badsum": false, "decoy": false, "fake": false, "cut:name": false, "overlap:1": false,
+		"badsum": false, "decoy": false, "fake": false, "hostfake": false, "cut:name": false, "overlap:1": false,
 		"disorder": true, "repeats:5": true,
 	}
 

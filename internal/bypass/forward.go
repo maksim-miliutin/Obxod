@@ -10,7 +10,10 @@ import (
 	"obxod/internal/divert"
 	"obxod/internal/forge"
 	"obxod/internal/hello"
+	"obxod/internal/ip"
 	"obxod/internal/rules"
+	"obxod/internal/seal"
+	"obxod/internal/tcp"
 )
 
 // sender is what the divert handle gives us, narrowed to the one call these take,
@@ -42,6 +45,13 @@ func (e *Engine) forward(h sender, packet []byte, addr *divert.Addr) (bool, erro
 
 	if e.hunt != nil && e.hunt.Host() == found.Host {
 		e.hunt.Saw(repeat)
+	}
+
+	// Swapping the name carries the spoiling itself, on the segment that holds the
+	// name. A whole forged copy on top of that is a second hello the server has to
+	// throw away, and it is not what the reference sends.
+	if r.HostFake != "" {
+		return e.hostfake(h, packet, addr, found, r)
 	}
 
 	// The decoy goes first and the real hello follows, cut or whole: an inspector
@@ -248,4 +258,110 @@ func backwards(on bool) string {
 	}
 
 	return ", back to front"
+}
+
+// worn cuts or pads the wanted name to the size of the real one, the way the
+// reference does: a longer name keeps its tail, a shorter one gets a prefix.
+func worn(real, want string) string {
+	if want == "auto" {
+		want = decoyFor(real)
+	}
+
+	if len(want) >= len(real) {
+		return want[len(want)-len(real):]
+	}
+
+	return strings.Repeat("x", len(real)-len(want)-1) + "." + want
+}
+
+// hostfake puts a made up name where the real one sits, then writes the real one
+// over it. What arrives first carries the wrong name; what the server puts back
+// together by sequence number carries the right one.
+func (e *Engine) hostfake(h sender, packet []byte, addr *divert.Addr, found hello.Outgoing, r rules.Rule) (bool, error) {
+	outer, err := ip.Parse(packet)
+	if err != nil {
+		return false, err
+	}
+
+	segment, err := tcp.Parse(outer.Payload)
+	if err != nil {
+		return false, err
+	}
+
+	payload := segment.Payload
+
+	if found.NameEnd > len(payload) {
+		e.say("  %s: the name runs past this packet, cannot swap it", found.Host)
+
+		return false, nil
+	}
+
+	part := func(bytes []byte, at int) []byte {
+		if err != nil {
+			return nil
+		}
+
+		var made []byte
+		made, err = seal.Remade(packet, bytes, segment.Seq+uint32(at))
+
+		return made
+	}
+
+	before := part(payload[:found.NameStart], 0)
+	real := part(payload[found.NameStart:found.NameEnd], found.NameStart)
+	after := part(payload[found.NameEnd:], found.NameEnd)
+
+	name := worn(found.Host, r.HostFake)
+
+	wrong, made := forge.Instead(packet, []byte(name), forge.Recipe{
+		TTL:      r.TTL,
+		SeqDelta: int32(found.NameStart) + r.BadSeq,
+		AckDelta: r.BadAck,
+		Stale:    r.Stale,
+		BadSum:   r.BadSum,
+	})
+
+	if err == nil {
+		err = made
+	}
+
+	if err != nil {
+		e.say("  %s: cannot swap the name: %v", found.Host, err)
+
+		return false, nil
+	}
+
+	if !e.wet {
+		e.say("  %s: would swap the name for %s (%s)", found.Host, name, r.Spoils())
+
+		return false, nil
+	}
+
+	e.say("  %s: name swapped for %s (%s)%s", found.Host, name, r.Spoils(), backwards(r.Disorder))
+
+	out := [][]byte{before}
+
+	for range max(1, r.Repeats) {
+		out = append(out, wrong)
+	}
+
+	// The reference sends what follows the name before writing the real name back
+	// when asked to; otherwise after it.
+	if r.Disorder {
+		out = append(out, after, real)
+	} else {
+		out = append(out, real, after)
+	}
+
+	for _, one := range out {
+		if len(one) == 0 {
+			continue
+		}
+
+		if err := h.Send(one, addr); err != nil {
+			return true, err
+		}
+	}
+
+	return true, nil
 }
