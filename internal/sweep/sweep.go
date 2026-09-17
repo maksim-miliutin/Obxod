@@ -134,8 +134,24 @@ func Candidates(host string) []rules.Rule {
 	add(rules.Rule{Decoy: "auto", BadSeq: 100000, Cut: "after"})
 	add(rules.Rule{Decoy: "auto", BadSeq: 100000, Cut: "start"})
 	add(rules.Rule{Decoy: "auto", BadSeq: 100000})
+	add(rules.Rule{Decoy: "auto", BadSeq: 100000, Repeats: 5})
+	add(rules.Rule{Decoy: "auto", Stale: 1 << 30, Cut: "name"})
+	add(rules.Rule{Decoy: "auto", Stale: 1 << 30})
+	add(rules.Rule{Decoy: "auto", BadAck: -66000})
+	add(rules.Rule{Decoy: "auto", BadSeq: 100000, BadAck: -66000})
 	add(rules.Rule{Decoy: "auto", BadSum: true, Cut: "name"})
 	add(rules.Rule{Decoy: "auto", BadSum: true})
+
+	// Short names rebuild the hello, which a hello split across packets refuses;
+	// they cost nothing to try and tell that apart from a way that simply fails.
+	add(rules.Rule{Decoy: "mail.ru", BadSeq: 100000})
+	add(rules.Rule{Decoy: "ya.ru", BadSeq: 100000, Cut: "name"})
+
+	// A recorded hello needs -fake; without one these say so and move on.
+	add(rules.Rule{Recorded: true, BadSeq: 100000})
+	add(rules.Rule{Recorded: true, BadSum: true, Repeats: 5})
+
+	add(rules.Rule{Decoy: "auto", BadSeq: 100000, Cut: "name", Disorder: true})
 
 	for _, hops := range []uint8{1, 2, 3, 4, 6, 8} {
 		add(rules.Rule{Decoy: "auto", TTL: hops, Cut: "name"})
