@@ -2,7 +2,6 @@ package bypass
 
 import (
 	"fmt"
-	"strings"
 	"time"
 
 	"obxod/internal/attempt"
@@ -154,10 +153,10 @@ func (e *Engine) judge(now time.Time) error {
 		return nil
 	}
 
-	e.say("  %s: %s", describe(e.hunt.Current()), verdict)
+	e.say("  %s: %s", e.hunt.Current().String(), verdict)
 
 	if verdict == sweep.Worked {
-		e.say("\nthis one works, keeping it:\n  -rule \"%s=%s\"", e.hunt.Host(), asRule(e.hunt.Current()))
+		e.say("\nthis one works, keeping it:\n  -rule \"%s=%s\"", e.hunt.Host(), e.hunt.Current().Text())
 
 		return nil
 	}
@@ -178,7 +177,7 @@ func (e *Engine) judge(now time.Time) error {
 		e.say("\n%s has not asked for anything yet. Give the rules that already work with -rule, or the site never gets this far.\n", host)
 	}
 
-	e.say("trying %s, %d left", describe(e.hunt.Current()), e.hunt.Left())
+	e.say("trying %s, %d left", e.hunt.Current().String(), e.hunt.Left())
 	e.set = withCandidate(e.base, e.hunt.Current())
 
 	return nil
@@ -234,7 +233,7 @@ func (e *Engine) announce() {
 	e.say("%s", mode)
 
 	for _, r := range e.set {
-		e.say("  %s: %s", r.Host, describe(r))
+		e.say("  %s: %s", r.Host, r)
 	}
 }
 
@@ -258,106 +257,6 @@ func withCandidate(base rules.Set, r rules.Rule) rules.Set {
 	}
 
 	return out
-}
-
-func describe(r rules.Rule) string {
-	var named []string
-
-	if r.TTL != 0 {
-		named = append(named, fmt.Sprintf("ttl %d", r.TTL))
-	}
-
-	if r.BadSeq != 0 {
-		named = append(named, fmt.Sprintf("badseq %d", r.BadSeq))
-	}
-
-	if r.BadAck != 0 {
-		named = append(named, fmt.Sprintf("badack %d", r.BadAck))
-	}
-
-	if r.Stale != 0 {
-		named = append(named, fmt.Sprintf("timestamp back %d", r.Stale))
-	}
-
-	if r.BadSum {
-		named = append(named, "badsum")
-	}
-
-	if r.Decoy != "" {
-		named = append(named, "decoy "+r.Decoy)
-	}
-
-	if r.Cut != "" {
-		named = append(named, "cut at "+r.Cut)
-	}
-
-	if r.Overlap != 0 {
-		named = append(named, fmt.Sprintf("overlap keeping %d", r.Overlap))
-	}
-
-	if r.Recorded {
-		named = append(named, "a recorded hello")
-	}
-
-	if r.Disorder {
-		named = append(named, "halves back to front")
-	}
-
-	if r.Repeats != 0 {
-		named = append(named, fmt.Sprintf("%d copies", r.Repeats))
-	}
-
-	return strings.Join(named, " + ")
-}
-
-func asRule(r rules.Rule) string {
-	var ways []string
-
-	if r.TTL != 0 {
-		ways = append(ways, fmt.Sprintf("ttl:%d", r.TTL))
-	}
-
-	if r.BadSeq != 0 {
-		ways = append(ways, fmt.Sprintf("badseq:%d", r.BadSeq))
-	}
-
-	if r.BadAck != 0 {
-		ways = append(ways, fmt.Sprintf("badack:%d", r.BadAck))
-	}
-
-	if r.Stale != 0 {
-		ways = append(ways, fmt.Sprintf("ts:%d", r.Stale))
-	}
-
-	if r.BadSum {
-		ways = append(ways, "badsum")
-	}
-
-	if r.Decoy != "" {
-		ways = append(ways, "decoy:"+r.Decoy)
-	}
-
-	if r.Cut != "" {
-		ways = append(ways, "cut:"+r.Cut)
-	}
-
-	if r.Overlap != 0 {
-		ways = append(ways, fmt.Sprintf("overlap:%d", r.Overlap))
-	}
-
-	if r.Recorded {
-		ways = append(ways, "fake")
-	}
-
-	if r.Disorder {
-		ways = append(ways, "disorder")
-	}
-
-	if r.Repeats != 0 {
-		ways = append(ways, fmt.Sprintf("repeats:%d", r.Repeats))
-	}
-
-	return strings.Join(ways, ",")
 }
 
 // isQUIC reports a datagram heading for 443, which is how a browser tries HTTP/3

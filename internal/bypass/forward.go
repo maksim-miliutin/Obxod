@@ -46,7 +46,7 @@ func (e *Engine) forward(h sender, packet []byte, addr *divert.Addr) (bool, erro
 
 	// The decoy goes first and the real hello follows, cut or whole: an inspector
 	// that reads the decoy and then finds no name in either half has nothing to match.
-	if r.Recorded || r.TTL != 0 || r.BadSeq != 0 || r.BadAck != 0 || r.Stale != 0 || r.BadSum || r.Decoy != "" {
+	if r.Forges() {
 		if err := e.fake(h, packet, addr, found, r); err != nil {
 			return false, err
 		}
@@ -89,12 +89,12 @@ func (e *Engine) fake(h sender, packet []byte, addr *divert.Addr, found hello.Ou
 	copies := max(1, r.Repeats)
 
 	if !e.wet {
-		e.say("  %s: would send a %d byte copy (%s%s%s)", found.Host, len(copied), spoils(r), wearing(recipe.Name), times(copies))
+		e.say("  %s: would send a %d byte copy (%s%s%s)", found.Host, len(copied), r.Spoils(), wearing(recipe.Name), times(copies))
 
 		return nil
 	}
 
-	e.say("  %s: copy sent ahead (%s%s%s)", found.Host, spoils(r), wearing(recipe.Name), times(copies))
+	e.say("  %s: copy sent ahead (%s%s%s)", found.Host, r.Spoils(), wearing(recipe.Name), times(copies))
 
 	for range copies {
 		if err := h.Send(copied, addr); err != nil {
@@ -189,36 +189,6 @@ func decoyFor(host string) string {
 	return strings.Repeat("x", len(host)-len(base)-1) + "." + base
 }
 
-func spoils(r rules.Rule) string {
-	var named []string
-
-	if r.TTL != 0 {
-		named = append(named, fmt.Sprintf("ttl %d", r.TTL))
-	}
-
-	if r.BadSeq != 0 {
-		named = append(named, fmt.Sprintf("badseq %d", r.BadSeq))
-	}
-
-	if r.BadAck != 0 {
-		named = append(named, fmt.Sprintf("badack %d", r.BadAck))
-	}
-
-	if r.Stale != 0 {
-		named = append(named, "old timestamp")
-	}
-
-	if r.BadSum {
-		named = append(named, "badsum")
-	}
-
-	if len(named) == 0 {
-		return "nothing spoiled"
-	}
-
-	return strings.Join(named, " + ")
-}
-
 func wearing(name string) string {
 	if name == "" {
 		return ""
@@ -246,12 +216,12 @@ func (e *Engine) canned(h sender, packet []byte, addr *divert.Addr, found hello.
 	copies := max(1, r.Repeats)
 
 	if !e.wet {
-		e.say("  %s: would send %d recorded bytes (%s%s)", found.Host, len(e.recorded), spoils(r), times(copies))
+		e.say("  %s: would send %d recorded bytes (%s%s)", found.Host, len(e.recorded), r.Spoils(), times(copies))
 
 		return nil
 	}
 
-	e.say("  %s: %d recorded bytes sent ahead (%s%s)", found.Host, len(e.recorded), spoils(r), times(copies))
+	e.say("  %s: %d recorded bytes sent ahead (%s%s)", found.Host, len(e.recorded), r.Spoils(), times(copies))
 
 	for range copies {
 		if err := h.Send(made, addr); err != nil {

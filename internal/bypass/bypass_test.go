@@ -204,7 +204,7 @@ func TestIsQUIC(t *testing.T) {
 // The sweep is only useful if what it prints can be pasted back as a rule.
 func TestAsRuleRoundTrips(t *testing.T) {
 	for _, r := range sweep.Candidates("gateway.discord.gg") {
-		text := asRule(r)
+		text := r.Text()
 
 		back, err := rules.Parse("gateway.discord.gg=" + text)
 		if err != nil {
@@ -272,41 +272,5 @@ func TestNewPutsTheFirstCandidateInPlace(t *testing.T) {
 	got, ok := e.set.For(host)
 	if !ok || got != first {
 		t.Errorf("the sweep starts on %+v, want %+v", got, first)
-	}
-}
-
-func TestAsRuleCarriesRepeats(t *testing.T) {
-	r, err := rules.Parse("gateway.discord.gg=badseq:100000,decoy,repeats:5")
-	if err != nil {
-		t.Fatalf("Parse: %v", err)
-	}
-
-	back, err := rules.Parse("gateway.discord.gg=" + asRule(r))
-	if err != nil {
-		t.Fatalf("%q does not parse back: %v", asRule(r), err)
-	}
-
-	if back != r {
-		t.Errorf("\n got %+v\nwant %+v", back, r)
-	}
-}
-
-// Every way at once: asRule is one of several places that count the ways, and a
-// way forgotten here vanishes from what the sweep prints as its own answer.
-func TestAsRuleCarriesEveryWay(t *testing.T) {
-	const text = "ttl:4,badseq:100000,badack:-66000,ts:1000,badsum,decoy:mail.ru,fake,cut:name,disorder,repeats:5"
-
-	want, err := rules.Parse("discord.com=" + text)
-	if err != nil {
-		t.Fatalf("Parse: %v", err)
-	}
-
-	back, err := rules.Parse("discord.com=" + asRule(want))
-	if err != nil {
-		t.Fatalf("%q does not parse back: %v", asRule(want), err)
-	}
-
-	if back != want {
-		t.Errorf("\n got %+v\nwant %+v\nvia %q", back, want, asRule(want))
 	}
 }

@@ -3,13 +3,12 @@ package rules
 import (
 	"errors"
 	"fmt"
-	"strconv"
 	"strings"
 )
 
 var (
 	ErrNoHost   = errors.New("rules: a rule starts with a host name and an equals sign")
-	ErrNoWay    = errors.New("rules: a rule needs at least one of ttl, badseq, badsum, decoy or cut")
+	ErrNoWay    = errors.New("rules: a rule needs a way to bypass, such as decoy or cut:name")
 	ErrCutWhere = errors.New("rules: cut takes name, after or start")
 )
 
@@ -37,8 +36,7 @@ type Rule struct {
 	Disorder bool
 }
 
-// Parse reads one rule, written as host=way,way,way. A way is ttl:4, badseq:100000,
-// badsum, decoy, decoy:some.host.name or cut:name.
+// Parse reads one rule, written as host=way,way,way.
 func Parse(text string) (Rule, error) {
 	host, ways, found := strings.Cut(strings.TrimSpace(text), "=")
 	if !found || strings.TrimSpace(host) == "" {
@@ -65,110 +63,13 @@ func Parse(text string) (Rule, error) {
 	return r, nil
 }
 
-// On the type so every caller counts the same fields; a way forgotten here does nothing.
-func (r Rule) Blank() bool {
-	return r.TTL == 0 && r.BadSeq == 0 && !r.BadSum && r.Decoy == "" && r.Cut == "" && r.Overlap == 0 && !r.Recorded && r.BadAck == 0 && r.Stale == 0
-}
+func (r *Rule) take(text string) error {
+	name, value, given := strings.Cut(text, ":")
 
-func (r *Rule) take(way string) error {
-	name, value, hasValue := strings.Cut(way, ":")
-
-	switch name {
-	case "badsum":
-		r.BadSum = true
-
-		return nil
-	case "decoy":
-		r.Decoy = "auto"
-		if hasValue {
-			r.Decoy = value
+	for _, w := range ways {
+		if w.name == name {
+			return w.read(r, value, given)
 		}
-
-		return nil
-	case "ttl":
-		hops, err := strconv.ParseUint(value, 10, 8)
-		if err != nil {
-			return fmt.Errorf("rules: ttl wants a number of hops: %w", err)
-		}
-
-		r.TTL = uint8(hops)
-
-		return nil
-	case "badseq":
-		shift, err := strconv.ParseUint(value, 10, 32)
-		if err != nil {
-			return fmt.Errorf("rules: badseq wants a number: %w", err)
-		}
-
-		r.BadSeq = uint32(shift)
-
-		return nil
-	case "overlap":
-		at, err := strconv.Atoi(value)
-		if err != nil || at < 1 {
-			return fmt.Errorf("rules: overlap wants how many real bytes go first, at least 1")
-		}
-
-		r.Overlap = at
-
-		return nil
-	case "ts":
-		if value == "" {
-			r.Stale = staleDefault
-
-			return nil
-		}
-
-		back, err := strconv.ParseUint(value, 10, 32)
-		if err != nil || back == 0 || back > staleMost {
-			return fmt.Errorf("rules: ts wants how far back to set the timestamp, 1 to %d", staleMost)
-		}
-
-		r.Stale = uint32(back)
-
-		return nil
-	case "badack":
-		shift, err := strconv.ParseInt(value, 10, 32)
-		if err != nil || shift == 0 {
-			return fmt.Errorf("rules: badack wants how far to move the acknowledgement, usually back, e.g. -66000")
-		}
-
-		r.BadAck = int32(shift)
-
-		return nil
-	case "fake":
-		if value != "" {
-			return fmt.Errorf("rules: fake takes no value, the file comes from -fake")
-		}
-
-		r.Recorded = true
-
-		return nil
-	case "disorder":
-		if value != "" {
-			return fmt.Errorf("rules: disorder takes no value")
-		}
-
-		r.Disorder = true
-
-		return nil
-	case "repeats":
-		copies, err := strconv.Atoi(value)
-		if err != nil || copies < 1 || copies > 20 {
-			return fmt.Errorf("rules: repeats wants how many copies go out, 1 to 20")
-		}
-
-		r.Repeats = copies
-
-		return nil
-	case "cut":
-		if value != "name" && value != "after" && value != "start" {
-			return ErrCutWhere
-		}
-
-		r.Cut = value
-
-		return nil
 	}
 
 	return fmt.Errorf("rules: %q is no way to bypass anything", name)

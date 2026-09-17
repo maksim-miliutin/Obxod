@@ -2,6 +2,7 @@ package rules
 
 import (
 	"errors"
+	"strings"
 	"testing"
 )
 
@@ -330,6 +331,73 @@ func TestTsRefusesAShiftThatWrapsForward(t *testing.T) {
 		t.Run(text, func(t *testing.T) {
 			if _, err := Parse("discord.com=badsum," + text); err == nil {
 				t.Error("nonsense was accepted")
+			}
+		})
+	}
+}
+
+// Every way, from the list itself: a row added there is covered here without
+// anyone remembering to add a case.
+func TestEveryWayWritesBackAndParsesAgain(t *testing.T) {
+	samples := map[string]string{
+		"ttl": "ttl:4", "badseq": "badseq:100000", "badack": "badack:-66000",
+		"ts": "ts:1000", "badsum": "badsum", "decoy": "decoy:mail.ru",
+		"fake": "fake", "cut": "cut:name", "overlap": "overlap:1",
+		"disorder": "disorder", "repeats": "repeats:5",
+	}
+
+	for _, w := range ways {
+		t.Run(w.name, func(t *testing.T) {
+			sample, ok := samples[w.name]
+			if !ok {
+				t.Fatalf("no sample for way %q; add one when adding the way", w.name)
+			}
+
+			was, err := Parse("discord.com=badsum," + sample)
+			if err != nil {
+				t.Fatalf("Parse %q: %v", sample, err)
+			}
+
+			back, err := Parse("discord.com=" + was.Text())
+			if err != nil {
+				t.Fatalf("%q does not parse back: %v", was.Text(), err)
+			}
+
+			if back != was {
+				t.Errorf("\n got %+v\nwant %+v\nvia %q", back, was, was.Text())
+			}
+
+			if !strings.Contains(was.String(), "") || was.String() == "" {
+				t.Error("the rule says nothing about itself")
+			}
+		})
+	}
+}
+
+// The help offers every way and nothing that is not one.
+func TestWaysListsThemAll(t *testing.T) {
+	hint := Ways()
+
+	for _, w := range ways {
+		if !strings.Contains(hint, w.name) {
+			t.Errorf("the help does not offer %q", w.name)
+		}
+	}
+}
+
+func TestOnlyTheRightWaysCountAsOne(t *testing.T) {
+	cases := map[string]bool{
+		"ttl:4": false, "badseq:2": false, "badack:-1": false, "ts": false,
+		"badsum": false, "decoy": false, "fake": false, "cut:name": false, "overlap:1": false,
+		"disorder": true, "repeats:5": true,
+	}
+
+	for text, blank := range cases {
+		t.Run(text, func(t *testing.T) {
+			_, err := Parse("discord.com=" + text)
+
+			if blank != errors.Is(err, ErrNoWay) {
+				t.Errorf("%q alone: err = %v, blank expected = %v", text, err, blank)
 			}
 		})
 	}
