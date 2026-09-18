@@ -2,6 +2,7 @@ package bypass
 
 import (
 	"fmt"
+	"math/rand/v2"
 	"strings"
 	"time"
 
@@ -261,7 +262,7 @@ func backwards(on bool) string {
 }
 
 // worn cuts or pads the wanted name to the size of the real one, the way the
-// reference does: a longer name keeps its tail, a shorter one gets a prefix.
+// reference does: a longer name keeps its tail, a shorter one gets a subdomain.
 func worn(real, want string) string {
 	if want == "auto" {
 		want = decoyFor(real)
@@ -271,7 +272,16 @@ func worn(real, want string) string {
 		return want[len(want)-len(real):]
 	}
 
-	return strings.Repeat("x", len(real)-len(want)-1) + "." + want
+	// A run of one letter reads as nothing anybody would register, and an inspector
+	// looking for a plausible name has an easy time throwing it out.
+	pad := make([]byte, len(real)-len(want))
+	for i := range pad[:len(pad)-1] {
+		pad[i] = byte('a' + rand.IntN(26))
+	}
+
+	pad[len(pad)-1] = '.'
+
+	return string(pad) + want
 }
 
 // hostfake puts a made up name where the real one sits, then writes the real one

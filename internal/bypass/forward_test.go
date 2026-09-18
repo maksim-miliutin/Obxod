@@ -592,10 +592,8 @@ func TestHostFakeSendsFourPartsInOrder(t *testing.T) {
 		t.Fatalf("sent %d packets, want before, wrong name, real name, after", len(r.sent))
 	}
 
-	wrong := worn(host, "mail.ru")
-
-	if !bytes.Contains(r.sent[1], []byte(wrong)) {
-		t.Errorf("packet 2 does not carry the made up name %q", wrong)
+	if !bytes.Contains(r.sent[1], []byte(".mail.ru")) {
+		t.Error("packet 2 does not carry the made up name")
 	}
 
 	if bytes.Contains(r.sent[1], []byte(host)) {
@@ -733,5 +731,37 @@ func TestHostFakeSaysWhenThereIsNoTimestampToAge(t *testing.T) {
 
 	if !told {
 		t.Error("nothing was said about why the name was not swapped")
+	}
+}
+
+// A made up name has to read as a name: the size of the real one, the wanted name
+// at the end behind a dot, and letters in front rather than one repeated sign.
+func TestThePaddingReadsAsASubdomain(t *testing.T) {
+	const real = "updates.discord.com"
+
+	seen := map[string]bool{}
+
+	for range 20 {
+		got := worn(real, "mail.ru")
+
+		if len(got) != len(real) {
+			t.Fatalf("worn = %q, %d bytes, want %d", got, len(got), len(real))
+		}
+
+		if !strings.HasSuffix(got, ".mail.ru") {
+			t.Fatalf("worn = %q, want the wanted name behind a dot", got)
+		}
+
+		for i, c := range got[:len(got)-len(".mail.ru")] {
+			if c < 'a' || c > 'z' {
+				t.Fatalf("worn = %q has %q at %d, want a letter", got, c, i)
+			}
+		}
+
+		seen[got] = true
+	}
+
+	if len(seen) < 2 {
+		t.Error("twenty names came out the same; an inspector can learn one name")
 	}
 }
