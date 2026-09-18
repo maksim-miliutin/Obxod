@@ -244,3 +244,33 @@ func TestEveryCandidateWritesBackAndParses(t *testing.T) {
 		}
 	}
 }
+
+// Order is the whole value of the list: swapping the name is the one way measured
+// to carry a whole page through, so it goes before anything else.
+func TestSwappingTheNameComesFirst(t *testing.T) {
+	first := Candidates("discord.com")[0]
+
+	if first.HostFake == "" {
+		t.Errorf("the sweep starts on %q, want a swapped name", first.Text())
+	}
+
+	if first.Stale == 0 {
+		t.Error("the first candidate swaps the name without ageing the timestamp, which measured as nothing")
+	}
+}
+
+// Which name is used decides almost as much as the method, so more than one is
+// tried before the method is given up on.
+func TestSeveralNamesAreTried(t *testing.T) {
+	names := map[string]bool{}
+
+	for _, r := range Candidates("discord.com") {
+		if r.HostFake != "" {
+			names[r.HostFake] = true
+		}
+	}
+
+	if len(names) < 3 {
+		t.Errorf("the sweep tries %d names, want several", len(names))
+	}
+}

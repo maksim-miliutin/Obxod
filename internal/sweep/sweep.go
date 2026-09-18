@@ -124,6 +124,17 @@ func Candidates(host string) []rules.Rule {
 		out = append(out, r)
 	}
 
+	// Swapping the name inside the stream is the one way measured to carry a whole
+	// page through, and which name is used decides almost as much as the method.
+	for _, name := range []string{"mail.ru", "ya.ru", "vk.com", "www.google.com", "auto"} {
+		add(rules.Rule{HostFake: name, Stale: 600000})
+	}
+
+	add(rules.Rule{HostFake: "mail.ru", Stale: 600000, Disorder: true})
+	add(rules.Rule{HostFake: "mail.ru", Stale: 600000, Repeats: 5})
+	add(rules.Rule{HostFake: "mail.ru", BadSum: true})
+	add(rules.Rule{HostFake: "mail.ru", TTL: 4})
+
 	// An overlap only works when a pattern was loaded; without one these come back
 	// as "cannot overlap" and cost a few seconds each.
 	add(rules.Rule{Overlap: 1})

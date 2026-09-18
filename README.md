@@ -16,7 +16,7 @@ top of the fake.
 Needs Windows, administrator privileges, and two files from WinDivert 2.2 sitting
 next to the executable:
 
-    WinDivert.dll
+    WinDivert.dll   
     WinDivert64.sys
 
 Both come from the x64 folder of the official release at
