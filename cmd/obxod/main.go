@@ -32,7 +32,7 @@ func run() error {
 	rulesFile := flag.String("rules", "", "a file of rules, one per line; blank lines and lines starting with # are skipped")
 	hosts := flag.String("host", "", "sites to work on, comma separated; a bare domain covers its subdomains, \"all\" covers everything")
 	ttl := flag.Int("ttl", 0, "hops the forged copy may live; zero leaves the original ttl alone")
-	badseq := flag.Uint("badseq", 0, "shift the copy's sequence number by this much")
+	badseq := flag.Int("badseq", 0, "shift the copy's sequence number by this much, either way")
 	badsum := flag.Bool("badsum", false, "give the copy a wrong tcp checksum")
 	decoy := flag.String("decoy", "", "put another host name in the copy; any length, the hello is rebuilt; \"auto\" makes one the same size")
 	where := flag.String("cut", "", "split the real hello: name (through the middle of the host name), after (just past it), start (near the record start)")
@@ -56,7 +56,15 @@ func run() error {
 		ruleTexts = append(ruleTexts, written(string(raw))...)
 	}
 
-	base, err := plan(ruleTexts, *hosts, uint8(*ttl), uint32(*badseq), *badsum, *decoy, *where)
+	base, err := plan(asked{
+		texts:  ruleTexts,
+		hosts:  *hosts,
+		ttl:    uint8(*ttl),
+		badseq: int32(*badseq),
+		badsum: *badsum,
+		decoy:  *decoy,
+		where:  *where,
+	})
 
 	if *sweepHost == "" && err != nil {
 		return err
@@ -155,33 +163,44 @@ func (r *repeated) Set(text string) error {
 	return nil
 }
 
+// The older single-strategy flags, which say between them what one -rule says.
+type asked struct {
+	texts  []string
+	hosts  string
+	ttl    uint8
+	badseq int32
+	badsum bool
+	decoy  string
+	where  string
+}
+
 // plan turns whatever the command line carried into rules: either -rule entries,
-// or the older single-strategy flags spread over the hosts in -host.
-func plan(texts []string, hosts string, ttl uint8, badseq uint32, badsum bool, decoy string, where string) (rules.Set, error) {
-	if len(texts) > 0 {
-		return rules.ParseAll(texts)
+// or the older flags spread over the hosts in -host.
+func plan(a asked) (rules.Set, error) {
+	if len(a.texts) > 0 {
+		return rules.ParseAll(a.texts)
 	}
 
 	var ways []string
 
-	if ttl != 0 {
-		ways = append(ways, fmt.Sprintf("ttl:%d", ttl))
+	if a.ttl != 0 {
+		ways = append(ways, fmt.Sprintf("ttl:%d", a.ttl))
 	}
 
-	if badseq != 0 {
-		ways = append(ways, fmt.Sprintf("badseq:%d", badseq))
+	if a.badseq != 0 {
+		ways = append(ways, fmt.Sprintf("badseq:%d", a.badseq))
 	}
 
-	if badsum {
+	if a.badsum {
 		ways = append(ways, "badsum")
 	}
 
-	if decoy != "" {
-		ways = append(ways, "decoy:"+decoy)
+	if a.decoy != "" {
+		ways = append(ways, "decoy:"+a.decoy)
 	}
 
-	if where != "" {
-		ways = append(ways, "cut:"+where)
+	if a.where != "" {
+		ways = append(ways, "cut:"+a.where)
 	}
 
 	if len(ways) == 0 {
@@ -190,7 +209,7 @@ func plan(texts []string, hosts string, ttl uint8, badseq uint32, badsum bool, d
 
 	var spread []string
 
-	for _, host := range parseHosts(hosts) {
+	for _, host := range parseHosts(a.hosts) {
 		spread = append(spread, host+"="+strings.Join(ways, ","))
 	}
 

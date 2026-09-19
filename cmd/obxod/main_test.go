@@ -5,7 +5,7 @@ import (
 )
 
 func TestPlanSpreadsFlagsOverHosts(t *testing.T) {
-	set, err := plan(nil, "discord.com, discord.gg", 0, 100000, false, "auto", "name")
+	set, err := plan(asked{hosts: "discord.com, discord.gg", badseq: 100000, decoy: "auto", where: "name"})
 	if err != nil {
 		t.Fatalf("plan: %v", err)
 	}
@@ -22,7 +22,7 @@ func TestPlanSpreadsFlagsOverHosts(t *testing.T) {
 }
 
 func TestPlanPrefersExplicitRules(t *testing.T) {
-	set, err := plan([]string{"discord.gg=ttl:2,cut:start"}, "ignored.example", 4, 0, false, "", "")
+	set, err := plan(asked{texts: []string{"discord.gg=ttl:2,cut:start"}, hosts: "ignored.example", ttl: 4})
 	if err != nil {
 		t.Fatalf("plan: %v", err)
 	}
@@ -33,7 +33,7 @@ func TestPlanPrefersExplicitRules(t *testing.T) {
 }
 
 func TestPlanNeedsSomething(t *testing.T) {
-	if _, err := plan(nil, "discord.com", 0, 0, false, "", ""); err == nil {
+	if _, err := plan(asked{hosts: "discord.com"}); err == nil {
 		t.Error("a plan with no way to bypass was accepted")
 	}
 }
@@ -149,12 +149,25 @@ func TestWrittenFindsNothingInAnEmptyFile(t *testing.T) {
 func TestWhatIsWrittenParses(t *testing.T) {
 	const file = "all=hostfake:mail.ru,ts\ndiscord.com=decoy,badseq:100000,cut:name\n"
 
-	set, err := plan(written(file), "", 0, 0, false, "", "")
+	set, err := plan(asked{texts: written(file)})
 	if err != nil {
 		t.Fatalf("plan: %v", err)
 	}
 
 	if len(set) != 2 {
 		t.Fatalf("plan made %d rules, want 2", len(set))
+	}
+}
+
+// The older flags say between them what one -rule says, so a negative shift has
+// to reach the rule the same way -rule badseq:-10000 does.
+func TestTheOlderFlagsCarryASignedShift(t *testing.T) {
+	set, err := plan(asked{hosts: "discord.com", badseq: -10000, decoy: "auto"})
+	if err != nil {
+		t.Fatalf("plan: %v", err)
+	}
+
+	if len(set) != 1 || set[0].BadSeq != -10000 {
+		t.Errorf("plan = %+v, want a shift of -10000", set)
 	}
 }
