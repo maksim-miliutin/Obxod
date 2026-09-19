@@ -29,6 +29,7 @@ func run() error {
 	var ruleTexts repeated
 
 	flag.Var(&ruleTexts, "rule", "a rule per site, repeatable: host=way,way (ways: "+rules.Ways()+")")
+	rulesFile := flag.String("rules", "", "a file of rules, one per line; blank lines and lines starting with # are skipped")
 	hosts := flag.String("host", "", "sites to work on, comma separated; a bare domain covers its subdomains, \"all\" covers everything")
 	ttl := flag.Int("ttl", 0, "hops the forged copy may live; zero leaves the original ttl alone")
 	badseq := flag.Uint("badseq", 0, "shift the copy's sequence number by this much")
@@ -45,6 +46,15 @@ func run() error {
 	noQUIC := flag.Bool("noquic", false, "drop outgoing quic so the browser falls back to tcp, which we can unblock")
 	wet := flag.Bool("wet", false, "actually send copies; off by default, only reports")
 	flag.Parse()
+
+	if *rulesFile != "" {
+		raw, err := os.ReadFile(*rulesFile)
+		if err != nil {
+			return fmt.Errorf("cannot read the rules: %w", err)
+		}
+
+		ruleTexts = append(ruleTexts, written(string(raw))...)
+	}
 
 	base, err := plan(ruleTexts, *hosts, uint8(*ttl), uint32(*badseq), *badsum, *decoy, *where)
 
@@ -224,4 +234,25 @@ func parsePorts(list string) ([]uint16, error) {
 	}
 
 	return ports, nil
+}
+
+// written picks the rules out of a file: everything after a # is a note, and a
+// line with nothing left on it is not a rule.
+func written(text string) []string {
+	var out []string
+
+	for _, line := range strings.Split(text, "\n") {
+		if note := strings.Index(line, "#"); note >= 0 {
+			line = line[:note]
+		}
+
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+
+		out = append(out, line)
+	}
+
+	return out
 }

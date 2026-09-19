@@ -104,3 +104,57 @@ func TestSpreadOnNothingRecorded(t *testing.T) {
 		t.Errorf("spread gave %d bytes from nothing", len(got))
 	}
 }
+
+// A rules file is edited by hand, so it has to tolerate notes, blank lines and
+// stray spaces without turning them into rules that fail to parse.
+func TestWrittenPicksOutTheRules(t *testing.T) {
+	const file = `
+# what works here, measured against one provider
+discord.com=hostfake:mail.ru,ts
+
+  discord.gg=hostfake:mail.ru,ts   
+
+youtube.com=hostfake:mail.ru,ts  # the browser wants -noquic for this one
+#discordapp.com=decoy
+`
+
+	got := written(file)
+
+	want := []string{
+		"discord.com=hostfake:mail.ru,ts",
+		"discord.gg=hostfake:mail.ru,ts",
+		"youtube.com=hostfake:mail.ru,ts",
+	}
+
+	if len(got) != len(want) {
+		t.Fatalf("picked %d rules, want %d: %q", len(got), len(want), got)
+	}
+
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("rule %d = %q, want %q", i, got[i], want[i])
+		}
+	}
+}
+
+func TestWrittenFindsNothingInAnEmptyFile(t *testing.T) {
+	for _, text := range []string{"", "\n\n", "# only a note\n", "   \n\t\n"} {
+		if got := written(text); len(got) != 0 {
+			t.Errorf("picked %q out of %q", got, text)
+		}
+	}
+}
+
+// Whatever the file holds has to survive being parsed as a rule.
+func TestWhatIsWrittenParses(t *testing.T) {
+	const file = "all=hostfake:mail.ru,ts\ndiscord.com=decoy,badseq:100000,cut:name\n"
+
+	set, err := plan(written(file), "", 0, 0, false, "", "")
+	if err != nil {
+		t.Fatalf("plan: %v", err)
+	}
+
+	if len(set) != 2 {
+		t.Fatalf("plan made %d rules, want 2", len(set))
+	}
+}

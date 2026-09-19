@@ -6,3 +6,5 @@
 *.ps1
 cap.etl
 cap.txt
+
+rules.txt
