@@ -44,6 +44,7 @@ func run() error {
 	seqovl := flag.Int("seqovl", 0, "how many bytes the overlap reaches back; zero means the whole pattern")
 	silence := flag.Int("silence", 45, "seconds of silence after which a connection counts as killed")
 	noQUIC := flag.Bool("noquic", false, "drop outgoing quic so the browser falls back to tcp, which we can unblock")
+	seen := flag.Bool("seen", false, "name every host no rule covers, once each, so the missing ones can be found")
 	wet := flag.Bool("wet", false, "actually send copies; off by default, only reports")
 	flag.Parse()
 
@@ -136,6 +137,7 @@ func run() error {
 		Silence:  time.Duration(*silence) * time.Second,
 		DropQUIC: *noQUIC,
 		Wet:      *wet,
+		Seen:     *seen,
 		Report:   func(text string) { fmt.Println(text) },
 	})
 

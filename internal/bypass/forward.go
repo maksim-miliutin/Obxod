@@ -33,6 +33,8 @@ func (e *Engine) forward(h sender, packet []byte, addr *divert.Addr) (bool, erro
 
 	r, ok := e.set.For(found.Host)
 	if !ok {
+		e.noRule(found.Host)
+
 		return false, nil
 	}
 
@@ -374,4 +376,16 @@ func (e *Engine) hostfake(h sender, packet []byte, addr *divert.Addr, found hell
 	}
 
 	return true, nil
+}
+
+// A site living on a name nobody wrote a rule for is invisible: the packet goes
+// out untouched and nothing is said. Naming it once is how the rule gets written.
+func (e *Engine) noRule(host string) {
+	if e.seen == nil || e.seen[host] {
+		return
+	}
+
+	e.seen[host] = true
+
+	e.say("  %s: no rule covers this name", host)
 }

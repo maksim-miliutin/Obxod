@@ -274,3 +274,73 @@ func TestNewPutsTheFirstCandidateInPlace(t *testing.T) {
 		t.Errorf("the sweep starts on %+v, want %+v", got, first)
 	}
 }
+
+// The trap this closes: a site on a name nobody listed goes out untouched and the
+// program says nothing, so the missing rule is invisible.
+func TestNamesWithNoRuleAreReportedOnce(t *testing.T) {
+	out := &lines{}
+
+	e := New(Settings{
+		Rules:  setOf(t, "discord.com=hostfake:mail.ru"),
+		Wet:    true,
+		Seen:   true,
+		Report: out.say,
+	})
+
+	for range 3 {
+		if _, err := e.forward(&recorder{}, packet443(clientHello("cdn.discordapp.com")), &divert.Addr{}); err != nil {
+			t.Fatalf("forward: %v", err)
+		}
+	}
+
+	if _, err := e.forward(&recorder{}, packet443(clientHello("media.discordapp.net")), &divert.Addr{}); err != nil {
+		t.Fatalf("forward: %v", err)
+	}
+
+	var named []string
+
+	for _, said := range out.all() {
+		if strings.Contains(said, "no rule covers") {
+			named = append(named, said)
+		}
+	}
+
+	if len(named) != 2 {
+		t.Fatalf("named %d hosts, want each of the two once: %q", len(named), named)
+	}
+}
+
+// Off by default: a name with no rule is the normal case for everything else on
+// the machine, and saying so on every packet would bury the rest of the log.
+func TestNamesAreNotReportedUnlessAsked(t *testing.T) {
+	out := &lines{}
+
+	e := New(Settings{Rules: setOf(t, "discord.com=hostfake:mail.ru"), Wet: true, Report: out.say})
+
+	if _, err := e.forward(&recorder{}, packet443(clientHello("example.org")), &divert.Addr{}); err != nil {
+		t.Fatalf("forward: %v", err)
+	}
+
+	for _, said := range out.all() {
+		if strings.Contains(said, "no rule covers") {
+			t.Errorf("named a host without being asked: %q", said)
+		}
+	}
+}
+
+// A name a rule does cover is not a miss, however the rule was written.
+func TestACoveredNameIsNotNamed(t *testing.T) {
+	out := &lines{}
+
+	e := New(Settings{Rules: setOf(t, "discord.com=hostfake:mail.ru"), Wet: true, Seen: true, Report: out.say})
+
+	if _, err := e.forward(&recorder{}, packet443(clientHello("updates.discord.com")), &divert.Addr{}); err != nil {
+		t.Fatalf("forward: %v", err)
+	}
+
+	for _, said := range out.all() {
+		if strings.Contains(said, "no rule covers") {
+			t.Errorf("a covered name was called a miss: %q", said)
+		}
+	}
+}

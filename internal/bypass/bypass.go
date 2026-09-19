@@ -38,6 +38,7 @@ type Settings struct {
 	Silence  time.Duration
 	DropQUIC bool
 	Wet      bool
+	Seen     bool // name the hosts no rule covers, so the missing ones can be added
 
 	Report func(text string)
 }
@@ -60,6 +61,10 @@ type Engine struct {
 
 	quiet   int
 	dropped int
+
+	// Grows with the number of distinct names browsed while -seen is on, which is
+	// a flag turned on for a short look rather than left running.
+	seen map[string]bool
 }
 
 func New(s Settings) *Engine {
@@ -75,6 +80,10 @@ func New(s Settings) *Engine {
 		report:   s.Report,
 		tries:    attempt.New(forget),
 		health:   link.New(),
+	}
+
+	if s.Seen {
+		e.seen = map[string]bool{}
 	}
 
 	if e.hunt != nil {
