@@ -16,7 +16,7 @@ top of the fake.
 Needs Windows, administrator privileges, and two files from WinDivert 2.2 sitting
 next to the executable:
 
-    WinDivert.dll   
+    WinDivert.dll
     WinDivert64.sys
 
 Both come from the x64 folder of the official release at
@@ -44,17 +44,35 @@ its own content from `discordapp.com`, which `discord.com` does not cover.
 ## What works
 
 Measured against one provider, so read it as a starting point rather than a
-setting. Discord loads whole with this:
+setting. Keep the rules in a file and edit them as you find more names:
 
-    obxod.exe -wet ^
-      -rule "discord.com=hostfake:mail.ru,ts" ^
-      -rule "discord.gg=hostfake:mail.ru,ts" ^
-      -rule "discordapp.com=hostfake:mail.ru,ts" ^
-      -rule "discordapp.net=hostfake:mail.ru,ts" ^
-      -rule "discordcdn.com=hostfake:mail.ru,ts" ^
-      -rule "discord.media=hostfake:mail.ru,ts"
+    # rules.txt
+    discord.com=hostfake:mail.ru,ts
+    discord.gg=hostfake:mail.ru,ts
+    discordapp.com=hostfake:mail.ru,ts
+    discordapp.net=hostfake:mail.ru,ts
+    discordcdn.com=hostfake:mail.ru,ts
+    discord.media=hostfake:mail.ru,ts
+    youtube.com=hostfake:mail.ru,ts
+    googlevideo.com=hostfake:mail.ru,ts
+    ytimg.com=hostfake:mail.ru,ts
+    ggpht.com=hostfake:mail.ru,ts
+    x.com=hostfake:mail.ru,ts
 
-Three things about that line took a week to find, and none of them is obvious.
+    obxod.exe -wet -noquic -rules rules.txt
+
+The same rule carried Discord, YouTube and X whole. Browsers reach for HTTP/3
+first, and nothing here touches datagrams, so `-noquic` is what makes them fall
+back to tcp where the rules apply. It drops every outgoing quic datagram, not
+only the ones for these sites.
+
+A site lives on more names than anyone remembers, and one missing name is
+invisible: traffic no rule covers goes out untouched and nothing is said about it.
+`-seen` names each one once, which is how the list above was written.
+
+    obxod.exe -wet -noquic -seen -rules rules.txt
+
+Three things about those rules took a week to find, and none of them is obvious.
 
 `hostfake` swaps the name inside the stream. Sending a whole forged hello ahead of
 the real one instead, which is the obvious move, gets the handshake through and
@@ -70,6 +88,20 @@ as not sending it.
 The name matters as much as the method. `hostfake:mail.ru` loads the whole page;
 the made up name the program picks on its own gets a third of it. The inspector
 reads the name and judges it.
+
+## What a failure looks like
+
+A page that never arrives and a page that arrives saying no are different
+problems, and only the first one is this program's.
+
+    This service is not available in your region.
+
+That is the site answering. The connection got there, the name went through, and
+the service turned it down on the address it came from. Nothing here can change
+which address that is.
+
+An empty answer after a long wait is the other kind, and that is the one worth
+chasing with rules.
 
 ## Checking
 
