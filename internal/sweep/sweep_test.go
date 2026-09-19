@@ -274,3 +274,53 @@ func TestSeveralNamesAreTried(t *testing.T) {
 		t.Errorf("the sweep tries %d names, want several", len(names))
 	}
 }
+
+// Whether the client asked again says little: we measured retries that had
+// nothing to do with the rule. How far the stream went says more.
+func TestBytesAreCountedPerCandidate(t *testing.T) {
+	now := time.Now()
+	s := New("discord.com", Candidates("discord.com"), time.Minute, now)
+
+	s.Carried(1000)
+	s.Carried(500)
+
+	if s.Bytes() != 1500 {
+		t.Errorf("Bytes = %d, want 1500", s.Bytes())
+	}
+
+	s.Next(now)
+
+	if s.Bytes() != 0 {
+		t.Errorf("the next candidate starts on %d bytes, want none", s.Bytes())
+	}
+}
+
+func TestTheBestCandidateIsTheOneThatCarriedMost(t *testing.T) {
+	now := time.Now()
+	list := Candidates("discord.com")
+	s := New("discord.com", list, time.Minute, now)
+
+	s.Carried(100)
+	s.Next(now)
+	s.Carried(65000)
+	s.Next(now)
+	s.Carried(300)
+
+	best, bytes := s.Best()
+
+	if bytes != 65000 {
+		t.Errorf("the best carried %d, want 65000", bytes)
+	}
+
+	if best != list[1] {
+		t.Errorf("the best is %+v, want %+v", best, list[1])
+	}
+}
+
+func TestNothingCarriedLeavesNoBest(t *testing.T) {
+	s := New("discord.com", Candidates("discord.com"), time.Minute, time.Now())
+
+	if _, bytes := s.Best(); bytes != 0 {
+		t.Errorf("a sweep that carried nothing reports %d bytes", bytes)
+	}
+}

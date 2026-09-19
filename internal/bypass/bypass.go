@@ -153,7 +153,7 @@ func (e *Engine) judge(now time.Time) error {
 		return nil
 	}
 
-	e.say("  %s: %s", e.hunt.Current().String(), verdict)
+	e.say("  %s: %s, %d bytes carried", e.hunt.Current(), verdict, e.hunt.Bytes())
 
 	if verdict == sweep.Worked {
 		e.say("\nthis one works, keeping it:\n  -rule \"%s=%s\"", e.hunt.Host(), e.hunt.Current().Text())
@@ -164,7 +164,14 @@ func (e *Engine) judge(now time.Time) error {
 	host := e.hunt.Host()
 
 	if !e.hunt.Next(now) {
-		return fmt.Errorf("bypass: nothing left to try for %s", host)
+		best, bytes := e.hunt.Best()
+
+		if bytes == 0 {
+			return fmt.Errorf("bypass: tried everything for %s and nothing got through", host)
+		}
+
+		return fmt.Errorf("bypass: tried everything for %s; the most that got through was %d bytes with -rule %q",
+			host, bytes, host+"="+best.Text())
 	}
 
 	e.quiet++
@@ -217,6 +224,14 @@ func (e *Engine) reset(port uint16) {
 
 func (e *Engine) answered(port uint16, bytes int) {
 	host, first := e.health.Data(port, bytes, time.Now())
+	if host == "" {
+		return
+	}
+
+	if e.hunt != nil && e.hunt.Host() == host {
+		e.hunt.Carried(bytes)
+	}
+
 	if !first {
 		return
 	}

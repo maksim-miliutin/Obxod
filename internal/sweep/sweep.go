@@ -38,6 +38,10 @@ type Sweep struct {
 	sawHello  bool
 	sawRepeat bool
 	done      bool
+
+	carried   int
+	best      rules.Rule
+	bestBytes int
 }
 
 func New(host string, candidates []rules.Rule, window time.Duration, now time.Time) *Sweep {
@@ -60,6 +64,40 @@ func (s *Sweep) Left() int {
 	defer s.mu.Unlock()
 
 	return len(s.candidates) - s.at - 1
+}
+
+// Carried counts what the site actually got back while this candidate was on.
+// Whether the client asked again says little; how far the stream went says more.
+func (s *Sweep) Carried(bytes int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.done {
+		return
+	}
+
+	s.carried += bytes
+
+	if s.carried > s.bestBytes {
+		s.bestBytes = s.carried
+		s.best = s.candidates[s.at]
+	}
+}
+
+// Bytes is what the candidate on now has carried so far.
+func (s *Sweep) Bytes() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	return s.carried
+}
+
+// Best is the candidate that carried the most, and how much.
+func (s *Sweep) Best() (rules.Rule, int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	return s.best, s.bestBytes
 }
 
 // Called from the loop and from the reply watcher, which run apart.
@@ -110,6 +148,7 @@ func (s *Sweep) Next(now time.Time) bool {
 	s.since = now
 	s.sawHello = false
 	s.sawRepeat = false
+	s.carried = 0
 
 	return s.at < len(s.candidates)
 }
