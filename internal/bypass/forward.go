@@ -38,6 +38,8 @@ func (e *Engine) forward(h sender, packet []byte, addr *divert.Addr) (bool, erro
 		return false, nil
 	}
 
+	j := job{to: h, packet: packet, addr: addr, found: found, rule: r}
+
 	repeat := e.tries.Saw(found.Host, found.SrcPort, found.Seq, time.Now()) == attempt.Again
 
 	if repeat {
@@ -54,63 +56,73 @@ func (e *Engine) forward(h sender, packet []byte, addr *divert.Addr) (bool, erro
 	// name. A whole forged copy on top of that is a second hello the server has to
 	// throw away, and it is not what the reference sends.
 	if r.HostFake != "" {
-		return e.hostfake(h, packet, addr, found, r)
+		return e.hostfake(j)
 	}
 
 	// The decoy goes first and the real hello follows, cut or whole: an inspector
 	// that reads the decoy and then finds no name in either half has nothing to match.
 	if r.Forges() {
-		if err := e.fake(h, packet, addr, found, r); err != nil {
+		if err := e.fake(j); err != nil {
 			return false, err
 		}
 	}
 
 	if r.Overlap != 0 {
-		return e.overlay(h, packet, addr, found, r)
+		return e.overlay(j)
 	}
 
 	if r.Cut != "" {
-		return e.split(h, packet, addr, found, r)
+		return e.split(j)
 	}
 
 	return false, nil
 }
 
-func (e *Engine) fake(h sender, packet []byte, addr *divert.Addr, found hello.Outgoing, r rules.Rule) error {
-	recipe := forge.Recipe{TTL: r.TTL, SeqDelta: r.BadSeq, AckDelta: r.BadAck, Stale: r.Stale, BadSum: r.BadSum}
+// What one hello asks for: where it goes, what it says, and the rule that covers
+// it. Every step of the path wants all of it, and none of it alone.
+type job struct {
+	to     sender
+	packet []byte
+	addr   *divert.Addr
+	found  hello.Outgoing
+	rule   rules.Rule
+}
 
-	if r.Recorded {
-		return e.canned(h, packet, addr, found, r, recipe)
+func (e *Engine) fake(j job) error {
+	recipe := forge.Recipe{TTL: j.rule.TTL, SeqDelta: j.rule.BadSeq, AckDelta: j.rule.BadAck, Stale: j.rule.Stale, BadSum: j.rule.BadSum}
+
+	if j.rule.Recorded {
+		return e.canned(j, recipe)
 	}
 
-	if r.Decoy != "" {
-		name := r.Decoy
+	if j.rule.Decoy != "" {
+		name := j.rule.Decoy
 		if name == "auto" {
-			name = decoyFor(found.Host)
+			name = decoyFor(j.found.Host)
 		}
 
 		recipe.Name = name
 	}
 
-	copied, err := forge.Copy(packet, recipe)
+	copied, err := forge.Copy(j.packet, recipe)
 	if err != nil {
-		e.say("  %s: cannot copy: %v", found.Host, err)
+		e.say("  %s: cannot copy: %v", j.found.Host, err)
 
 		return nil
 	}
 
-	copies := max(1, r.Repeats)
+	copies := max(1, j.rule.Repeats)
 
 	if !e.wet {
-		e.say("  %s: would send a %d byte copy (%s%s%s)", found.Host, len(copied), r.Spoils(), wearing(recipe.Name), times(copies))
+		e.say("  %s: would send a %d byte copy (%s%s%s)", j.found.Host, len(copied), j.rule.Spoils(), wearing(recipe.Name), times(copies))
 
 		return nil
 	}
 
-	e.say("  %s: copy sent ahead (%s%s%s)", found.Host, r.Spoils(), wearing(recipe.Name), times(copies))
+	e.say("  %s: copy sent ahead (%s%s%s)", j.found.Host, j.rule.Spoils(), wearing(recipe.Name), times(copies))
 
 	for range copies {
-		if err := h.Send(copied, addr); err != nil {
+		if err := j.to.Send(copied, j.addr); err != nil {
 			return err
 		}
 	}
@@ -118,61 +130,61 @@ func (e *Engine) fake(h sender, packet []byte, addr *divert.Addr, found hello.Ou
 	return nil
 }
 
-func (e *Engine) split(h sender, packet []byte, addr *divert.Addr, found hello.Outgoing, r rules.Rule) (bool, error) {
-	point, err := pointFor(found, r.Cut)
+func (e *Engine) split(j job) (bool, error) {
+	point, err := pointFor(j.found, j.rule.Cut)
 	if err != nil {
 		return false, err
 	}
 
-	first, second, err := cut.At(packet, point)
+	first, second, err := cut.At(j.packet, point)
 	if err != nil {
-		e.say("  %s: cannot split: %v", found.Host, err)
+		e.say("  %s: cannot split: %v", j.found.Host, err)
 
 		return false, nil
 	}
 
 	if !e.wet {
-		e.say("  %s: would split into %d and %d bytes at %s", found.Host, len(first), len(second), r.Cut)
+		e.say("  %s: would split into %d and %d bytes at %s", j.found.Host, len(first), len(second), j.rule.Cut)
 
 		return false, nil
 	}
 
-	e.say("  %s: split into %d and %d bytes at %s%s", found.Host, len(first), len(second), r.Cut, backwards(r.Disorder))
+	e.say("  %s: split into %d and %d bytes at %s%s", j.found.Host, len(first), len(second), j.rule.Cut, backwards(j.rule.Disorder))
 
-	first, second = ordered(first, second, r.Disorder)
+	first, second = ordered(first, second, j.rule.Disorder)
 
-	if err := h.Send(first, addr); err != nil {
+	if err := j.to.Send(first, j.addr); err != nil {
 		return false, err
 	}
 
-	return true, h.Send(second, addr)
+	return true, j.to.Send(second, j.addr)
 }
 
-func (e *Engine) overlay(h sender, packet []byte, addr *divert.Addr, found hello.Outgoing, r rules.Rule) (bool, error) {
-	first, second, err := cut.Overlap(packet, e.pattern, r.Overlap)
+func (e *Engine) overlay(j job) (bool, error) {
+	first, second, err := cut.Overlap(j.packet, e.pattern, j.rule.Overlap)
 	if err != nil {
-		e.say("  %s: cannot overlap: %v", found.Host, err)
+		e.say("  %s: cannot overlap: %v", j.found.Host, err)
 
 		return false, nil
 	}
 
 	if !e.wet {
 		e.say("  %s: would lay %d recorded bytes over the stream, then %d and %d bytes",
-			found.Host, len(e.pattern), len(first), len(second))
+			j.found.Host, len(e.pattern), len(first), len(second))
 
 		return false, nil
 	}
 
 	e.say("  %s: %d recorded bytes laid over, then %d and %d bytes%s",
-		found.Host, len(e.pattern), len(first), len(second), backwards(r.Disorder))
+		j.found.Host, len(e.pattern), len(first), len(second), backwards(j.rule.Disorder))
 
-	first, second = ordered(first, second, r.Disorder)
+	first, second = ordered(first, second, j.rule.Disorder)
 
-	if err := h.Send(first, addr); err != nil {
+	if err := j.to.Send(first, j.addr); err != nil {
 		return false, err
 	}
 
-	return true, h.Send(second, addr)
+	return true, j.to.Send(second, j.addr)
 }
 
 func pointFor(found hello.Outgoing, where string) (int, error) {
@@ -218,26 +230,26 @@ func times(copies int) string {
 	return fmt.Sprintf(", %d times", copies)
 }
 
-func (e *Engine) canned(h sender, packet []byte, addr *divert.Addr, found hello.Outgoing, r rules.Rule, recipe forge.Recipe) error {
-	made, err := forge.Instead(packet, e.recorded, recipe)
+func (e *Engine) canned(j job, recipe forge.Recipe) error {
+	made, err := forge.Instead(j.packet, e.recorded, recipe)
 	if err != nil {
-		e.say("  %s: cannot use the recorded hello: %v", found.Host, err)
+		e.say("  %s: cannot use the recorded hello: %v", j.found.Host, err)
 
 		return nil
 	}
 
-	copies := max(1, r.Repeats)
+	copies := max(1, j.rule.Repeats)
 
 	if !e.wet {
-		e.say("  %s: would send %d recorded bytes (%s%s)", found.Host, len(e.recorded), r.Spoils(), times(copies))
+		e.say("  %s: would send %d recorded bytes (%s%s)", j.found.Host, len(e.recorded), j.rule.Spoils(), times(copies))
 
 		return nil
 	}
 
-	e.say("  %s: %d recorded bytes sent ahead (%s%s)", found.Host, len(e.recorded), r.Spoils(), times(copies))
+	e.say("  %s: %d recorded bytes sent ahead (%s%s)", j.found.Host, len(e.recorded), j.rule.Spoils(), times(copies))
 
 	for range copies {
-		if err := h.Send(made, addr); err != nil {
+		if err := j.to.Send(made, j.addr); err != nil {
 			return err
 		}
 	}
@@ -289,8 +301,8 @@ func worn(real, want string) string {
 // hostfake puts a made up name where the real one sits, then writes the real one
 // over it. What arrives first carries the wrong name; what the server puts back
 // together by sequence number carries the right one.
-func (e *Engine) hostfake(h sender, packet []byte, addr *divert.Addr, found hello.Outgoing, r rules.Rule) (bool, error) {
-	outer, err := ip.Parse(packet)
+func (e *Engine) hostfake(j job) (bool, error) {
+	outer, err := ip.Parse(j.packet)
 	if err != nil {
 		return false, err
 	}
@@ -302,8 +314,8 @@ func (e *Engine) hostfake(h sender, packet []byte, addr *divert.Addr, found hell
 
 	payload := segment.Payload
 
-	if found.NameEnd > len(payload) {
-		e.say("  %s: the name runs past this packet, cannot swap it", found.Host)
+	if j.found.NameEnd > len(payload) {
+		e.say("  %s: the name runs past this j.packet, cannot swap it", j.found.Host)
 
 		return false, nil
 	}
@@ -314,23 +326,23 @@ func (e *Engine) hostfake(h sender, packet []byte, addr *divert.Addr, found hell
 		}
 
 		var made []byte
-		made, err = seal.Remade(packet, bytes, segment.Seq+uint32(at))
+		made, err = seal.Remade(j.packet, bytes, segment.Seq+uint32(at))
 
 		return made
 	}
 
-	before := part(payload[:found.NameStart], 0)
-	real := part(payload[found.NameStart:found.NameEnd], found.NameStart)
-	after := part(payload[found.NameEnd:], found.NameEnd)
+	before := part(payload[:j.found.NameStart], 0)
+	real := part(payload[j.found.NameStart:j.found.NameEnd], j.found.NameStart)
+	after := part(payload[j.found.NameEnd:], j.found.NameEnd)
 
-	name := worn(found.Host, r.HostFake)
+	name := worn(j.found.Host, j.rule.HostFake)
 
-	wrong, made := forge.Instead(packet, []byte(name), forge.Recipe{
-		TTL:      r.TTL,
-		SeqDelta: int32(found.NameStart) + r.BadSeq,
-		AckDelta: r.BadAck,
-		Stale:    r.Stale,
-		BadSum:   r.BadSum,
+	wrong, made := forge.Instead(j.packet, []byte(name), forge.Recipe{
+		TTL:      j.rule.TTL,
+		SeqDelta: int32(j.found.NameStart) + j.rule.BadSeq,
+		AckDelta: j.rule.BadAck,
+		Stale:    j.rule.Stale,
+		BadSum:   j.rule.BadSum,
 	})
 
 	if err == nil {
@@ -338,28 +350,28 @@ func (e *Engine) hostfake(h sender, packet []byte, addr *divert.Addr, found hell
 	}
 
 	if err != nil {
-		e.say("  %s: cannot swap the name: %v", found.Host, err)
+		e.say("  %s: cannot swap the name: %v", j.found.Host, err)
 
 		return false, nil
 	}
 
 	if !e.wet {
-		e.say("  %s: would swap the name for %s (%s)", found.Host, name, r.Spoils())
+		e.say("  %s: would swap the name for %s (%s)", j.found.Host, name, j.rule.Spoils())
 
 		return false, nil
 	}
 
-	e.say("  %s: name swapped for %s (%s)%s", found.Host, name, r.Spoils(), backwards(r.Disorder))
+	e.say("  %s: name swapped for %s (%s)%s", j.found.Host, name, j.rule.Spoils(), backwards(j.rule.Disorder))
 
 	out := [][]byte{before}
 
-	for range max(1, r.Repeats) {
+	for range max(1, j.rule.Repeats) {
 		out = append(out, wrong)
 	}
 
 	// The reference sends what follows the name before writing the real name back
 	// when asked to; otherwise after it.
-	if r.Disorder {
+	if j.rule.Disorder {
 		out = append(out, after, real)
 	} else {
 		out = append(out, real, after)
@@ -370,7 +382,7 @@ func (e *Engine) hostfake(h sender, packet []byte, addr *divert.Addr, found hell
 			continue
 		}
 
-		if err := h.Send(one, addr); err != nil {
+		if err := j.to.Send(one, j.addr); err != nil {
 			return true, err
 		}
 	}
@@ -378,7 +390,7 @@ func (e *Engine) hostfake(h sender, packet []byte, addr *divert.Addr, found hell
 	return true, nil
 }
 
-// A site living on a name nobody wrote a rule for is invisible: the packet goes
+// A site living on a name nobody wrote a rule for is invisible: the j.packet goes
 // out untouched and nothing is said. Naming it once is how the rule gets written.
 func (e *Engine) noRule(host string) {
 	if e.seen == nil || e.seen[host] {
