@@ -439,3 +439,35 @@ func TestTwoKindsOfNewsAreCountedApart(t *testing.T) {
 		t.Errorf("tally = %q, want both kinds counted", said)
 	}
 }
+
+// Twice a sweep judged nothing forty-five times over because the browser was
+// idle. Saying "no traffic" without saying what to do about it wastes the run.
+func TestASilentSweepAsksForTraffic(t *testing.T) {
+	out := &lines{}
+	now := time.Now()
+
+	e := New(Settings{
+		Rules:  setOf(t, "discord.com=hostfake:mail.ru"),
+		Hunt:   sweep.New("nothing.example", sweep.Candidates("nothing.example"), time.Second, now),
+		Wet:    true,
+		Report: out.say,
+	})
+
+	for i := range 6 {
+		if err := e.judge(now.Add(time.Duration(i+1) * 2 * time.Second)); err != nil {
+			t.Fatalf("judge: %v", err)
+		}
+	}
+
+	var asked bool
+
+	for _, said := range out.all() {
+		if strings.Contains(said, "keep reloading") {
+			asked = true
+		}
+	}
+
+	if !asked {
+		t.Errorf("a sweep with nothing to judge never said what it needs:\n%s", strings.Join(out.all(), "\n"))
+	}
+}

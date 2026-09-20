@@ -195,8 +195,11 @@ func (e *Engine) judge(now time.Time) error {
 		e.quiet = 0
 	}
 
+	// Every candidate gets its own window, and a window with no hello in it judges
+	// nothing. A browser that already has the page open opens no new connection.
 	if e.quiet == 4 {
-		e.say("\n%s has not asked for anything yet. Give the rules that already work with -rule, or the site never gets this far.\n", host)
+		e.say("\n%s has said nothing for four tries. A sweep judges live traffic:"+
+			" keep reloading the site while it runs, and give the rules the rest of it needs with -rule.\n", host)
 	}
 
 	e.say("trying %s, %d left", e.hunt.Current().String(), e.hunt.Left())
