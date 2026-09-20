@@ -8,3 +8,6 @@ cap.etl
 cap.txt
 
 rules.txt
+
+*.log
+winws-alt13.txt
