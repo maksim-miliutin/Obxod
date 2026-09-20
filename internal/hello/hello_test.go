@@ -171,3 +171,14 @@ func TestFoundDoesNotCareAboutThePort(t *testing.T) {
 		}
 	}
 }
+
+// A name of no bytes passes the parser and then makes nonsense of everything after:
+// a cut point equal to its own end, a swapped name that is empty, and a line saying
+// a name was swapped when none was.
+func TestAHelloWithNoNameIsNotFound(t *testing.T) {
+	payload := clientHello("")
+
+	if _, ok := Found(packetTo(443, 6, payload)); ok {
+		t.Error("a hello with an empty name was taken for one we can work with")
+	}
+}

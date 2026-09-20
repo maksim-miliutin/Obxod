@@ -42,6 +42,12 @@ func Found(packet []byte) (Outgoing, bool) {
 		return Outgoing{}, false
 	}
 
+	// A hello can declare a name of no bytes at all, and every way below assumes
+	// there is something to cut at, swap out or write a rule for.
+	if name.Host == "" {
+		return Outgoing{}, false
+	}
+
 	return Outgoing{
 		Host:      name.Host,
 		NameStart: name.Offset,
