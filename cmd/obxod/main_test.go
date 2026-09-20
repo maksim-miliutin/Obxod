@@ -1,7 +1,10 @@
 package main
 
 import (
+	"os"
+	"sync/atomic"
 	"testing"
+	"time"
 )
 
 func TestPlanSpreadsFlagsOverHosts(t *testing.T) {
@@ -170,4 +173,48 @@ func TestTheOlderFlagsCarryASignedShift(t *testing.T) {
 	if len(set) != 1 || set[0].BadSeq != -10000 {
 		t.Errorf("plan = %+v, want a shift of -10000", set)
 	}
+}
+
+type closer struct {
+	closed atomic.Bool
+}
+
+func (c *closer) Close() error {
+	c.closed.Store(true)
+
+	return nil
+}
+
+// Ctrl+C kills the process where it stands, so nothing deferred runs and the
+// driver keeps its handles. This is what closes them.
+func TestInterruptClosesTheHandles(t *testing.T) {
+	one, two := &closer{}, &closer{}
+
+	stopped := onInterrupt(one, two)
+
+	if stopped() {
+		t.Fatal("said we were interrupted before anything happened")
+	}
+
+	me, err := os.FindProcess(os.Getpid())
+	if err != nil {
+		t.Skipf("cannot find this process: %v", err)
+	}
+
+	// Windows has no way for a process to signal itself, so the wiring is checked
+	// where it can be and left to the run itself where it cannot.
+	if err := me.Signal(os.Interrupt); err != nil {
+		t.Skipf("cannot raise an interrupt here: %v", err)
+	}
+
+	for range 100 {
+		if one.closed.Load() && two.closed.Load() && stopped() {
+			return
+		}
+
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	t.Errorf("after an interrupt: first closed = %v, second closed = %v, stopped = %v",
+		one.closed.Load(), two.closed.Load(), stopped())
 }

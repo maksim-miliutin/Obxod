@@ -3,9 +3,12 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io"
 	"os"
+	"os/signal"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"obxod/internal/bypass"
@@ -129,6 +132,9 @@ func run() error {
 	}
 	defer eyes.Close()
 
+	stopped := onInterrupt(wire, eyes)
+	defer stopped()
+
 	engine := bypass.New(bypass.Settings{
 		Rules:    base,
 		Hunt:     hunt,
@@ -141,7 +147,34 @@ func run() error {
 		Report:   func(text string) { fmt.Println(text) },
 	})
 
-	return engine.Run(wire, eyes)
+	if err := engine.Run(wire, eyes); err != nil && !stopped() {
+		return err
+	}
+
+	return nil
+}
+
+// Ctrl+C kills the process where it stands, so the deferred closes never run and
+// the driver is left holding handles until Windows notices. Closing them here
+// makes the loop fail, which is why the caller asks whether that was us.
+func onInterrupt(handles ...io.Closer) func() bool {
+	var asked atomic.Bool
+
+	notice := make(chan os.Signal, 1)
+	signal.Notify(notice, os.Interrupt)
+
+	go func() {
+		<-notice
+		asked.Store(true)
+
+		fmt.Println("stopping")
+
+		for _, h := range handles {
+			h.Close()
+		}
+	}()
+
+	return asked.Load
 }
 
 // A zero seqovl means the overlap reaches back over the whole recording.
