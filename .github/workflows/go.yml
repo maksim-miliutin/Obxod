@@ -11,6 +11,12 @@ on:
 permissions:
   contents: read
 
+# A new push to the same branch cancels the run before it, so the answer that
+# arrives is about the code that is there now.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     strategy:

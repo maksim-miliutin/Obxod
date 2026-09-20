@@ -1,0 +1,9 @@
+version: 2
+
+updates:
+  # The only thing this project depends on: a project with no libraries still
+  # pins three actions, and they stop working when their runtime is retired.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
