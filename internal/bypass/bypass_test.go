@@ -344,3 +344,34 @@ func TestACoveredNameIsNotNamed(t *testing.T) {
 		}
 	}
 }
+
+// A repeated hello says the client asked again and nothing more. We measured
+// retries on hosts no rule touched, so calling one a failed way is a guess.
+func TestARepeatIsNotCalledAFailure(t *testing.T) {
+	out := &lines{}
+
+	e := New(Settings{Rules: setOf(t, "discord.com=hostfake:mail.ru"), Wet: true, Report: out.say})
+	packet := packet443(clientHello("updates.discord.com"))
+
+	for range 2 {
+		if _, err := e.forward(&recorder{}, packet, &divert.Addr{}); err != nil {
+			t.Fatalf("forward: %v", err)
+		}
+	}
+
+	var told bool
+
+	for _, said := range out.all() {
+		if strings.Contains(said, "not getting through") {
+			t.Errorf("a repeat was blamed on the way: %q", said)
+		}
+
+		if strings.Contains(said, "asking again") {
+			told = true
+		}
+	}
+
+	if !told {
+		t.Error("the repeat was not reported at all")
+	}
+}

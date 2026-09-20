@@ -43,7 +43,7 @@ func (e *Engine) forward(h sender, packet []byte, addr *divert.Addr) (bool, erro
 	repeat := e.tries.Saw(found.Host, found.SrcPort, found.Seq, time.Now()) == attempt.Again
 
 	if repeat {
-		e.say("  %s: asking again, so this way is not getting through", found.Host)
+		e.say("  %s: asking again", found.Host)
 	}
 
 	e.health.Hello(found.Host, found.SrcPort)
