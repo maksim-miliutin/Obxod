@@ -375,3 +375,67 @@ func TestARepeatIsNotCalledAFailure(t *testing.T) {
 		t.Error("the repeat was not reported at all")
 	}
 }
+
+// The flood this stops: one site opens a connection a second, and the same line
+// hundreds of times over buries every other host in the log.
+func TestTheSameNewsIsSaidOnceThenCounted(t *testing.T) {
+	out := &lines{}
+
+	e := New(Settings{Rules: setOf(t, "discord.com=hostfake:mail.ru"), Wet: true, Report: out.say})
+	packet := packet443(clientHello("updates.discord.com"))
+
+	for range 50 {
+		if _, err := e.forward(&recorder{}, packet, &divert.Addr{}); err != nil {
+			t.Fatalf("forward: %v", err)
+		}
+	}
+
+	var swapped int
+
+	for _, said := range out.all() {
+		if strings.Contains(said, "name swapped") {
+			swapped++
+		}
+	}
+
+	if swapped != 1 {
+		t.Errorf("said the swap %d times, want once", swapped)
+	}
+}
+
+func TestTheTallyNamesWhatWasCounted(t *testing.T) {
+	e := New(Settings{Rules: setOf(t, "discord.com=hostfake:mail.ru"), Wet: true})
+	packet := packet443(clientHello("updates.discord.com"))
+
+	for range 10 {
+		if _, err := e.forward(&recorder{}, packet, &divert.Addr{}); err != nil {
+			t.Fatalf("forward: %v", err)
+		}
+	}
+
+	said := e.tally()
+
+	if !strings.Contains(said, "updates.discord.com") || !strings.Contains(said, "9 more") {
+		t.Errorf("tally = %q, want the host and the nine it did not say", said)
+	}
+
+	if again := e.tally(); again != "" {
+		t.Errorf("the tally repeats itself: %q", again)
+	}
+}
+
+// Different news about the same host is different news.
+func TestTwoKindsOfNewsAreCountedApart(t *testing.T) {
+	e := New(Settings{Rules: setOf(t, "discord.com=hostfake:mail.ru"), Wet: true})
+
+	for range 3 {
+		e.once("a.discord.com", "name swapped for %s", "x.mail.ru")
+		e.once("a.discord.com", "asking again")
+	}
+
+	said := e.tally()
+
+	if !strings.Contains(said, "name 2 more") || !strings.Contains(said, "asking 2 more") {
+		t.Errorf("tally = %q, want both kinds counted", said)
+	}
+}

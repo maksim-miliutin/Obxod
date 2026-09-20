@@ -43,7 +43,7 @@ func (e *Engine) forward(h sender, packet []byte, addr *divert.Addr) (bool, erro
 	repeat := e.tries.Saw(found.Host, found.SrcPort, found.Seq, time.Now()) == attempt.Again
 
 	if repeat {
-		e.say("  %s: asking again", found.Host)
+		e.once(found.Host, "asking again")
 	}
 
 	e.health.Hello(found.Host, found.SrcPort)
@@ -119,7 +119,7 @@ func (e *Engine) fake(j job) error {
 		return nil
 	}
 
-	e.say("  %s: copy sent ahead (%s%s%s)", j.found.Host, j.rule.Spoils(), wearing(recipe.Name), times(copies))
+	e.once(j.found.Host, "copy sent ahead (%s%s%s)", j.rule.Spoils(), wearing(recipe.Name), times(copies))
 
 	for range copies {
 		if err := j.to.Send(copied, j.addr); err != nil {
@@ -149,7 +149,7 @@ func (e *Engine) split(j job) (bool, error) {
 		return false, nil
 	}
 
-	e.say("  %s: split into %d and %d bytes at %s%s", j.found.Host, len(first), len(second), j.rule.Cut, backwards(j.rule.Disorder))
+	e.once(j.found.Host, "split into %d and %d bytes at %s%s", len(first), len(second), j.rule.Cut, backwards(j.rule.Disorder))
 
 	first, second = ordered(first, second, j.rule.Disorder)
 
@@ -361,7 +361,7 @@ func (e *Engine) hostfake(j job) (bool, error) {
 		return false, nil
 	}
 
-	e.say("  %s: name swapped for %s (%s)%s", j.found.Host, name, j.rule.Spoils(), backwards(j.rule.Disorder))
+	e.once(j.found.Host, "name swapped for %s (%s)%s", name, j.rule.Spoils(), backwards(j.rule.Disorder))
 
 	out := [][]byte{before}
 

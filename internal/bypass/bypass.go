@@ -2,6 +2,8 @@ package bypass
 
 import (
 	"fmt"
+	"sort"
+	"strings"
 	"time"
 
 	"obxod/internal/attempt"
@@ -65,6 +67,8 @@ type Engine struct {
 	// Grows with the number of distinct names browsed while -seen is on, which is
 	// a flag turned on for a short look rather than left running.
 	seen map[string]bool
+
+	told map[string]int
 }
 
 func New(s Settings) *Engine {
@@ -85,6 +89,8 @@ func New(s Settings) *Engine {
 	if s.Seen {
 		e.seen = map[string]bool{}
 	}
+
+	e.told = map[string]int{}
 
 	if e.hunt != nil {
 		e.set = withCandidate(e.base, e.hunt.Current())
@@ -297,4 +303,43 @@ func isQUIC(packet []byte) bool {
 	}
 
 	return datagram.DstPort == 443
+}
+
+// once says a thing about a host the first time and counts it after that. A site
+// opens a connection a second, and the same line hundreds of times over buries
+// everything worth reading.
+func (e *Engine) once(host, what string, args ...any) {
+	key := host + "|" + what
+
+	e.told[key]++
+
+	if e.told[key] == 1 {
+		e.say("  "+host+": "+what, args...)
+	}
+}
+
+// Tally names what has been happening since the last time, for the lines that
+// were said once and counted after.
+func (e *Engine) tally() string {
+	var out []string
+
+	for key, times := range e.told {
+		if times < 2 {
+			continue
+		}
+
+		host, what, _ := strings.Cut(key, "|")
+		out = append(out, fmt.Sprintf("%s %s %d more", host, firstWord(what), times-1))
+	}
+
+	sort.Strings(out)
+	clear(e.told)
+
+	return strings.Join(out, ", ")
+}
+
+func firstWord(what string) string {
+	word, _, _ := strings.Cut(what, " ")
+
+	return word
 }
