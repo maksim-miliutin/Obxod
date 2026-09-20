@@ -7,9 +7,10 @@ import (
 )
 
 var (
-	ErrNoHost   = errors.New("rules: a rule starts with a host name and an equals sign")
-	ErrNoWay    = errors.New("rules: a rule needs a way to bypass, such as decoy or cut:name")
-	ErrCutWhere = errors.New("rules: cut takes name, after or start")
+	ErrManyHosts = errors.New("rules: a host name cannot hold a comma")
+	ErrNoHost    = errors.New("rules: a rule starts with a host name and an equals sign")
+	ErrNoWay     = errors.New("rules: a rule needs a way to bypass, such as decoy or cut:name")
+	ErrCutWhere  = errors.New("rules: cut takes name, after or start")
 )
 
 // Ten minutes of ticks: old enough for the server to call the copy a stale
@@ -45,7 +46,12 @@ func Parse(text string) (Rule, error) {
 		return Rule{}, ErrNoHost
 	}
 
-	r := Rule{Host: strings.ToLower(strings.TrimSpace(host))}
+	host = strings.ToLower(strings.TrimSpace(host))
+	if strings.Contains(host, ",") {
+		return Rule{}, ErrManyHosts
+	}
+
+	r := Rule{Host: host}
 
 	for _, way := range strings.Split(ways, ",") {
 		way = strings.TrimSpace(way)
@@ -79,16 +85,38 @@ func (r *Rule) take(text string) error {
 
 type Set []Rule
 
+// Several reads one line that may name more than one host for the same ways,
+// which is how a list of a site's names stays one line instead of twenty.
+func Several(text string) (Set, error) {
+	hosts, ways, found := strings.Cut(strings.TrimSpace(text), "=")
+	if !found {
+		return nil, ErrNoHost
+	}
+
+	var set Set
+
+	for _, host := range strings.Split(hosts, ",") {
+		r, err := Parse(host + "=" + ways)
+		if err != nil {
+			return nil, err
+		}
+
+		set = append(set, r)
+	}
+
+	return set, nil
+}
+
 func ParseAll(texts []string) (Set, error) {
 	var set Set
 
 	for _, text := range texts {
-		r, err := Parse(text)
+		some, err := Several(text)
 		if err != nil {
 			return nil, fmt.Errorf("%q: %w", text, err)
 		}
 
-		set = append(set, r)
+		set = append(set, some...)
 	}
 
 	return set, nil

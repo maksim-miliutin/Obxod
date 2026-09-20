@@ -437,3 +437,53 @@ func TestTheDefaultTimestampShiftIsTenMinutesOfTicks(t *testing.T) {
 		t.Error("the default shift wraps forward")
 	}
 }
+
+// A site lives on a dozen names that all want the same treatment, and writing
+// the ways out a dozen times is how one of them ends up different by mistake.
+func TestSeveralHostsShareOneLine(t *testing.T) {
+	set, err := Several("youtube.com, ytimg.com ,ggpht.com=hostfake:mail.ru,ts")
+	if err != nil {
+		t.Fatalf("Several: %v", err)
+	}
+
+	if len(set) != 3 {
+		t.Fatalf("made %d rules, want 3", len(set))
+	}
+
+	for _, r := range set {
+		if r.HostFake != "mail.ru" || r.Stale == 0 {
+			t.Errorf("%s got %+v, want the same ways as the rest", r.Host, r)
+		}
+	}
+
+	if set[0].Host != "youtube.com" || set[1].Host != "ytimg.com" || set[2].Host != "ggpht.com" {
+		t.Errorf("hosts came out as %q, %q, %q", set[0].Host, set[1].Host, set[2].Host)
+	}
+}
+
+func TestOneHostStillWorks(t *testing.T) {
+	set, err := Several("discord.com=hostfake:mail.ru,ts")
+	if err != nil {
+		t.Fatalf("Several: %v", err)
+	}
+
+	if len(set) != 1 || set[0].Host != "discord.com" {
+		t.Errorf("made %+v, want the one rule", set)
+	}
+}
+
+func TestAnEmptyHostInTheListIsRefused(t *testing.T) {
+	for _, text := range []string{"a.com,=ts", ",a.com=ts", "a.com,,b.com=ts", "=ts"} {
+		if _, err := Several(text); !errors.Is(err, ErrNoHost) {
+			t.Errorf("%q gave %v, want ErrNoHost", text, err)
+		}
+	}
+}
+
+// Parse makes one rule, so a list handed to it would quietly become a host name
+// with a comma in it that matches nothing.
+func TestParseRefusesAList(t *testing.T) {
+	if _, err := Parse("a.com,b.com=ts"); !errors.Is(err, ErrManyHosts) {
+		t.Errorf("Parse took a list: %v", err)
+	}
+}
