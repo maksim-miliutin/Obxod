@@ -3,6 +3,7 @@ package bypass
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
@@ -470,4 +471,62 @@ func TestASilentSweepAsksForTraffic(t *testing.T) {
 	if !asked {
 		t.Errorf("a sweep with nothing to judge never said what it needs:\n%s", strings.Join(out.all(), "\n"))
 	}
+}
+
+// The bug this guards: counting the repeats and never printing them is worse than
+// printing them all. The loop writes the counts, the reply watcher reads them, and
+// a run with no test across that boundary said nothing for a whole day.
+func TestTheHeartbeatShowsWhatWasCounted(t *testing.T) {
+	out := &lines{}
+
+	e := New(Settings{Rules: setOf(t, "discord.com=hostfake:mail.ru"), Wet: true, Report: out.say})
+	packet := packet443(clientHello("updates.discord.com"))
+
+	for range 10 {
+		if _, err := e.forward(&recorder{}, packet, &divert.Addr{}); err != nil {
+			t.Fatalf("forward: %v", err)
+		}
+	}
+
+	e.watched(1)
+
+	var shown bool
+
+	for _, said := range out.all() {
+		if strings.Contains(said, "replies watched") && strings.Contains(said, "9 more") {
+			shown = true
+		}
+	}
+
+	if !shown {
+		t.Errorf("the heartbeat said nothing about the nine it swallowed:\n%s", strings.Join(out.all(), "\n"))
+	}
+}
+
+// once runs on the loop and tally on the reply watcher. Without a lock of their own
+// this is a data race, and no test crossed that boundary until this one.
+func TestCountingIsSafeFromTwoGoroutines(t *testing.T) {
+	e := New(Settings{Rules: setOf(t, "discord.com=hostfake:mail.ru"), Wet: true})
+
+	var wg sync.WaitGroup
+
+	wg.Add(2)
+
+	go func() {
+		defer wg.Done()
+
+		for i := range 500 {
+			e.once(fmt.Sprintf("host%d.discord.com", i%7), "asking again")
+		}
+	}()
+
+	go func() {
+		defer wg.Done()
+
+		for range 500 {
+			e.tally()
+		}
+	}()
+
+	wg.Wait()
 }

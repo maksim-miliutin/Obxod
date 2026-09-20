@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"obxod/internal/attempt"
@@ -68,7 +69,10 @@ type Engine struct {
 	// a flag turned on for a short look rather than left running.
 	seen map[string]bool
 
-	told map[string]int
+	// The loop writes these and the reply watcher reads and clears them, so they
+	// need a lock of their own; every other field here belongs to one goroutine.
+	toldMu sync.Mutex
+	told   map[string]int
 }
 
 func New(s Settings) *Engine {
@@ -210,11 +214,7 @@ func (e *Engine) judge(now time.Time) error {
 
 func (e *Engine) watch(eyes Eyes) {
 	seen := replies.Watch{
-		Seen: func(total int) {
-			if total%200 == 1 {
-				e.say("  replies watched: %d so far", total)
-			}
-		},
+		Seen:   e.watched,
 		Reset:  e.reset,
 		Closed: e.health.Closed,
 		Data:   e.answered,
@@ -223,6 +223,21 @@ func (e *Engine) watch(eyes Eyes) {
 	if err := seen.Run(eyes); err != nil {
 		e.say("watching replies stopped: %v", err)
 	}
+}
+
+// Every so often, how many replies went by and what was said once and counted after.
+func (e *Engine) watched(total int) {
+	if total%200 != 1 {
+		return
+	}
+
+	if counted := e.tally(); counted != "" {
+		e.say("  replies watched: %d so far (%s)", total, counted)
+
+		return
+	}
+
+	e.say("  replies watched: %d so far", total)
 }
 
 func (e *Engine) reset(port uint16) {
@@ -314,9 +329,12 @@ func isQUIC(packet []byte) bool {
 func (e *Engine) once(host, what string, args ...any) {
 	key := host + "|" + what
 
+	e.toldMu.Lock()
 	e.told[key]++
+	first := e.told[key] == 1
+	e.toldMu.Unlock()
 
-	if e.told[key] == 1 {
+	if first {
 		e.say("  "+host+": "+what, args...)
 	}
 }
@@ -324,6 +342,9 @@ func (e *Engine) once(host, what string, args ...any) {
 // Tally names what has been happening since the last time, for the lines that
 // were said once and counted after.
 func (e *Engine) tally() string {
+	e.toldMu.Lock()
+	defer e.toldMu.Unlock()
+
 	var out []string
 
 	for key, times := range e.told {
