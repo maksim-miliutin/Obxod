@@ -765,3 +765,30 @@ func TestThePaddingReadsAsASubdomain(t *testing.T) {
 		t.Error("twenty names came out the same; an inspector can learn one name")
 	}
 }
+
+// The dead guard this replaces: a check on the packet length never fired, because
+// seal.Remade builds headers even for nothing, and a hello whose name sits at the
+// very end went out with a fourth segment carrying no bytes at all.
+func TestNothingIsSentForAnEmptyTail(t *testing.T) {
+	const host = "updates.discord.com"
+
+	payload := clientHello(host)
+	end := bytes.Index(payload, []byte(host)) + len(host)
+
+	r := &recorder{}
+
+	// The name is the last thing in this hello, so there is no tail to send.
+	if _, err := engineFor(t, true, nil, host+"=hostfake:mail.ru").forward(r, packet443(payload[:end]), &divert.Addr{}); err != nil {
+		t.Fatalf("forward: %v", err)
+	}
+
+	if len(r.sent) != 3 {
+		t.Fatalf("sent %d packets, want before, the made up name and the real one", len(r.sent))
+	}
+
+	for i, one := range r.sent {
+		if len(one) <= 40 {
+			t.Errorf("packet %d carries no payload, %d bytes in all", i, len(one))
+		}
+	}
+}

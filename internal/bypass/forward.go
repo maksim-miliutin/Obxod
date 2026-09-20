@@ -333,7 +333,14 @@ func (e *Engine) hostfake(j job) (bool, error) {
 
 	before := part(payload[:j.found.NameStart], 0)
 	real := part(payload[j.found.NameStart:j.found.NameEnd], j.found.NameStart)
-	after := part(payload[j.found.NameEnd:], j.found.NameEnd)
+
+	// A segment carrying nothing is a bare acknowledgement, not a piece of the
+	// hello, and seal.Remade builds headers for it all the same.
+	var after []byte
+
+	if j.found.NameEnd < len(payload) {
+		after = part(payload[j.found.NameEnd:], j.found.NameEnd)
+	}
 
 	name := worn(j.found.Host, j.rule.HostFake)
 
