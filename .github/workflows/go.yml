@@ -6,6 +6,11 @@ on:
   pull_request:
     branches: [ master ]
 
+# A run that only builds and checks has no business writing to the repository,
+# and the token it gets by default can do more than that.
+permissions:
+  contents: read
+
 jobs:
   build:
     strategy:
@@ -34,3 +39,8 @@ jobs:
 
       - name: test
         run: go test ./...
+
+      # Needs a C compiler, which the windows runner has no reason to carry.
+      - name: race
+        if: matrix.os == 'ubuntu-latest'
+        run: go test -race ./...

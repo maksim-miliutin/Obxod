@@ -46,17 +46,9 @@ its own content from `discordapp.com`, which `discord.com` does not cover.
 Measured against one provider, so read it as a starting point rather than a
 setting. Keep the rules in a file and edit them as you find more names:
 
-    # rules.txt
-    discord.com=hostfake:mail.ru,ts
-    discord.gg=hostfake:mail.ru,ts
-    discordapp.com=hostfake:mail.ru,ts
-    discordapp.net=hostfake:mail.ru,ts
-    discordcdn.com=hostfake:mail.ru,ts
-    discord.media=hostfake:mail.ru,ts
-    youtube.com=hostfake:mail.ru,ts
-    googlevideo.com=hostfake:mail.ru,ts
-    ytimg.com=hostfake:mail.ru,ts
-    ggpht.com=hostfake:mail.ru,ts
+    # rules.txt: one line may name as many hosts as share the ways
+    discord.com,discord.gg,discordapp.com,discordapp.net,discordcdn.com,discord.media=hostfake:mail.ru,ts
+    youtube.com,ytimg.com,ggpht.com,googlevideo.com=hostfake:mail.ru,ts
     x.com=hostfake:mail.ru,ts
 
     obxod.exe -wet -noquic -rules rules.txt
@@ -88,6 +80,26 @@ as not sending it.
 The name matters as much as the method. `hostfake:mail.ru` loads the whole page;
 the made up name the program picks on its own gets a third of it. The inspector
 reads the name and judges it.
+
+## Working out the rules for a site
+
+Start with nothing and let the program say what it wants.
+
+Run it with `-seen` and use the site for a minute. Every name no rule covers is
+named once, and that list is the rules to write. A site reaches a dozen names and
+nobody remembers them all.
+
+Add them with the ways that already work elsewhere, then look again. A name that
+still will not carry anything is the one to sweep:
+
+    obxod.exe -wet -noquic -sweep that.name -seconds 12 -rules rules.txt
+
+A sweep judges live traffic, so keep reloading the site while it runs; a browser
+sitting on an open page opens no new connections and the sweep has nothing to go
+on. It prints what carried the most, ready to paste back as a rule.
+
+Not every name needs a rule. A name nobody blocks works better left alone, and a
+rule on it is one more thing to go wrong.
 
 ## What a failure looks like
 
