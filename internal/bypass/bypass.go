@@ -37,6 +37,7 @@ type Settings struct {
 	Hunt     *sweep.Sweep
 	Pattern  []byte
 	Recorded []byte
+	Voiced   []byte // a recorded voice datagram, sent ahead by the fakeudp way
 
 	Silence  time.Duration
 	DropQUIC bool
@@ -51,6 +52,7 @@ type Engine struct {
 	set      rules.Set
 	hunt     *sweep.Sweep
 	pattern  []byte
+	voiced   []byte
 	recorded []byte
 
 	silence  time.Duration
@@ -82,6 +84,7 @@ func New(s Settings) *Engine {
 		hunt:     s.Hunt,
 		pattern:  s.Pattern,
 		recorded: s.Recorded,
+		voiced:   s.Voiced,
 		silence:  s.Silence,
 		dropQUIC: s.DropQUIC,
 		wet:      s.Wet,
@@ -127,6 +130,12 @@ func (e *Engine) Run(wire Wire, eyes Eyes) error {
 				e.say("  quic dropped: %d so far", e.dropped)
 			}
 
+			continue
+		}
+
+		if sent, err := e.voice(wire, packet, &addr); err != nil {
+			return err
+		} else if sent {
 			continue
 		}
 

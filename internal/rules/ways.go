@@ -135,6 +135,21 @@ var ways = []way{
 		say:   func(r Rule) string { return text("a name swapped in place", r.HostFake) },
 	},
 	{
+		name: "fakeudp", hint: "fakeudp:5", kind: counts,
+		read: func(r *Rule, value string, _ bool) error {
+			copies, err := strconv.Atoi(value)
+			if err != nil || copies < 1 || copies > 20 {
+				return fmt.Errorf("rules: fakeudp wants how many recorded datagrams go first, 1 to 20")
+			}
+
+			r.FakeUDP = copies
+
+			return nil
+		},
+		write: func(r Rule) string { return number("fakeudp", int64(r.FakeUDP), r.FakeUDP == 0) },
+		say:   func(r Rule) string { return words("recorded datagrams", int64(r.FakeUDP), r.FakeUDP == 0) },
+	},
+	{
 		name: "fake", hint: "fake", kind: counts | forges,
 		read:  func(r *Rule, _ string, given bool) error { return bare(&r.Recorded, "fake", given) },
 		write: func(r Rule) string { return flag("fake", r.Recorded) },

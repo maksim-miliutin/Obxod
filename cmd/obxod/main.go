@@ -44,6 +44,7 @@ func run() error {
 	tcpPorts := flag.String("ports", "443,2053,2083,2087,2096,8443", "tcp ports where hellos are looked for")
 	patternFile := flag.String("pattern", "", "a recorded hello from an allowed site, used by overlap")
 	fakeFile := flag.String("fake", "", "a recorded hello sent ahead in place of a forged copy, used by the fake way")
+	voicedFile := flag.String("fakeudp", "", "a recorded voice datagram sent ahead, used by the fakeudp way")
 	seqovl := flag.Int("seqovl", 0, "how many bytes the overlap reaches back; zero means the whole pattern")
 	silence := flag.Int("silence", 45, "seconds of silence after which a connection counts as killed")
 	noQUIC := flag.Bool("noquic", false, "drop outgoing quic so the browser falls back to tcp, which we can unblock")
@@ -135,11 +136,21 @@ func run() error {
 	stopped := onInterrupt(wire, eyes)
 	defer stopped()
 
+	var voiced []byte
+
+	if *voicedFile != "" {
+		voiced, err = os.ReadFile(*voicedFile)
+		if err != nil {
+			return fmt.Errorf("cannot read the recorded datagram: %w", err)
+		}
+	}
+
 	engine := bypass.New(bypass.Settings{
 		Rules:    base,
 		Hunt:     hunt,
 		Pattern:  pattern,
 		Recorded: recorded,
+		Voiced:   voiced,
 		Silence:  time.Duration(*silence) * time.Second,
 		DropQUIC: *noQUIC,
 		Wet:      *wet,

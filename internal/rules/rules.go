@@ -37,6 +37,7 @@ type Rule struct {
 	Stale    uint32
 	Disorder bool
 	HostFake string
+	FakeUDP  int
 }
 
 // Parse reads one rule, written as host=way,way,way.
