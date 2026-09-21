@@ -1,6 +1,7 @@
 package main
 
 import (
+	"obxod/internal/filter"
 	"os"
 	"sync/atomic"
 	"testing"
@@ -217,4 +218,51 @@ func TestInterruptClosesTheHandles(t *testing.T) {
 
 	t.Errorf("after an interrupt: first closed = %v, second closed = %v, stopped = %v",
 		one.closed.Load(), two.closed.Load(), stopped())
+}
+
+// The ports a call opens on move between discord versions, and they used to be
+// written into the program where nobody could reach them.
+func TestVoiceRangesAreRead(t *testing.T) {
+	got, err := parseRanges("19294-19344, 50000-50100 ,443")
+	if err != nil {
+		t.Fatalf("parseRanges: %v", err)
+	}
+
+	want := []filter.PortRange{
+		{From: 19294, To: 19344},
+		{From: 50000, To: 50100},
+		{From: 443, To: 443},
+	}
+
+	if len(got) != len(want) {
+		t.Fatalf("read %d ranges, want %d", len(got), len(want))
+	}
+
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("range %d is %+v, want %+v", i, got[i], want[i])
+		}
+	}
+}
+
+func TestVoiceRangesRefuseNonsense(t *testing.T) {
+	for _, text := range []string{"50100-50000", "70000", "-", "a-b", "443-", "19294-70000"} {
+		t.Run(text, func(t *testing.T) {
+			if _, err := parseRanges(text); err == nil {
+				t.Error("nonsense was read as a range")
+			}
+		})
+	}
+}
+
+// The default is what discord uses now, and it has to survive being read back.
+func TestTheDefaultVoicePortsParse(t *testing.T) {
+	got, err := parseRanges(voicePorts)
+	if err != nil {
+		t.Fatalf("the built in ports do not parse: %v", err)
+	}
+
+	if len(got) != 2 {
+		t.Errorf("read %d ranges out of the default, want 2", len(got))
+	}
 }

@@ -19,7 +19,8 @@ import (
 	"obxod/internal/sweep"
 )
 
-var voice = []filter.PortRange{{From: 19294, To: 19344}, {From: 50000, To: 50100}}
+// Where discord opens a call. It moves between versions, so -voice exists.
+const voicePorts = "19294-19344,50000-50100"
 
 func main() {
 	if err := run(); err != nil {
@@ -44,6 +45,7 @@ func run() error {
 	tcpPorts := flag.String("ports", "443,2053,2083,2087,2096,8443", "tcp ports where hellos are looked for")
 	patternFile := flag.String("pattern", "", "a recorded hello from an allowed site, used by overlap")
 	fakeFile := flag.String("fake", "", "a recorded hello sent ahead in place of a forged copy, used by the fake way")
+	voiceList := flag.String("voice", voicePorts, "udp port ranges where a call is opened, comma separated")
 	voicedFile := flag.String("fakeudp", "", "a recorded voice datagram sent ahead, used by the fakeudp way")
 	seqovl := flag.Int("seqovl", 0, "how many bytes the overlap reaches back; zero means the whole pattern")
 	silence := flag.Int("silence", 45, "seconds of silence after which a connection counts as killed")
@@ -80,6 +82,11 @@ func run() error {
 	if *sweepHost != "" {
 		host := strings.ToLower(*sweepHost)
 		hunt = sweep.New(host, sweep.Candidates(host), time.Duration(*seconds)*time.Second, time.Now())
+	}
+
+	voice, err := parseRanges(*voiceList)
+	if err != nil {
+		return err
 	}
 
 	ports, err := parsePorts(*tcpPorts)
@@ -320,4 +327,40 @@ func written(text string) []string {
 	}
 
 	return out
+}
+
+// parseRanges reads "19294-19344,50000-50100". A single port is a range of one,
+// so "443" and "443-443" mean the same thing.
+func parseRanges(list string) ([]filter.PortRange, error) {
+	var out []filter.PortRange
+
+	for _, text := range strings.Split(list, ",") {
+		text = strings.TrimSpace(text)
+		if text == "" {
+			continue
+		}
+
+		first, last, dashed := strings.Cut(text, "-")
+		if !dashed {
+			last = first
+		}
+
+		from, err := strconv.ParseUint(strings.TrimSpace(first), 10, 16)
+		if err != nil {
+			return nil, fmt.Errorf("port range %q: %w", text, err)
+		}
+
+		to, err := strconv.ParseUint(strings.TrimSpace(last), 10, 16)
+		if err != nil {
+			return nil, fmt.Errorf("port range %q: %w", text, err)
+		}
+
+		if to < from {
+			return nil, fmt.Errorf("port range %q runs backwards", text)
+		}
+
+		out = append(out, filter.PortRange{From: uint16(from), To: uint16(to)})
+	}
+
+	return out, nil
 }
