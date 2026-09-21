@@ -8,6 +8,7 @@ import (
 	"os/signal"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -46,6 +47,7 @@ func run() error {
 	patternFile := flag.String("pattern", "", "a recorded hello from an allowed site, used by overlap")
 	fakeFile := flag.String("fake", "", "a recorded hello sent ahead in place of a forged copy, used by the fake way")
 	voiceList := flag.String("voice", voicePorts, "udp port ranges where a call is opened, comma separated")
+	logFile := flag.String("log", "", "append what would be printed to this file instead of the console")
 	voicedFile := flag.String("fakeudp", "", "a recorded voice datagram sent ahead, used by the fakeudp way")
 	seqovl := flag.Int("seqovl", 0, "how many bytes the overlap reaches back; zero means the whole pattern")
 	silence := flag.Int("silence", 45, "seconds of silence after which a connection counts as killed")
@@ -152,6 +154,18 @@ func run() error {
 		}
 	}
 
+	report := writing(os.Stdout)
+
+	if *logFile != "" {
+		written, err := os.OpenFile(*logFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+		if err != nil {
+			return fmt.Errorf("cannot open the log: %w", err)
+		}
+		defer written.Close()
+
+		report = writing(written)
+	}
+
 	engine := bypass.New(bypass.Settings{
 		Rules:    base,
 		Hunt:     hunt,
@@ -162,7 +176,7 @@ func run() error {
 		DropQUIC: *noQUIC,
 		Wet:      *wet,
 		Seen:     *seen,
-		Report:   func(text string) { fmt.Println(text) },
+		Report:   report,
 	})
 
 	if err := engine.Run(wire, eyes); err != nil && !stopped() {
@@ -363,4 +377,17 @@ func parseRanges(list string) ([]filter.PortRange, error) {
 	}
 
 	return out, nil
+}
+
+// The engine reports from the loop and from the reply watcher, which run apart,
+// so the lock is what keeps two lines from landing inside one another.
+func writing(to io.Writer) func(string) {
+	var mu sync.Mutex
+
+	return func(text string) {
+		mu.Lock()
+		defer mu.Unlock()
+
+		fmt.Fprintln(to, text)
+	}
 }

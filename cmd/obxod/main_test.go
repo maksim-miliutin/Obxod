@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bytes"
 	"obxod/internal/filter"
 	"os"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -264,5 +266,64 @@ func TestTheDefaultVoicePortsParse(t *testing.T) {
 
 	if len(got) != 2 {
 		t.Errorf("read %d ranges out of the default, want 2", len(got))
+	}
+}
+
+// Without a console there is nowhere for the report to land, and a run in the
+// background is exactly the one worth reading afterwards.
+func TestWritingPutsEveryLineDown(t *testing.T) {
+	var written bytes.Buffer
+
+	say := writing(&written)
+
+	say("first")
+	say("second")
+
+	if written.String() != "first\nsecond\n" {
+		t.Errorf("wrote %q, want the two lines each on its own", written.String())
+	}
+}
+
+// busyWriter counts how many are inside a write at once. Two at a time is a line
+// landing inside another, which is what the lock is there to stop.
+type busyWriter struct {
+	inside  atomic.Int32
+	clashed atomic.Bool
+}
+
+func (w *busyWriter) Write(p []byte) (int, error) {
+	if w.inside.Add(1) > 1 {
+		w.clashed.Store(true)
+	}
+
+	time.Sleep(50 * time.Microsecond)
+	w.inside.Add(-1)
+
+	return len(p), nil
+}
+
+// The engine reports from the loop and from the reply watcher at once.
+func TestWritingKeepsLinesWhole(t *testing.T) {
+	to := &busyWriter{}
+	say := writing(to)
+
+	var wg sync.WaitGroup
+
+	wg.Add(2)
+
+	for range 2 {
+		go func() {
+			defer wg.Done()
+
+			for range 100 {
+				say("a line of some length")
+			}
+		}()
+	}
+
+	wg.Wait()
+
+	if to.clashed.Load() {
+		t.Error("two lines were written at once")
 	}
 }
