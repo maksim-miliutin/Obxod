@@ -67,8 +67,10 @@ func BenchmarkStep(b *testing.B) {
 			b.ReportAllocs()
 			b.ResetTimer()
 
+			// step is on a timer now, so the cost being measured is the work it
+			// does when it does run.
 			for range b.N {
-				e.step(when)
+				e.check(when)
 			}
 		})
 	}

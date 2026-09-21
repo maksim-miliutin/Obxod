@@ -571,3 +571,71 @@ func TestResetsOnUnknownPortsAreCountedNotListed(t *testing.T) {
 		t.Errorf("forty resets took %d lines, want one", said)
 	}
 }
+
+// The waste this stops: the loop asked for the bookkeeping once a packet, and
+// with forty live links that cost eight times what handling the packet did.
+func TestTheBookkeepingRunsOnATimer(t *testing.T) {
+	out := &lines{}
+	now := time.Now()
+
+	e := New(Settings{
+		Rules:   setOf(t, "discord.com=hostfake:mail.ru"),
+		Wet:     true,
+		Silence: time.Second,
+		Report:  out.say,
+	})
+
+	e.health.Hello("discord.com", 1111)
+	e.health.Data(1111, 1460, now)
+
+	if err := e.step(now.Add(time.Minute)); err != nil {
+		t.Fatalf("step: %v", err)
+	}
+
+	// A second link, just as quiet, a moment after the last look.
+	e.health.Hello("discord.com", 2222)
+	e.health.Data(2222, 700, now)
+
+	if err := e.step(now.Add(time.Minute + 10*time.Millisecond)); err != nil {
+		t.Fatalf("step: %v", err)
+	}
+
+	for _, said := range out.all() {
+		if strings.Contains(said, "700 bytes") {
+			t.Errorf("looked again ten milliseconds later: %q", said)
+		}
+	}
+}
+
+// And it still runs: a link that goes quiet has to be reported, just not checked
+// for on every packet that goes by.
+func TestTheBookkeepingStillRuns(t *testing.T) {
+	out := &lines{}
+	now := time.Now()
+
+	e := New(Settings{
+		Rules:   setOf(t, "discord.com=hostfake:mail.ru"),
+		Wet:     true,
+		Silence: time.Second,
+		Report:  out.say,
+	})
+
+	e.health.Hello("discord.com", 54321)
+	e.health.Data(54321, 1460, now)
+
+	if err := e.step(now.Add(time.Minute)); err != nil {
+		t.Fatalf("step: %v", err)
+	}
+
+	var told bool
+
+	for _, said := range out.all() {
+		if strings.Contains(said, "1460 bytes") {
+			told = true
+		}
+	}
+
+	if !told {
+		t.Errorf("the quiet link was never reported:\n%s", strings.Join(out.all(), "\n"))
+	}
+}

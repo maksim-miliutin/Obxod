@@ -66,6 +66,7 @@ type Engine struct {
 
 	quiet   int
 	dropped int
+	stepped time.Time
 
 	// Grows with the number of distinct names browsed while -seen is on, which is
 	// a flag turned on for a short look rather than left running.
@@ -158,7 +159,22 @@ func (e *Engine) Run(wire Wire, eyes Eyes) error {
 	}
 }
 
+// Everything here is measured in seconds: a sweep window is twelve, silence is
+// forty five. Asking once a packet walks every live link for nothing, which costs
+// more than handling the packet did.
+const stepEvery = 200 * time.Millisecond
+
 func (e *Engine) step(now time.Time) error {
+	if now.Sub(e.stepped) < stepEvery {
+		return nil
+	}
+
+	e.stepped = now
+
+	return e.check(now)
+}
+
+func (e *Engine) check(now time.Time) error {
 	if err := e.judge(now); err != nil {
 		return err
 	}
