@@ -9,9 +9,6 @@ import (
 	"obxod/internal/voice"
 )
 
-// voice puts recorded datagrams in front of the one that opens a call. Unlike a
-// hello there is no name in here to match, so the rule is looked up by nothing
-// but the protocol: whoever asked for fakeudp gets it on every voice datagram.
 func (e *Engine) voice(h sender, packet []byte, addr *divert.Addr) (bool, error) {
 	outer, err := ip.Parse(packet)
 	if err != nil || outer.Protocol != ip.ProtocolUDP {
@@ -70,5 +67,4 @@ func (e *Engine) voiceRule() (rules.Rule, bool) {
 	return rules.Rule{}, false
 }
 
-// Voice datagrams have no host to name the line after.
 const opening = "voice"

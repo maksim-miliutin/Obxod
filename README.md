@@ -80,6 +80,12 @@ number where it belongs, so the fake stays in the stream. Moving the sequence
 number instead puts it outside the window and nobody reads it, which is the same
 as not sending it.
 
+`md5sig` is the other kind of spoiling, and it drops the fake by a different rule:
+it hangs an md5 signature option on the segment, which a server that never agreed
+to one must refuse, while the inspector reads straight past it. Every spoiling so
+far leans on the sequence number; this one leans on what the two ends negotiated,
+so it is worth a try where the numbers get nowhere.
+
 The name matters as much as the method. `hostfake:mail.ru` loads the whole page;
 the made up name the program picks on its own gets a third of it. The inspector
 reads the name and judges it.
@@ -125,6 +131,14 @@ port.
 
 Where a call is opened moves between versions. `-voice` takes the ranges if the
 built in ones stop matching.
+
+## Running in the background
+
+The program prints to the console, which is fine while a console is there. Built
+without one, or left running behind the interface, it has nowhere to print — so
+`-log` writes the same lines to a file instead, appending rather than overwriting.
+
+    obxod.exe -wet -noquic -log obxod.log -rules rules.txt
 
 ## What a failure looks like
 

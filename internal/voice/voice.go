@@ -2,8 +2,7 @@ package voice
 
 import "encoding/binary"
 
-// What discord sends first on a voice port, and what answers a stun server. The
-// ports carry games and everything else too, so the payload decides, not the port.
+// These ports carry games and audio too, so the payload decides, not the port.
 const (
 	discoveryLen  = 74
 	discoveryAsk  = 1
@@ -15,8 +14,6 @@ const (
 	stunCookie    = 0x2112a442
 )
 
-// Discovery reports the datagram discord sends to learn its own address, which
-// opens a voice connection. Its address field is still all zeroes on the way out.
 func Discovery(payload []byte) bool {
 	if len(payload) != discoveryLen {
 		return false
@@ -39,7 +36,6 @@ func Discovery(payload []byte) bool {
 	return true
 }
 
-// Stun reports a stun message, which is how a call finds its way through.
 func Stun(payload []byte) bool {
 	if len(payload) < stunHeaderLen {
 		return false
@@ -58,7 +54,6 @@ func Stun(payload []byte) bool {
 	return int(binary.BigEndian.Uint16(payload[2:4])) <= len(payload)-stunHeaderLen
 }
 
-// Ours reports a datagram worth putting a fake in front of.
 func Ours(payload []byte) bool {
 	return Discovery(payload) || Stun(payload)
 }
