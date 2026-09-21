@@ -95,6 +95,12 @@ var ways = []way{
 		},
 	},
 	{
+		name: "md5sig", hint: "md5sig", kind: counts | forges | spoils,
+		read:  func(r *Rule, _ string, given bool) error { return bare(&r.Signed, "md5sig", given) },
+		write: func(r Rule) string { return flag("md5sig", r.Signed) },
+		say:   func(r Rule) string { return flag("md5sig", r.Signed) },
+	},
+	{
 		name: "badsum", hint: "badsum", kind: counts | forges | spoils,
 		read:  func(r *Rule, _ string, given bool) error { return bare(&r.BadSum, "badsum", given) },
 		write: func(r Rule) string { return flag("badsum", r.BadSum) },

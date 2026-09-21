@@ -89,7 +89,14 @@ type job struct {
 }
 
 func (e *Engine) fake(j job) error {
-	recipe := forge.Recipe{TTL: j.rule.TTL, SeqDelta: j.rule.BadSeq, AckDelta: j.rule.BadAck, Stale: j.rule.Stale, BadSum: j.rule.BadSum}
+	recipe := forge.Recipe{
+		TTL:      j.rule.TTL,
+		SeqDelta: j.rule.BadSeq,
+		AckDelta: j.rule.BadAck,
+		Stale:    j.rule.Stale,
+		Signed:   j.rule.Signed,
+		BadSum:   j.rule.BadSum,
+	}
 
 	if j.rule.Recorded {
 		return e.canned(j, recipe)
@@ -349,6 +356,7 @@ func (e *Engine) hostfake(j job) (bool, error) {
 		SeqDelta: int32(j.found.NameStart) + j.rule.BadSeq,
 		AckDelta: j.rule.BadAck,
 		Stale:    j.rule.Stale,
+		Signed:   j.rule.Signed,
 		BadSum:   j.rule.BadSum,
 	})
 

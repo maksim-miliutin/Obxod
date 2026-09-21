@@ -35,6 +35,7 @@ type Rule struct {
 	Recorded bool
 	BadAck   int32
 	Stale    uint32
+	Signed   bool
 	Disorder bool
 	HostFake string
 	FakeUDP  int

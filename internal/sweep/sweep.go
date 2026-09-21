@@ -189,6 +189,8 @@ func Candidates(host string) []rules.Rule {
 	add(rules.Rule{Decoy: "auto", Stale: 1 << 30})
 	add(rules.Rule{Decoy: "auto", BadAck: -66000})
 	add(rules.Rule{Decoy: "auto", BadSeq: 100000, BadAck: -66000})
+	add(rules.Rule{Decoy: "auto", Signed: true})
+	add(rules.Rule{HostFake: "mail.ru", Signed: true})
 	add(rules.Rule{Decoy: "auto", BadSum: true, Cut: "name"})
 	add(rules.Rule{Decoy: "auto", BadSum: true})
 

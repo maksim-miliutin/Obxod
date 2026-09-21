@@ -23,6 +23,7 @@ type Recipe struct {
 	SeqDelta int32  // added to the sequence number so the server drops the copy; zero leaves it
 	AckDelta int32  // added to the acknowledgement number, usually backwards; zero leaves it
 	Stale    uint32 // taken off the timestamp so the server calls the copy old; zero leaves it
+	Signed   bool   // a made up md5 signature the server must refuse, and the inspector ignores
 	BadSum   bool   // leave a wrong TCP checksum so the copy is dropped past the inspector
 
 	// Must match the real name in length: a hello counts the name in three places.
@@ -65,6 +66,15 @@ func Copy(packet []byte, r Recipe) ([]byte, error) {
 		if err := seal.Stale(copied, r.Stale); err != nil {
 			return nil, err
 		}
+	}
+
+	if r.Signed {
+		signed, err := seal.Signed(copied)
+		if err != nil {
+			return nil, err
+		}
+
+		copied = signed
 	}
 
 	if err := seal.Sums(copied, r.BadSum); err != nil {
@@ -135,6 +145,15 @@ func Instead(packet []byte, recorded []byte, r Recipe) ([]byte, error) {
 		if err := seal.Stale(made, r.Stale); err != nil {
 			return nil, err
 		}
+	}
+
+	if r.Signed {
+		signed, err := seal.Signed(made)
+		if err != nil {
+			return nil, err
+		}
+
+		made = signed
 	}
 
 	if err := seal.Sums(made, r.BadSum); err != nil {

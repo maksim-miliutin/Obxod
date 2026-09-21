@@ -792,3 +792,36 @@ func TestNothingIsSentForAnEmptyTail(t *testing.T) {
 		}
 	}
 }
+
+// An option nobody agreed to is a reason for the server to drop the copy that has
+// nothing to do with its sequence number, so the inspector still reads it in place.
+func TestTheCopyCanCarryASignature(t *testing.T) {
+	const host = "updates.discord.com"
+
+	for _, rule := range []string{host + "=decoy,md5sig", host + "=hostfake:mail.ru,md5sig"} {
+		t.Run(rule, func(t *testing.T) {
+			r := &recorder{}
+
+			if _, err := engineFor(t, true, nil, rule).forward(r, packet443(clientHello(host)), &divert.Addr{}); err != nil {
+				t.Fatalf("forward: %v", err)
+			}
+
+			var signed bool
+
+			for _, one := range r.sent {
+				outer, err := ip.Parse(one)
+				if err != nil {
+					t.Fatalf("ip.Parse: %v", err)
+				}
+
+				if len(outer.Payload) > 21 && outer.Payload[20] == 19 && outer.Payload[21] == 18 {
+					signed = true
+				}
+			}
+
+			if !signed {
+				t.Errorf("none of the %d packets carries a signature", len(r.sent))
+			}
+		})
+	}
+}
