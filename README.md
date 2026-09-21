@@ -62,6 +62,9 @@ A site lives on more names than anyone remembers, and one missing name is
 invisible: traffic no rule covers goes out untouched and nothing is said about it.
 `-seen` names each one once, which is how the list above was written.
 
+Not every name wants a rule. One that nobody blocks works better left alone, and a
+rule on it is one more thing to go wrong.
+
     obxod.exe -wet -noquic -seen -rules rules.txt
 
 Three things about those rules took a week to find, and none of them is obvious.
@@ -100,6 +103,28 @@ on. It prints what carried the most, ready to paste back as a rule.
 
 Not every name needs a rule. A name nobody blocks works better left alone, and a
 rule on it is one more thing to go wrong.
+
+## Voice
+
+A call runs on datagrams, and nothing said above touches those. Discord opens one
+by asking a voice server what its own address is, and that question is what gets
+dropped; without an answer the client sits on Connecting forever.
+
+What carries it through is a recorded datagram sent ahead of the real one, the
+same idea as a forged hello and with no spoiling at all. Record it once, point
+`-fakeudp` at the file, and ask for it in a rule:
+
+    discord.media=hostfake:mail.ru,ts,fakeudp:5
+
+    obxod.exe -wet -noquic -fakeudp ACTIVE_DISCORD_UDP.bin -rules rules.txt
+
+The datagram goes in front of what opens a call and of stun messages, and in front
+of nothing else. Those ports carry games and the audio itself, and a fake put in
+front of either breaks what was working, so the payload decides rather than the
+port.
+
+Where a call is opened moves between versions. `-voice` takes the ranges if the
+built in ones stop matching.
 
 ## What a failure looks like
 
