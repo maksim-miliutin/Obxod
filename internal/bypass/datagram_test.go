@@ -3,8 +3,10 @@ package bypass
 import (
 	"bytes"
 	"encoding/binary"
+	"obxod/internal/sweep"
 	"strings"
 	"testing"
+	"time"
 
 	"obxod/internal/checksum"
 	"obxod/internal/divert"
@@ -32,7 +34,6 @@ func voicePacket(payload []byte) []byte {
 	return out
 }
 
-// What discord sends to open a call: 74 bytes, a question, and no address yet.
 func discovery() []byte {
 	out := make([]byte, 74)
 	binary.BigEndian.PutUint16(out[0:2], 1)
@@ -138,7 +139,6 @@ func TestTheWayWithoutARecordingSaysSo(t *testing.T) {
 	}
 }
 
-// Nothing goes out until -wet, same as every other way.
 func TestNothingIsSentWhileDry(t *testing.T) {
 	out := &lines{}
 
@@ -156,5 +156,31 @@ func TestNothingIsSentWhileDry(t *testing.T) {
 
 	if len(r.sent) != 0 {
 		t.Errorf("sent %d datagrams while dry", len(r.sent))
+	}
+}
+
+// The bug this guards: a sweep swaps its candidate into the set, none of which
+// carry fakeudp, and voice used to read the set — so tuning one host by sweep
+// silently dropped voice for the whole run. It has to keep working from the base.
+func TestVoiceKeepsWorkingDuringASweep(t *testing.T) {
+	recorded := bytes.Repeat([]byte{0xab}, 1200)
+
+	// The sweep is tuning the very host the fakeudp rule is on, so withCandidate
+	// drops that rule from the set — and voice must still find it in the base.
+	e := New(Settings{
+		Rules:  setOf(t, "discord.media=fakeudp:5"),
+		Hunt:   sweep.New("discord.media", sweep.Candidates("discord.media"), time.Second, time.Now()),
+		Wet:    true,
+		Voiced: recorded,
+	})
+
+	r := &recorder{}
+
+	if _, err := e.voice(r, voicePacket(discovery()), &divert.Addr{}); err != nil {
+		t.Fatalf("voice: %v", err)
+	}
+
+	if len(r.sent) != 5 {
+		t.Fatalf("sent %d datagrams during a sweep, want the five fakeudp asks for", len(r.sent))
 	}
 }

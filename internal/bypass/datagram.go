@@ -57,8 +57,11 @@ func (e *Engine) voice(h sender, packet []byte, addr *divert.Addr) (bool, error)
 
 // A voice datagram carries no name, so the way is taken from whichever rule asked
 // for it. Two rules asking for different counts is a question nobody has posed.
+// From the base rules, not the swept set: a sweep swaps in one tcp candidate at a
+// time and none of them carry fakeudp, so reading the set would drop voice for the
+// whole run while a host is being tuned.
 func (e *Engine) voiceRule() (rules.Rule, bool) {
-	for _, r := range e.set {
+	for _, r := range e.base {
 		if r.FakeUDP != 0 {
 			return r, true
 		}
