@@ -252,7 +252,9 @@ func (e *Engine) watched(total int) {
 func (e *Engine) reset(port uint16) {
 	host, known := e.health.Reset(port)
 	if !known {
-		e.say("  reset on port %d, which we never touched", port)
+		// A link is forgotten the moment there is nothing left to say about it, so
+		// an unknown port is either one we never touched or one already done with.
+		e.once("reset", "on a port we are not watching")
 
 		return
 	}

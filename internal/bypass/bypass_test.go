@@ -530,3 +530,44 @@ func TestCountingIsSafeFromTwoGoroutines(t *testing.T) {
 
 	wg.Wait()
 }
+
+// The claim this drops: a link is forgotten as soon as there is nothing left to
+// say about it, so an unknown port is either one we never touched or one we
+// finished with, and the log said the first about both.
+func TestAResetOnAnUnknownPortClaimsNothing(t *testing.T) {
+	out := &lines{}
+
+	e := New(Settings{Rules: setOf(t, "discord.com=hostfake:mail.ru"), Wet: true, Report: out.say})
+
+	e.reset(54321)
+
+	for _, said := range out.all() {
+		if strings.Contains(said, "never touched") {
+			t.Errorf("said what it cannot know: %q", said)
+		}
+	}
+}
+
+// And the flood it stops: a machine resets dozens of ports a minute, none of them
+// ours, and each one used to take a line.
+func TestResetsOnUnknownPortsAreCountedNotListed(t *testing.T) {
+	out := &lines{}
+
+	e := New(Settings{Rules: setOf(t, "discord.com=hostfake:mail.ru"), Wet: true, Report: out.say})
+
+	for port := uint16(50000); port < 50040; port++ {
+		e.reset(port)
+	}
+
+	var said int
+
+	for _, line := range out.all() {
+		if strings.Contains(line, "reset") {
+			said++
+		}
+	}
+
+	if said != 1 {
+		t.Errorf("forty resets took %d lines, want one", said)
+	}
+}
