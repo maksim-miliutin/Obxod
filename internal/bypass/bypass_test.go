@@ -436,7 +436,7 @@ func TestTwoKindsOfNewsAreCountedApart(t *testing.T) {
 
 	said := e.tally()
 
-	if !strings.Contains(said, "name 2 more") || !strings.Contains(said, "asking 2 more") {
+	if !strings.Contains(said, "name swapped for") || !strings.Contains(said, "asking again") {
 		t.Errorf("tally = %q, want both kinds counted", said)
 	}
 }
@@ -637,5 +637,46 @@ func TestTheBookkeepingStillRuns(t *testing.T) {
 
 	if !told {
 		t.Errorf("the quiet link was never reported:\n%s", strings.Join(out.all(), "\n"))
+	}
+}
+
+// The bug this guards: the count key was the template, so a line with a %d in it
+// showed up in the tally as "%d" instead of the word, exactly on voice datagrams.
+func TestTheTallyShowsAWordNotAPlaceholder(t *testing.T) {
+	e := New(Settings{Rules: setOf(t, "discord.com=hostfake:mail.ru"), Wet: true})
+
+	for range 4 {
+		e.once("voice", "%d recorded datagrams sent first", 5)
+	}
+
+	said := e.tally()
+
+	if strings.Contains(said, "%") {
+		t.Errorf("the tally still has a placeholder in it: %q", said)
+	}
+
+	if !strings.Contains(said, "recorded datagrams") {
+		t.Errorf("tally = %q, want the voice line counted", said)
+	}
+
+	// The verb letter has to go with the %, or "%d recorded" leaves a stray "d".
+	if strings.Contains(said, "d recorded") {
+		t.Errorf("tally = %q, a format letter was left behind", said)
+	}
+}
+
+// And the fold still holds when the tail changes every time, which a swapped name
+// does: same first word, so it is the same news however the made up name reads.
+func TestLinesFoldByTheirFirstWord(t *testing.T) {
+	e := New(Settings{Rules: setOf(t, "discord.com=hostfake:mail.ru"), Wet: true})
+
+	for _, name := range []string{"aja", "epm", "xgh", "fnu"} {
+		e.once("discord.com", "name swapped for %s.mail.ru", name)
+	}
+
+	said := e.tally()
+
+	if !strings.Contains(said, "name swapped for") {
+		t.Errorf("tally = %q, want the names folded into one", said)
 	}
 }

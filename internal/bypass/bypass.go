@@ -353,17 +353,37 @@ func isQUIC(packet []byte) bool {
 // once says a thing about a host the first time and counts it after that. A site
 // opens a connection a second, and the same line hundreds of times over buries
 // everything worth reading.
+// Two lines are the same news when they came from the same template, so a swapped
+// name folds however the made up name reads. The key is the template with its
+// verbs stripped, which stays a readable phrase and never a bare number or %d.
 func (e *Engine) once(host, what string, args ...any) {
-	key := host + "|" + what
-
 	e.toldMu.Lock()
-	e.told[key]++
-	first := e.told[key] == 1
+	e.told[host+"|"+plain(what)]++
+	first := e.told[host+"|"+plain(what)] == 1
 	e.toldMu.Unlock()
 
 	if first {
-		e.say("  "+host+": "+what, args...)
+		e.say("  " + host + ": " + fmt.Sprintf(what, args...))
 	}
+}
+
+// plain drops the format verbs from a template and squeezes the gaps, so what is
+// left reads as words wherever the verbs sat: "%d datagrams sent" turns into
+// "datagrams sent", "name swapped for %s" into "name swapped for".
+func plain(what string) string {
+	var b strings.Builder
+
+	for i := 0; i < len(what); i++ {
+		if what[i] == '%' && i+1 < len(what) {
+			i++
+
+			continue
+		}
+
+		b.WriteByte(what[i])
+	}
+
+	return strings.Join(strings.Fields(b.String()), " ")
 }
 
 // Tally names what has been happening since the last time, for the lines that
@@ -379,18 +399,12 @@ func (e *Engine) tally() string {
 			continue
 		}
 
-		host, what, _ := strings.Cut(key, "|")
-		out = append(out, fmt.Sprintf("%s %s %d more", host, firstWord(what), times-1))
+		host, phrase, _ := strings.Cut(key, "|")
+		out = append(out, fmt.Sprintf("%s: %s, %d more", host, phrase, times-1))
 	}
 
 	sort.Strings(out)
 	clear(e.told)
 
 	return strings.Join(out, ", ")
-}
-
-func firstWord(what string) string {
-	word, _, _ := strings.Cut(what, " ")
-
-	return word
 }
