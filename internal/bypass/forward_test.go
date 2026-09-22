@@ -825,3 +825,43 @@ func TestTheCopyCanCarryASignature(t *testing.T) {
 		})
 	}
 }
+
+// With an all rule every host matches, so -seen would say nothing and the tail
+// that all is catching stays invisible. It has to name what only all covered.
+func TestSeenNamesWhatAllCaught(t *testing.T) {
+	out := &lines{}
+
+	e := New(Settings{
+		Rules:  setOf(t, "all=hostfake:mail.ru", "discord.com=hostfake:mail.ru,ts"),
+		Wet:    true,
+		Seen:   true,
+		Report: out.say,
+	})
+
+	// discord has its own rule; this random edge does not.
+	for _, host := range []string{"updates.discord.com", "rr7---sn-x.googlevideo.com"} {
+		if _, err := e.forward(&recorder{}, packet443(clientHello(host)), &divert.Addr{}); err != nil {
+			t.Fatalf("forward %s: %v", host, err)
+		}
+	}
+
+	var namedEdge, namedDiscord bool
+
+	for _, said := range out.all() {
+		if strings.Contains(said, "googlevideo") && strings.Contains(said, "caught by all") {
+			namedEdge = true
+		}
+
+		if strings.Contains(said, "updates.discord.com") && strings.Contains(said, "caught by all") {
+			namedDiscord = true
+		}
+	}
+
+	if !namedEdge {
+		t.Errorf("the edge all caught was not named:\n%s", strings.Join(out.all(), "\n"))
+	}
+
+	if namedDiscord {
+		t.Error("a host with its own rule was wrongly called caught by all")
+	}
+}

@@ -38,6 +38,10 @@ func (e *Engine) forward(h sender, packet []byte, addr *divert.Addr) (bool, erro
 		return false, nil
 	}
 
+	if r.Host == "all" {
+		e.caughtByAll(found.Host)
+	}
+
 	j := job{to: h, packet: packet, addr: addr, found: found, rule: r}
 
 	repeat := e.tries.Saw(found.Host, found.SrcPort, found.Seq, time.Now()) == attempt.Again
@@ -405,8 +409,8 @@ func (e *Engine) hostfake(j job) (bool, error) {
 	return true, nil
 }
 
-// A site living on a name nobody wrote a rule for is invisible: the j.packet goes
-// out untouched and nothing is said. Naming it once is how the rule gets written.
+// A name nobody wrote a rule for is invisible: the packet goes out untouched and
+// nothing is said. Naming it once is how the rule gets written.
 func (e *Engine) noRule(host string) {
 	if e.seen == nil || e.seen[host] {
 		return
@@ -415,4 +419,17 @@ func (e *Engine) noRule(host string) {
 	e.seen[host] = true
 
 	e.say("  %s: no rule covers this name", host)
+}
+
+// With an all rule every host has a rule, so -seen would go silent. Naming the
+// ones all caught is how you find the tail worth its own rule, the way
+// googlevideo needed one once the default hurt it.
+func (e *Engine) caughtByAll(host string) {
+	if e.seen == nil || e.seen[host] {
+		return
+	}
+
+	e.seen[host] = true
+
+	e.say("  %s: caught by all", host)
 }
