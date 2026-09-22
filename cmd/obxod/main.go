@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"net"
 	"os"
 	"os/signal"
 	"strconv"
@@ -16,6 +17,7 @@ import (
 	"obxod/internal/cut"
 	"obxod/internal/divert"
 	"obxod/internal/filter"
+	"obxod/internal/probe"
 	"obxod/internal/rules"
 	"obxod/internal/sweep"
 )
@@ -54,7 +56,12 @@ func run() error {
 	noQUIC := flag.Bool("noquic", false, "drop outgoing quic so the browser falls back to tcp, which we can unblock")
 	seen := flag.Bool("seen", false, "name every host no rule covers, once each, so the missing ones can be found")
 	wet := flag.Bool("wet", false, "actually send copies; off by default, only reports")
+	check := flag.String("check", "", "test how these hosts behave with no bypass, comma separated, then exit")
 	flag.Parse()
+
+	if *check != "" {
+		return checkHosts(*check)
+	}
 
 	if *rulesFile != "" {
 		raw, err := os.ReadFile(*rulesFile)
@@ -390,4 +397,29 @@ func writing(to io.Writer) func(string) {
 
 		fmt.Fprintln(to, text)
 	}
+}
+
+// checkHosts reaches each host without any bypass and says how it answered, so a
+// site that will not load can be told apart: blocked by address, reset on the
+// name, or simply down. It is a picture, not a verdict on who does the blocking.
+func checkHosts(list string) error {
+	var d net.Dialer
+
+	d.Timeout = 5 * time.Second
+
+	for _, host := range strings.Split(list, ",") {
+		host = strings.TrimSpace(host)
+		if host == "" {
+			continue
+		}
+
+		verdict, err := probe.Host(&d, host, 5*time.Second)
+		if err != nil {
+			return err
+		}
+
+		fmt.Printf("%-40s %s\n", host, verdict)
+	}
+
+	return nil
 }
