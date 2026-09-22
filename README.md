@@ -35,6 +35,18 @@ covers its subdomains, so `discord.com` also covers `updates.discord.com`.
 
     host=way,way,way
 
+The host `all` is the default: it covers every name no other rule names. A site
+serves files from subdomains that change with every mirror or edge server
+(`2.na.dl.wireshark.org`, `rr7---sn-x.googlevideo.com`), and listing each is
+hopeless. One `all` rule reaches them; a named rule still beats it, so tuned
+hosts keep their own ways.
+
+    all=hostfake:mail.ru,ts
+
+The catch: `all` touches every connection, including the ones that already work,
+and a way that suits one site can break another. It is the widest net, not the
+safest. Name the sites you can and keep `all` for the tail.
+
 Run `obxod.exe -h` for the ways and what each one does.
 
 A site usually lives on more than one domain, and a missing one is invisible: the

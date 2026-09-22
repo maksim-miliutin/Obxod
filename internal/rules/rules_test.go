@@ -487,3 +487,54 @@ func TestParseRefusesAList(t *testing.T) {
 		t.Errorf("Parse took a list: %v", err)
 	}
 }
+
+// The host "all" is the default: it covers every name no other rule names, so a
+// blocked site that serves files from an ever-changing subdomain (a mirror, a
+// video edge like rr7.googlevideo) is reached without listing each one.
+func TestAllIsTheDefault(t *testing.T) {
+	set, err := ParseAll([]string{"all=hostfake:mail.ru,ts"})
+	if err != nil {
+		t.Fatalf("ParseAll: %v", err)
+	}
+
+	for _, host := range []string{"2.na.dl.wireshark.org", "rr7---sn-x.googlevideo.com", "anything.example"} {
+		r, ok := set.For(host)
+		if !ok || r.HostFake != "mail.ru" {
+			t.Errorf("all did not cover %q: ok=%v rule=%+v", host, ok, r)
+		}
+	}
+}
+
+// A named rule beats the default, so all does not trample the tuning of a host
+// that has its own line.
+func TestANamedRuleBeatsAll(t *testing.T) {
+	set, err := ParseAll([]string{
+		"all=hostfake:mail.ru",
+		"discord.media=hostfake:mail.ru,ts,fakeudp:5",
+	})
+	if err != nil {
+		t.Fatalf("ParseAll: %v", err)
+	}
+
+	r, ok := set.For("finland14007.discord.media")
+	if !ok || r.FakeUDP != 5 {
+		t.Errorf("the named discord rule lost to all: %+v", r)
+	}
+}
+
+// The longest matching name wins, so a subdomain rule beats a broader one and
+// both beat all.
+func TestTheMostSpecificRuleWins(t *testing.T) {
+	set, err := ParseAll([]string{
+		"all=ttl:4",
+		"googlevideo.com=hostfake:mail.ru,ts",
+	})
+	if err != nil {
+		t.Fatalf("ParseAll: %v", err)
+	}
+
+	r, _ := set.For("rr7---sn-x.googlevideo.com")
+	if r.Host != "googlevideo.com" {
+		t.Errorf("all beat the more specific googlevideo rule: %q", r.Host)
+	}
+}
