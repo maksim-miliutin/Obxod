@@ -184,3 +184,42 @@ func TestVoiceKeepsWorkingDuringASweep(t *testing.T) {
 		t.Fatalf("sent %d datagrams during a sweep, want the five fakeudp asks for", len(r.sent))
 	}
 }
+
+// An all rule with fakeudp would throw a discord fake at every game and stray
+// datagram on the voice ports. Voice comes from a rule that names a host.
+func TestAllDoesNotDriveVoice(t *testing.T) {
+	e := New(Settings{
+		Rules:  setOf(t, "all=hostfake:mail.ru,fakeudp:5"),
+		Wet:    true,
+		Voiced: bytes.Repeat([]byte{0xab}, 100),
+	})
+
+	r := &recorder{}
+
+	if _, err := e.voice(r, voicePacket(discovery()), &divert.Addr{}); err != nil {
+		t.Fatalf("voice: %v", err)
+	}
+
+	if len(r.sent) != 0 {
+		t.Errorf("all drove voice: %d fakes went out", len(r.sent))
+	}
+}
+
+// A named voice rule still works, even standing next to an all rule.
+func TestANamedVoiceRuleStillDrivesVoice(t *testing.T) {
+	e := New(Settings{
+		Rules:  setOf(t, "all=hostfake:mail.ru", "discord.media=fakeudp:5"),
+		Wet:    true,
+		Voiced: bytes.Repeat([]byte{0xab}, 100),
+	})
+
+	r := &recorder{}
+
+	if _, err := e.voice(r, voicePacket(discovery()), &divert.Addr{}); err != nil {
+		t.Fatalf("voice: %v", err)
+	}
+
+	if len(r.sent) != 5 {
+		t.Fatalf("the named voice rule sent %d fakes, want 5", len(r.sent))
+	}
+}

@@ -62,7 +62,9 @@ func (e *Engine) voice(h sender, packet []byte, addr *divert.Addr) (bool, error)
 // whole run while a host is being tuned.
 func (e *Engine) voiceRule() (rules.Rule, bool) {
 	for _, r := range e.base {
-		if r.FakeUDP != 0 {
+		// Not from all: it would fire a discord fake at every game and stray
+		// datagram on these ports. Voice is fakeudp on a rule that names a host.
+		if r.FakeUDP != 0 && r.Host != "all" {
 			return r, true
 		}
 	}
