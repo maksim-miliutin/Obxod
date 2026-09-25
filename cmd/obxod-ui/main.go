@@ -5,6 +5,8 @@ package main
 import (
 	"fmt"
 	"image/color"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -18,6 +20,7 @@ import (
 	"obxod/internal/meter"
 	"obxod/internal/preset"
 	"obxod/internal/runner"
+	"obxod/internal/sites"
 )
 
 var (
@@ -28,13 +31,20 @@ var (
 func main() {
 	window := app.New().NewWindow("Obxod")
 
-	hosts := preset.Hosts()
+	own, _ := sites.Load(sitesFile())
 
 	dot := canvas.NewText("●", idle)
 	word := widget.NewLabel("Выключено")
-	count := widget.NewLabel(fmt.Sprintf("Обходится сайтов: %d", len(hosts)))
-	list := widget.NewLabel(strings.Join(hosts, "\n"))
+	count := widget.NewLabel("")
+	list := widget.NewLabel("")
 	speed := widget.NewLabel("↓ —")
+
+	show := func() {
+		hosts := preset.HostsWith(own.List())
+		count.SetText(fmt.Sprintf("Обходится сайтов: %d", len(hosts)))
+		list.SetText(strings.Join(hosts, "\n"))
+	}
+	show()
 
 	chosen := preset.All()[0]
 
@@ -54,7 +64,7 @@ func main() {
 	}
 
 	turnOn := func() {
-		started, err := start(chosen)
+		started, err := start(chosen, own.List())
 		if err != nil {
 			dialog.ShowError(err, window)
 
@@ -69,6 +79,13 @@ func main() {
 		dot.Refresh()
 		word.SetText("Работает")
 		button.SetText("Выключить")
+	}
+
+	restart := func() {
+		if session != nil {
+			turnOff()
+			turnOn()
+		}
 	}
 
 	button.OnTapped = func() {
@@ -88,13 +105,42 @@ func main() {
 		}
 
 		chosen = found
-
-		if session != nil {
-			turnOff()
-			turnOn()
-		}
+		restart()
 	})
 	choose.SetSelected(chosen.Name)
+
+	entry := widget.NewEntry()
+	entry.SetPlaceHolder("example.com")
+
+	save := func() {
+		if err := own.Save(sitesFile()); err != nil {
+			dialog.ShowError(err, window)
+		}
+	}
+
+	add := widget.NewButton("Добавить", func() {
+		if strings.TrimSpace(entry.Text) == "" {
+			return
+		}
+
+		own.Add(entry.Text)
+		save()
+		entry.SetText("")
+		show()
+		restart()
+	})
+
+	remove := widget.NewButton("Убрать", func() {
+		if strings.TrimSpace(entry.Text) == "" {
+			return
+		}
+
+		own.Remove(entry.Text)
+		save()
+		entry.SetText("")
+		show()
+		restart()
+	})
 
 	go func() {
 		for range time.Tick(time.Second) {
@@ -115,16 +161,27 @@ func main() {
 		button,
 		widget.NewLabel("Способ:"),
 		choose,
+		entry,
+		container.NewHBox(add, remove),
 		count,
 	)
 	window.SetContent(container.NewBorder(top, speed, nil, nil, container.NewVScroll(list)))
-	window.Resize(fyne.NewSize(360, 420))
+	window.Resize(fyne.NewSize(360, 480))
 
 	window.ShowAndRun()
 }
 
-func start(p preset.Preset) (*runner.Session, error) {
-	set, err := p.Rules()
+func sitesFile() string {
+	exe, err := os.Executable()
+	if err != nil {
+		return "sites.txt"
+	}
+
+	return filepath.Join(filepath.Dir(exe), "sites.txt")
+}
+
+func start(p preset.Preset, extra []string) (*runner.Session, error) {
+	set, err := p.RulesWith(extra)
 	if err != nil {
 		return nil, err
 	}
