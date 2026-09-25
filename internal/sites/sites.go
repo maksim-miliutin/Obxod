@@ -3,6 +3,7 @@ package sites
 import (
 	"bufio"
 	"io"
+	"net/url"
 	"os"
 	"sort"
 	"strings"
@@ -17,7 +18,7 @@ func New() *Set {
 }
 
 func (s *Set) Add(name string) {
-	name = strings.TrimSpace(strings.ToLower(name))
+	name = domain(name)
 	if name == "" {
 		return
 	}
@@ -26,7 +27,32 @@ func (s *Set) Add(name string) {
 }
 
 func (s *Set) Remove(name string) {
-	delete(s.names, strings.TrimSpace(strings.ToLower(name)))
+	delete(s.names, domain(name))
+}
+
+func domain(input string) string {
+	input = strings.TrimSpace(strings.ToLower(input))
+	if input == "" {
+		return ""
+	}
+
+	if !strings.Contains(input, "://") {
+		input = "//" + input
+	}
+
+	u, err := url.Parse(input)
+	if err != nil {
+		return ""
+	}
+
+	host := strings.TrimPrefix(u.Hostname(), "www.")
+
+	// A real domain has a dot; a bare word is a typo, not a host to bypass.
+	if !strings.Contains(host, ".") {
+		return ""
+	}
+
+	return host
 }
 
 func (s *Set) List() []string {
