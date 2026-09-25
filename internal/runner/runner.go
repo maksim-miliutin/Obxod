@@ -107,3 +107,7 @@ func (s *Session) Stop() {
 		}
 	})
 }
+
+func (s *Session) Downloaded() int {
+	return s.engine.Downloaded()
+}

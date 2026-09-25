@@ -299,3 +299,41 @@ func TestNothingIsHeldAfterEveryLinkEnds(t *testing.T) {
 		}
 	}
 }
+
+func TestTotalAddsUpAndSurvivesAClose(t *testing.T) {
+	h := New()
+	now := time.Now()
+	h.Hello("a.com", 1)
+	h.Hello("b.com", 2)
+	h.Data(1, 100, now)
+	h.Data(2, 250, now)
+	h.Closed(1)
+	h.Data(2, 150, now)
+
+	if h.Total() != 500 {
+		t.Fatalf("Total = %d, want 500 (a close must not drop the total)", h.Total())
+	}
+}
+
+func TestTotalIsSafeUnderConcurrentData(t *testing.T) {
+	h := New()
+	h.Hello("a.com", 1)
+	now := time.Now()
+
+	done := make(chan struct{})
+	go func() {
+		for range 1000 {
+			h.Data(1, 1, now)
+		}
+		close(done)
+	}()
+
+	for range 1000 {
+		_ = h.Total()
+	}
+	<-done
+
+	if h.Total() != 1000 {
+		t.Fatalf("Total = %d, want 1000", h.Total())
+	}
+}

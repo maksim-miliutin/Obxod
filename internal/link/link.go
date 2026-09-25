@@ -8,6 +8,7 @@ import (
 type Health struct {
 	mu    sync.Mutex
 	links map[uint16]*state
+	total int
 }
 
 type state struct {
@@ -48,6 +49,7 @@ func (h *Health) Data(port uint16, bytes int, now time.Time) (string, bool) {
 	s.packets++
 	s.bytes += bytes
 	s.lastData = now
+	h.total += bytes
 
 	return s.host, s.packets == 1
 }
@@ -102,4 +104,11 @@ func (h *Health) WentQuiet(now time.Time, after time.Duration) []Report {
 	}
 
 	return out
+}
+
+func (h *Health) Total() int {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	return h.total
 }
