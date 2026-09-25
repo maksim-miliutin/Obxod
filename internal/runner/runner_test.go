@@ -10,6 +10,7 @@ import (
 
 	"obxod/internal/bypass"
 	"obxod/internal/divert"
+	"obxod/internal/filter"
 )
 
 // held stands in for a driver handle whose read blocks until the handle is
@@ -98,5 +99,15 @@ func TestStopClosesEachHandleOnce(t *testing.T) {
 
 	if wire.closes.Load() != 1 || eyes.closes.Load() != 1 {
 		t.Errorf("closes: wire %d, eyes %d, want 1 each", wire.closes.Load(), eyes.closes.Load())
+	}
+}
+
+func TestDefaultPortsGiveTheFilterSomethingToCatch(t *testing.T) {
+	if _, err := filter.Replies(DefaultPorts()); err != nil {
+		t.Fatalf("replies filter on default ports: %v", err)
+	}
+
+	if _, err := filter.Outbound(filter.Ports{TCP: DefaultPorts()}); err != nil {
+		t.Fatalf("outbound filter on default ports: %v", err)
 	}
 }
