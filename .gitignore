@@ -21,3 +21,4 @@ ACTIVE_DISCORD_UDP.bin
 
 *.syso
 /obxod-ui.exe
+*.exe~
