@@ -48,6 +48,19 @@ func Hosts() []string {
 	return strings.Split(blocked, ",")
 }
 
+func HostsWith(extra []string) []string {
+	return append(Hosts(), extra...)
+}
+
 func (p Preset) Rules() (rules.Set, error) {
-	return rules.Several(blocked + "=" + p.way)
+	return p.RulesWith(nil)
+}
+
+func (p Preset) RulesWith(extra []string) (rules.Set, error) {
+	hosts := blocked
+	if len(extra) > 0 {
+		hosts += "," + strings.Join(extra, ",")
+	}
+
+	return rules.Several(hosts + "=" + p.way)
 }

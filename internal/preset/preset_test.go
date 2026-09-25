@@ -64,3 +64,18 @@ func TestHostsAreTheBlockedSites(t *testing.T) {
 		}
 	}
 }
+
+func TestRulesWithKeepsBothPresetAndExtra(t *testing.T) {
+	set, err := All()[0].RulesWith([]string{"example.com"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, ok := set.For("example.com"); !ok {
+		t.Error("RulesWith dropped the extra host")
+	}
+
+	if _, ok := set.For("discord.com"); !ok {
+		t.Error("RulesWith dropped the preset hosts")
+	}
+}
