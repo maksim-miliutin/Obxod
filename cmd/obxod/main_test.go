@@ -178,26 +178,12 @@ func TestTheOlderFlagsCarryASignedShift(t *testing.T) {
 	}
 }
 
-type closer struct {
-	closed atomic.Bool
-}
-
-func (c *closer) Close() error {
-	c.closed.Store(true)
-
-	return nil
-}
-
 // Ctrl+C kills the process where it stands, so nothing deferred runs and the
-// driver keeps its handles. This is what closes them.
-func TestInterruptClosesTheHandles(t *testing.T) {
-	one, two := &closer{}, &closer{}
+// driver keeps its handles. onInterrupt turns the signal into a stop.
+func TestInterruptCallsStop(t *testing.T) {
+	var stopped atomic.Bool
 
-	stopped := onInterrupt(one, two)
-
-	if stopped() {
-		t.Fatal("said we were interrupted before anything happened")
-	}
+	onInterrupt(func() { stopped.Store(true) })
 
 	me, err := os.FindProcess(os.Getpid())
 	if err != nil {
@@ -211,15 +197,14 @@ func TestInterruptClosesTheHandles(t *testing.T) {
 	}
 
 	for range 100 {
-		if one.closed.Load() && two.closed.Load() && stopped() {
+		if stopped.Load() {
 			return
 		}
 
 		time.Sleep(10 * time.Millisecond)
 	}
 
-	t.Errorf("after an interrupt: first closed = %v, second closed = %v, stopped = %v",
-		one.closed.Load(), two.closed.Load(), stopped())
+	t.Error("an interrupt did not reach stop")
 }
 
 // The ports a call opens on move between discord versions, and they used to be

@@ -1,0 +1,557 @@
+[33mcommit 93557138e524f584300c93fa800ec1d675bea161[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mui-window[m[33m)[m
+Author: Maksim Miliutin <maksim.milutin06@gmail.com>
+Date:   Fri Sep 25 06:46:34 2026 +0300
+
+    ignore syso and ui binary
+
+[33mcommit 5122a5d8d8d43cc62ae6ef2ace1536f6532ed767[m
+Author: Maksim Miliutin <maksim.milutin06@gmail.com>
+Date:   Fri Sep 25 06:05:21 2026 +0300
+
+    empty ui window
+
+[33mcommit 647a6dfeb934d4d7a8a37ff0e2d322a38ba359d4[m
+Author: Maksim Miliutin <maksim.milutin06@gmail.com>
+Date:   Fri Sep 25 05:54:28 2026 +0300
+
+    scope ci to engine
+
+[33mcommit 90f57c54552f4d0858007f430820c065cd9a9de2[m[33m ([m[1;31morigin/master[m[33m, [m[1;32mmaster[m[33m)[m
+Author: Maksim Miliutin <maksim.milutin06@gmail.com>
+Date:   Tue Sep 22 14:24:43 2026 +0300
+
+    check how a host is blocked
+
+[33mcommit 308a76d1afda8132e54cdf607872dd46025132b0[m
+Author: Maksim Miliutin <maksim.milutin06@gmail.com>
+Date:   Tue Sep 22 13:52:01 2026 +0300
+
+    keep all out of voice
+
+[33mcommit c3cf8317d29e33d408c61edfc7e0131ee379a2e8[m
+Author: Maksim Miliutin <maksim.milutin06@gmail.com>
+Date:   Tue Sep 22 13:33:49 2026 +0300
+
+    name the tail all caught
+
+[33mcommit ecb7fda4a61b6a9a36942c27a0b2bd2749e8914c[m
+Author: Maksim Miliutin <maksim.milutin06@gmail.com>
+Date:   Tue Sep 22 13:06:42 2026 +0300
+
+    document the all rule
+
+[33mcommit 87433f4bea6e047e5e0a47f63177e9ef0405ef6e[m
+Author: Maksim Miliutin <maksim.milutin06@gmail.com>
+Date:   Mon Sep 21 14:33:11 2026 +0300
+
+    keep voice through a sweep
+
+[33mcommit 507b7954003b2899c8482ff4d53bb34ab5ad0c0e[m
+Author: Maksim Miliutin <maksim.milutin06@gmail.com>
+Date:   Mon Sep 21 13:37:50 2026 +0300
+
+    keep placeholders out of the tally
+
+[33mcommit 2be62d5c618e988ea247702250e970c2302dfc37[m
+Author: Maksim Miliutin <maksim.milutin06@gmail.com>
+Date:   Mon Sep 21 12:57:58 2026 +0300
+
+    thin the comments
+
+[33mcommit f0fe9f9f896d6d4b0ce6c7c81c7e1c4655c06bbf[m
+Author: Maksim Miliutin <maksim.milutin06@gmail.com>
+Date:   Mon Sep 21 12:45:16 2026 +0300
+
+    sign the copy with nothing
+
+[33mcommit e92e8b9f7a20e11aa6c0d37bfaef95e1dba364a6[m
+Author: Maksim Miliutin <maksim.milutin06@gmail.com>
+Date:   Mon Sep 21 12:21:15 2026 +0300
+
+    write the report to a file
+
+[33mcommit 712c817f172f6e00fe42a5d2ef0811fb4bbc46c2[m
+Author: Maksim Miliutin <maksim.milutin06@gmail.com>
+Date:   Mon Sep 21 12:10:16 2026 +0300
+
+    check on a timer
+
+[33mcommit 6d79679ae2f4a363cdcc8d0b004a70857c5188a5[m
+Author: Maksim Miliutin <maksim.milutin06@gmail.com>
+Date:   Mon Sep 21 11:40:12 2026 +0300
+
+    seal the hot path down
+
+[33mcommit d83f7504659655445dc232029127fa10dc1ca3b3[m
+Author: Maksim Miliutin <maksim.milutin06@gmail.com>
+Date:   Mon Sep 21 11:31:53 2026 +0300
+
+    write down the voice way
+
+[33mcommit 3a430a2841b50a6131c3fa6969a80cc68d587f5d[m
+Author: Maksim Miliutin <maksim.milutin06@gmail.com>
+Date:   Mon Sep 21 11:27:30 2026 +0300
+
+    take the voice ports
+
+[33mcommit 9871b57f667706a06844cec9339c200981062141[m
+Author: Maksim Miliutin <maksim.milutin06@gmail.com>
+Date:   Mon Sep 21 11:07:47 2026 +0300
+
+    put a recorded datagram first
+
+[33mcommit fd06734154cc5486cd17c2715296fd8c035c6d4a[m
+Author: Maksim Miliutin <maksim.milutin06@gmail.com>
+Date:   Mon Sep 21 10:45:13 2026 +0300
+
+    put a recorded datagram first
+
+[33mcommit 67f2fc81fec41482d639906ef0af9132feae5021[m
+Author: Maksim Miliutin <maksim.milutin06@gmail.com>
+Date:   Mon Sep 21 09:33:34 2026 +0300
+
+    tell a voice datagram apart
+
+[33mcommit 7c6c92a1ac9dacb77c1a72ca6fdd445fcaadaaa8[m
+Author: Maksim Miliutin <maksim.milutin06@gmail.com>
+Date:   Mon Sep 21 09:09:54 2026 +0300
+
+    drop a build leftover
+
+[33mcommit e1258fc880312f5590ff21ef862e830161d7133d[m
+Author: Maksim Miliutin <maksim.milutin06@gmail.com>
+Date:   Mon Sep 21 08:57:57 2026 +0300
+
+    seal a datagram
+
+[33mcommit fabdb8dac577952ffd382d26ea7f34ade372befb[m
+Author: Maksim Miliutin <maksim.milutin06@gmail.com>
+Date:   Sun Sep 20 11:25:49 2026 +0300
+
+    ignore a hello with no name
+
+[33mcommit 171c2b61bbf8e81d5a87f7e951d23a5abf4d88dd[m
+Author: Maksim Miliutin <maksim.milutin06@gmail.com>
+Date:   Sun Sep 20 11:25:49 2026 +0300
+
+    send nothing for an empty tail
+
+[33mcommit 62332e84cf512584414dcc16d6eed38e612b9968[m
+Author: Maksim Miliutin <maksim.milutin06@gmail.com>
+Date:   Sun Sep 20 11:25:48 2026 +0300
+
+    show what was counted
+
+[33mcommit 25b042bb6871d65cb41db791b647f1ced30ccafa[m
+Author: Maksim Miliutin <maksim.milutin06@gmail.com>
+Date:   Sun Sep 20 10:33:25 2026 +0300
+
+    cancel stale ci runs
+
+[33mcommit b81858281ec7e12da83523874c20c15f1dfd5c07[m
+Author: Maksim Miliutin <maksim.milutin06@gmail.com>
+Date:   Sun Sep 20 10:30:34 2026 +0300
+
+    least privilege in ci + new read me
+
+[33mcommit 0c6559be8de04fd9e353e00384712a9c87f97332[m
+Author: Maksim Miliutin <maksim.milutin06@gmail.com>
+Date:   Sun Sep 20 10:29:18 2026 +0300
+
+    say a sweep needs traffic
+
+[33mcommit 141ad3bfbc8be41fb122fc5cf5474da7ec348aac[m
+Author: Maksim Miliutin <maksim.milutin06@gmail.com>
+Date:   Sun Sep 20 10:20:17 2026 +0300
+
+    close the driver on interrupt
+
+[33mcommit 7f8acc2d882fb4660a3a8b2ba1ffdb939d105383[m
+Author: Maksim Miliutin <maksim.milutin06@gmail.com>
+Date:   Sun Sep 20 10:17:06 2026 +0300
+
+    several hosts per rule
+
+[33mcommit 8e3e4feea86a93cbc2f2507af0c0dd7300c8ed18[m
+Author: Maksim Miliutin <maksim.milutin06@gmail.com>
+Date:   Sun Sep 20 09:28:36 2026 +0300
+
+    drop logs from the repo
+
+[33mcommit 36d3967e86049b9ccf4c8e52d85fd79052033bfc[m
+Author: Maksim Miliutin <maksim.milutin06@gmail.com>
+Date:   Sun Sep 20 09:19:51 2026 +0300
+
+    say each thing once
+
+[33mcommit 09cde85de0ed9ef63a52563c27bf9a8433bdc50c[m
+Author: Maksim Miliutin <maksim.milutin06@gmail.com>
+Date:   Sun Sep 20 09:16:03 2026 +0300
+
+    stop blaming the way for a retry
+
+[33mcommit 724173f3ca7223ebf819264c6b05f211f200e79f[m
+Author: Maksim Miliutin <maksim.milutin06@gmail.com>
+Date:   Sat Sep 19 17:07:41 2026 +0300
+
+    say what else works
+
+[33mcommit f3f3138acf0386e5dcc6752a58a2e5f090f1e656[m
+Author: Maksim Miliutin <maksim.milutin06@gmail.com>
+Date:   Sat Sep 19 16:57:02 2026 +0300
+
+    one job per hello
+
+[33mcommit 63b83813180015e4b84400ed8893f6285387ed31[m
+Author: Maksim Miliutin <maksim.milutin06@gmail.com>
+Date:   Sat Sep 19 16:14:17 2026 +0300
+
+    name what rules miss
+
+[33mcommit aacee25f733dd0f1b267abeed9691ef39e3a3de0[m
+Author: Maksim Miliutin <maksim.milutin06@gmail.com>
+Date:   Sat Sep 19 13:36:39 2026 +0300
+
+    judge by bytes carried
+
+[33mcommit ae13ac201cf0025d11024d2189365fb372554aa3[m
+Author: Maksim Miliutin <maksim.milutin06@gmail.com>
+Date:   Sat Sep 19 13:31:09 2026 +0300
+
+    plan takes one struct
+
+[33mcommit 0622a61c1266f49da988a377dc414f7fd7591c73[m
+Author: Maksim Miliutin <maksim.milutin06@gmail.com>
+Date:   Sat Sep 19 12:07:30 2026 +0300
+
+    load rules from file
+
+[33mcommit 60d717d88d25d0b08095ca0685647b848f289c3a[m
+Author: Maksim Miliutin <maksim.milutin06@gmail.com>
+Date:   Fri Sep 18 12:04:47 2026 +0300
+
+    sweep hostfake first
+
+[33mcommit fd684711a651291b68063311dc175640a7de6cfd[m
+Author: Maksim Miliutin <maksim.milutin06@gmail.com>
+Date:   Fri Sep 18 09:38:40 2026 +0300
+
+    say what actually works
+
+[33mcommit e635bd6ad89f01be99041bc84d8fa823aa7abc00[m
+Author: Maksim Miliutin <maksim.milutin06@gmail.com>
+Date:   Fri Sep 18 09:10:11 2026 +0300
+
+    make up a plausible name
+
+[33mcommit 82a1ae4b3d941b932cfb4e944b45174196041b20[m
+Author: Maksim Miliutin <maksim.milutin06@gmail.com>
+Date:   Thu Sep 17 18:30:05 2026 +0300
+
+    no copy
+
+[33mcommit a9d85f4d8d3d5cc5863c717e707697379fcd1c37[m
+Author: Maksim Miliutin <maksim.milutin06@gmail.com>
+Date:   Thu Sep 17 17:41:44 2026 +0300
+
+    move the timestamp less
+
+[33mcommit 3acc1e261c96ef1a3773f48ffdb59745dee04f4f[m
+Author: Maksim Miliutin <maksim.milutin06@gmail.com>
+Date:   Thu Sep 17 12:55:43 2026 +0300
+
+    let badseq go backwards
+
+[33mcommit 7880d39302fd98bc7985f7cbe7631416449b1a37[m
+Author: Maksim Miliutin <maksim.milutin06@gmail.com>
+Date:   Thu Sep 17 12:44:26 2026 +0300
+
+    drop a field nobody reads
+
+[33mcommit 436d12e2d8f84356e4064bf4ff9ca22db0633ba3[m
+Author: Maksim Miliutin <maksim.milutin06@gmail.com>
+Date:   Thu Sep 17 12:33:30 2026 +0300
+
+    forget links once told about
+
+[33mcommit 1e51530b24e5cdd39e540673a91f5f106df5043b[m
+Author: Maksim Miliutin <maksim.milutin06@gmail.com>
+Date:   Thu Sep 17 12:14:53 2026 +0300
+
+    try the new ways too
+
+[33mcommit 01f1074359efd8637b3b97bc4f2d35878af0e7c3[m
+Author: Maksim Miliutin <maksim.milutin06@gmail.com>
+Date:   Thu Sep 17 12:03:51 2026 +0300
+
+    build candidates directly
+
+[33mcommit 1ab6c3ec23e09788e915fcfbaad1006b34b9847e[m
+Author: Maksim Miliutin <maksim.milutin06@gmail.com>
+Date:   Thu Sep 17 11:55:18 2026 +0300
+
+    one table of ways
+
+[33mcommit a0ab5072fa0aeee436fd198d6f78b411813f1167[m
+Author: Maksim Miliutin <maksim.milutin06@gmail.com>
+Date:   Wed Sep 16 17:34:58 2026 +0300
+
+    let decoys change size
+
+[33mcommit 3c971fe578a36fc172ec0a516f608b661ce2c429[m
+Author: Maksim Miliutin <maksim.milutin06@gmail.com>
+Date:   Wed Sep 16 14:17:41 2026 +0300
+
+    send the halves backwards
+
+[33mcommit b6f358cd2b1241dcd6f4d0a0d7600da1a43b6843[m
+Author: Maksim Miliutin <maksim.milutin06@gmail.com>
+Date:   Wed Sep 16 13:39:04 2026 +0300
+
+    count bytes not packets
+
+[33mcommit 79d3d4ec6f7cfb0ea063b7377d4d9c3390af634b[m
+Author: Maksim Miliutin <maksim.milutin06@gmail.com>
+Date:   Wed Sep 16 12:55:45 2026 +0300
+
+    stop refusing split hellos
+
+[33mcommit d46252bb484cfa5f4bcd53c6229f8958f1fc02ac[m
+Author: Maksim Miliutin <maksim.milutin06@gmail.com>
+Date:   Wed Sep 16 12:31:53 2026 +0300
+
+    age the timestamp
+
+[33mcommit b717b6614a42ff58029221737a5d8027e384c64a[m
+Author: Maksim Miliutin <maksim.milutin06@gmail.com>
+Date:   Tue Sep 15 17:04:40 2026 +0300
+
+    rename the hello
+
+[33mcommit 4e1696d9622194933f7ecf046ca1ad1960706d27[m
+Author: Maksim Miliutin <maksim.milutin06@gmail.com>
+Date:   Tue Sep 15 12:37:37 2026 +0300
+
+    fake from a file
+
+[33mcommit bbb33f4df49b7bb50c58f48f3137484a6a998468[m
+Author: Maksim Miliutin <maksim.milutin06@gmail.com>
+Date:   Tue Sep 15 12:28:06 2026 +0300
+
+    one place to seal
+
+[33mcommit aa5f6767950e597784d57fdc3f5a858824327bbd[m
+Author: Maksim Miliutin <maksim.milutin06@gmail.com>
+Date:   Tue Sep 15 11:13:34 2026 +0300
+
+    split reading from stretching
+
+[33mcommit 3791c7f2763f382c34419f6e6cb5ad84fc130c39[m
+Author: Maksim Miliutin <maksim.milutin06@gmail.com>
+Date:   Tue Sep 15 11:13:27 2026 +0300
+
+    prefix bypass errors
+
+[33mcommit 588c157820d953d83c015bd20550e0a6e35bad6a[m
+Author: Maksim Miliutin <maksim.milutin06@gmail.com>
+Date:   Tue Sep 15 11:05:11 2026 +0300
+
+    guard the sweep
+
+[33mcommit 66abd5b8629fb1240f498dce7849072950a9423e[m
+Author: Maksim Miliutin <maksim.milutin06@gmail.com>
+Date:   Tue Sep 15 10:55:40 2026 +0300
+
+    send the copy again
+
+[33mcommit 58a6c77cb7e380020922b5484574fdcbe97e7051[m
+Author: Maksim Miliutin <maksim.milutin06@gmail.com>
+Date:   Tue Sep 15 10:20:51 2026 +0300
+
+    one owner for ports
+
+[33mcommit 91e438281285fbb1625cd29baaea645dea4d3c24[m
+Author: Maksim Miliutin <maksim.milutin06@gmail.com>
+Date:   Tue Sep 15 09:54:03 2026 +0300
+
+    move engine into bypass
+
+[33mcommit 1765e3fa3415972fe4cf290ff57a1bbad3a3cd8f[m
+Author: Maksim Miliutin <maksim.milutin06@gmail.com>
+Date:   Sun Sep 13 20:17:48 2026 +0300
+
+    catch every discord port
+
+[33mcommit 8ac40e49a3237f4931271c43e2e281502d706e3d[m
+Author: Maksim Miliutin <maksim.milutin06@gmail.com>
+Date:   Sun Sep 13 19:04:43 2026 +0300
+
+    lay a recorded hello over
+
+[33mcommit a21b833b5e27727540fb411739598ae9e2407b66[m
+Author: Maksim Miliutin <maksim.milutin06@gmail.com>
+Date:   Sun Sep 13 18:36:30 2026 +0300
+
+    lay a recorded hello over
+
+[33mcommit 228eb41a665daa00cbe770a9535d3103844996bf[m
+Author: Maksim Miliutin <maksim.milutin06@gmail.com>
+Date:   Sun Sep 13 17:02:55 2026 +0300
+
+    tell closed from killed
+
+[33mcommit 4905641da71f0d59ac172c6de84417244bc8c855[m
+Author: Maksim Miliutin <maksim.milutin06@gmail.com>
+Date:   Sun Sep 13 16:48:50 2026 +0300
+
+    follow each connection
+
+[33mcommit 3c4ed37a48a3a0e2cfae0da1c60d73f944b5401f[m
+Author: Maksim Miliutin <maksim.milutin06@gmail.com>
+Date:   Sun Sep 13 16:31:30 2026 +0300
+
+    count watched replies
+
+[33mcommit 7df05229436c5a41814a793838fcd6cb53ee373d[m
+Author: Maksim Miliutin <maksim.milutin06@gmail.com>
+Date:   Sun Sep 13 15:58:10 2026 +0300
+
+    watch server replies
+
+[33mcommit 0b3731e1f6be197a4f601470ed1b693b085c75d4[m
+Author: Maksim Miliutin <maksim.milutin06@gmail.com>
+Date:   Sun Sep 13 15:30:15 2026 +0300
+
+    sweep for a working way
+
+[33mcommit 2b6521e352a1a9ca6ec503431c5307d1b62033dd[m
+Author: Maksim Miliutin <maksim.milutin06@gmail.com>
+Date:   Sun Sep 13 14:27:09 2026 +0300
+
+    spot retransmitted hellos
+
+[33mcommit f18684334db3fb41449243714906292769151396[m
+Author: Maksim Miliutin <maksim.milutin06@gmail.com>
+Date:   Sun Sep 13 14:16:53 2026 +0300
+
+    rules per site
+
+[33mcommit d2a35a8648a45ea8c133534c8d7938f73559c9ed[m
+Author: Maksim Miliutin <maksim.milutin06@gmail.com>
+Date:   Sun Sep 13 13:20:42 2026 +0300
+
+    drop outgoing quic
+
+[33mcommit 355982e43ac992843de442810cd4000bdaa70cd7[m
+Author: Maksim Miliutin <maksim.milutin06@gmail.com>
+Date:   Sun Sep 13 12:38:03 2026 +0300
+
+    watch several hosts
+
+[33mcommit fc19eb17934d6b3c8237dafe80eb07b6abfb7b50[m
+Author: Maksim Miliutin <maksim.milutin06@gmail.com>
+Date:   Sun Sep 13 12:22:20 2026 +0300
+
+    send decoy before cut
+
+[33mcommit 59a091b9b5a9662ba123651c5a107ff596fb124b[m
+Author: Maksim Miliutin <maksim.milutin06@gmail.com>
+Date:   Sun Sep 13 11:56:27 2026 +0300
+
+    add decoy name
+
+[33mcommit 19164d6c977236801cdf6c0c23e9fad4eb9f124e[m
+Author: Maksim Miliutin <maksim.milutin06@gmail.com>
+Date:   Sun Sep 13 11:26:29 2026 +0300
+
+    split real hello
+
+[33mcommit 72b0a39bb004eb129c518d30fedcb768e700f805[m
+Author: Maksim Miliutin <maksim.milutin06@gmail.com>
+Date:   Sun Sep 13 10:49:56 2026 +0300
+
+    add bedsum copy
+
+[33mcommit 7ac2f325804c1502be80545b73a9eba5d769b0f7[m
+Author: Maksim Miliutin <maksim.milutin06@gmail.com>
+Date:   Sun Sep 13 10:04:20 2026 +0300
+
+    add badseq copy
+
+[33mcommit 49fa8be2c0b813a632e792689767b762da0ddc32[m
+Author: Maksim Miliutin <maksim.milutin06@gmail.com>
+Date:   Sat Sep 12 23:34:55 2026 +0300
+
+    send first copy
+
+[33mcommit 4c5558e6f88c51b51205b9d0ac964c7cf5ca7201[m
+Author: Maksim Miliutin <maksim.milutin06@gmail.com>
+Date:   Sat Sep 12 22:07:37 2026 +0300
+
+    forge packet copy
+
+[33mcommit 5810c805d3b3efa6a44a8f162fdfccd438e046b1[m
+Author: Maksim Miliutin <maksim.milutin06@gmail.com>
+Date:   Sat Sep 12 22:04:26 2026 +0300
+
+    normalize line endings
+
+[33mcommit 40250d67f5bde86a547c173db4c958140c1cf36f[m
+Author: Maksim Miliutin <maksim.milutin06@gmail.com>
+Date:   Sat Sep 12 21:59:54 2026 +0300
+
+    compute checksums
+
+[33mcommit c48af12bb05d9ccc0e511c342c4d255d950d6bb8[m
+Author: Maksim Miliutin <maksim.milutin06@gmail.com>
+Date:   Sat Sep 12 21:35:55 2026 +0300
+
+    pass packets through
+
+[33mcommit f8344bb631c8f09fd31d64df42230ba7cc10c687[m
+Author: Maksim Miliutin <maksim.milutin06@gmail.com>
+Date:   Sat Sep 12 20:56:49 2026 +0300
+
+    open windivert handle +
+
+[33mcommit 714ad72efb5a14bc65250048a70c86563f7677a0[m
+Author: Maksim Miliutin <maksim.milutin06@gmail.com>
+Date:   Sat Sep 12 19:38:47 2026 +0300
+
+    build windivert filter
+
+[33mcommit 969e9ca7721f21c33399152f6b9c2bc71568094f[m
+Author: Maksim Miliutin <maksim.milutin06@gmail.com>
+Date:   Sat Sep 12 15:44:44 2026 +0300
+
+    parse udp datagram
+
+[33mcommit def2f072f254f81ef0d33497e26bb1744f18f75a[m
+Author: Maksim Miliutin <maksim.milutin06@gmail.com>
+Date:   Sat Sep 12 15:07:19 2026 +0300
+
+    find server name
+
+[33mcommit cd67ae451c1f3c0670dfde08452e8a2153e54fff[m
+Author: Maksim Miliutin <maksim.milutin06@gmail.com>
+Date:   Sat Sep 12 14:27:43 2026 +0300
+
+    parse tls client hello
+
+[33mcommit 015a375ef02eca36737cad61220dea3a39658379[m
+Author: Maksim Miliutin <maksim.milutin06@gmail.com>
+Date:   Sat Sep 12 14:03:45 2026 +0300
+
+    parse tcp header
+
+[33mcommit f149db83f674a4edadf35c0743d9b845f2a49b02[m
+Author: Maksim Miliutin <maksim.milutin06@gmail.com>
+Date:   Sat Sep 12 12:54:01 2026 +0300
+
+    parse ip header
+
+[33mcommit 70baade74f9cd61312c7697ea161469bf634a930[m
+Author: Maksim Miliutin <maksim.milutin06@gmail.com>
+Date:   Sat Sep 12 12:47:57 2026 +0300
+
+    empty repository

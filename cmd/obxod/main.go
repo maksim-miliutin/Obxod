@@ -10,15 +10,13 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
-	"obxod/internal/bypass"
 	"obxod/internal/cut"
-	"obxod/internal/divert"
 	"obxod/internal/filter"
 	"obxod/internal/probe"
 	"obxod/internal/rules"
+	"obxod/internal/runner"
 	"obxod/internal/sweep"
 )
 
@@ -127,31 +125,6 @@ func run() error {
 		fmt.Printf("fake: %d bytes from %s\n", len(recorded), *fakeFile)
 	}
 
-	outbound, err := filter.Outbound(filter.Ports{TCP: ports, Voice: voice, QUIC: *noQUIC})
-	if err != nil {
-		return err
-	}
-
-	watching, err := filter.Replies(ports)
-	if err != nil {
-		return err
-	}
-
-	wire, err := divert.Open(outbound, divert.Modify)
-	if err != nil {
-		return err
-	}
-	defer wire.Close()
-
-	eyes, err := divert.Open(watching, divert.Sniff)
-	if err != nil {
-		return fmt.Errorf("cannot watch replies: %w", err)
-	}
-	defer eyes.Close()
-
-	stopped := onInterrupt(wire, eyes)
-	defer stopped()
-
 	var voiced []byte
 
 	if *voicedFile != "" {
@@ -173,9 +146,11 @@ func run() error {
 		report = writing(written)
 	}
 
-	engine := bypass.New(bypass.Settings{
+	session, err := runner.Open(runner.Config{
 		Rules:    base,
 		Hunt:     hunt,
+		Ports:    ports,
+		Voice:    voice,
 		Pattern:  pattern,
 		Recorded: recorded,
 		Voiced:   voiced,
@@ -185,35 +160,27 @@ func run() error {
 		Seen:     *seen,
 		Report:   report,
 	})
-
-	if err := engine.Run(wire, eyes); err != nil && !stopped() {
+	if err != nil {
 		return err
 	}
+	defer session.Stop()
 
-	return nil
+	onInterrupt(session.Stop)
+
+	return session.Run()
 }
 
-// Ctrl+C kills the process where it stands, so the deferred closes never run and
-// the driver is left holding handles until Windows notices. Closing them here
-// makes the loop fail, which is why the caller asks whether that was us.
-func onInterrupt(handles ...io.Closer) func() bool {
-	var asked atomic.Bool
-
+// Ctrl+C kills the process where it stands, so nothing deferred runs and the
+// driver keeps its handles. This turns the signal into a stop, which closes them.
+func onInterrupt(stop func()) {
 	notice := make(chan os.Signal, 1)
 	signal.Notify(notice, os.Interrupt)
 
 	go func() {
 		<-notice
-		asked.Store(true)
-
 		fmt.Println("stopping")
-
-		for _, h := range handles {
-			h.Close()
-		}
+		stop()
 	}()
-
-	return asked.Load
 }
 
 // A zero seqovl means the overlap reaches back over the whole recording.

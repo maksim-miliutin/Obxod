@@ -33,20 +33,23 @@ jobs:
         with:
           go-version-file: go.mod
 
+      # Format covers the fyne command too: gofmt needs no build.
       - name: format
         shell: bash
         run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
 
+      # Engine only. cmd/obxod-ui pulls in fyne (CGO, GL, Windows), which no
+      # runner can build; it is Windows-only and checked by hand.
       - name: vet
-        run: go vet ./...
+        run: go vet ./cmd/obxod ./internal/...
 
       - name: build
-        run: go build ./...
+        run: go build ./cmd/obxod ./internal/...
 
       - name: test
-        run: go test ./...
+        run: go test ./cmd/obxod ./internal/...
 
       # Needs a C compiler, which the windows runner has no reason to carry.
       - name: race
         if: matrix.os == 'ubuntu-latest'
-        run: go test -race ./...
+        run: go test -race ./cmd/obxod ./internal/...

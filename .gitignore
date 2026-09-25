@@ -18,3 +18,7 @@ ACTIVE_DISCORD_UDP.bin
 
 *.etl
 *.txt
+
+*.syso
+/obxod-ui.exe
+*.exe~
