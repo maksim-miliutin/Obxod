@@ -1,5 +1,7 @@
 package main
 
+//go:generate rsrc -manifest obxod-ui.manifest -arch amd64 -o rsrc_windows_amd64.syso
+
 import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
