@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"image/color"
 	"strings"
+	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
@@ -14,6 +15,7 @@ import (
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/widget"
 
+	"obxod/internal/meter"
 	"obxod/internal/preset"
 	"obxod/internal/runner"
 )
@@ -32,10 +34,13 @@ func main() {
 	word := widget.NewLabel("Выключено")
 	count := widget.NewLabel(fmt.Sprintf("Обходится сайтов: %d", len(hosts)))
 	list := widget.NewLabel(strings.Join(hosts, "\n"))
+	speed := widget.NewLabel("↓ —")
 
 	chosen := preset.All()[0]
 
 	var session *runner.Session
+	var rate meter.Rate
+
 	button := widget.NewButton("Включить", nil)
 
 	turnOff := func() {
@@ -57,6 +62,7 @@ func main() {
 		}
 
 		session = started
+		rate = meter.Rate{}
 		go session.Run()
 
 		dot.Color = working
@@ -90,6 +96,20 @@ func main() {
 	})
 	choose.SetSelected(chosen.Name)
 
+	go func() {
+		for range time.Tick(time.Second) {
+			fyne.Do(func() {
+				if session == nil {
+					speed.SetText("↓ —")
+
+					return
+				}
+
+				speed.SetText("↓ " + meter.Human(rate.Sample(session.Downloaded(), time.Now())))
+			})
+		}
+	}()
+
 	top := container.NewVBox(
 		container.NewHBox(dot, word),
 		button,
@@ -97,7 +117,7 @@ func main() {
 		choose,
 		count,
 	)
-	window.SetContent(container.NewBorder(top, nil, nil, nil, container.NewVScroll(list)))
+	window.SetContent(container.NewBorder(top, speed, nil, nil, container.NewVScroll(list)))
 	window.Resize(fyne.NewSize(360, 420))
 
 	window.ShowAndRun()
