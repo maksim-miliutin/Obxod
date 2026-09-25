@@ -408,3 +408,7 @@ func (e *Engine) tally() string {
 
 	return strings.Join(out, ", ")
 }
+
+func (e *Engine) Downloaded() int {
+	return e.health.Total()
+}

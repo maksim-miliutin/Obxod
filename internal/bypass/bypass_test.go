@@ -680,3 +680,9 @@ func TestLinesFoldByTheirFirstWord(t *testing.T) {
 		t.Errorf("tally = %q, want the names folded into one", said)
 	}
 }
+
+func TestDownloadedStartsAtZero(t *testing.T) {
+	if n := New(Settings{Report: func(string) {}}).Downloaded(); n != 0 {
+		t.Fatalf("Downloaded on a fresh engine = %d, want 0", n)
+	}
+}

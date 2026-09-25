@@ -38,6 +38,10 @@ type Session struct {
 	stopped atomic.Bool
 }
 
+func DefaultPorts() []uint16 {
+	return []uint16{443, 2053, 2083, 2087, 2096, 8443}
+}
+
 func Open(cfg Config) (*Session, error) {
 	outbound, err := filter.Outbound(filter.Ports{TCP: cfg.Ports, Voice: cfg.Voice, QUIC: cfg.DropQUIC})
 	if err != nil {
@@ -102,4 +106,8 @@ func (s *Session) Stop() {
 			h.Close()
 		}
 	})
+}
+
+func (s *Session) Downloaded() int {
+	return s.engine.Downloaded()
 }
