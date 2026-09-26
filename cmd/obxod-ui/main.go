@@ -161,6 +161,13 @@ func main() {
 
 	caveat := widget.NewLabel("Не подошёл — попробуйте другой.\nУ разных провайдеров работают разные.")
 
+	startup := widget.NewCheck("Запускать при старте Windows", func(on bool) {
+		if err := setAutostart(on); err != nil {
+			dialog.ShowError(err, window)
+		}
+	})
+	startup.Checked = autostartOn()
+
 	entry := widget.NewEntry()
 	entry.SetPlaceHolder("instagram.com")
 
@@ -198,6 +205,7 @@ func main() {
 		widget.NewLabel("Способ:"),
 		choose,
 		caveat,
+		startup,
 		speed,
 	)
 
