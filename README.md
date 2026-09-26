@@ -7,6 +7,11 @@ arrive and matches the made up name; the server puts the stream back together by
 sequence number and gets the real one, because the real name follows and lands on
 top of the fake.
 
+There are two programs over the same engine: `obxod`, the console tool the rest of
+this file is about, and `obxod-ui`, a window over it for people who would rather
+click than type. The window is under "The window" below; everything else here is
+the engine both share.
+
 ## Build
 
     go build ./cmd/obxod
@@ -27,6 +32,38 @@ administrator privileges are for. To remove it, delete both files and reboot.
 Nothing goes out until `-wet` is given. Without it the program only reports what
 it would have sent, which is the safe way to see whether a site is recognised at
 all.
+
+## The window
+
+`obxod-ui` is a single window over the same engine. A button turns the bypass on
+and off, a dropdown picks one of a few tested ways, a field adds your own sites
+with a delete beside each, and a line shows the download speed of the bypassed
+traffic. It asks for administrator rights on launch, the same the driver needs.
+
+It bypasses what the engine bypasses: the built in sites (Discord, YouTube, X) and
+whatever you add. It does not speed up what is not blocked and it does not beat
+throttling — a site `-check` calls clear will not go faster through it.
+
+### Building the window
+
+The window uses fyne, which needs cgo and a C compiler. On Windows install gcc
+(w64devkit, say) and turn cgo on:
+
+    go env -w CGO_ENABLED=1
+
+The administrator manifest compiles into a .syso with rsrc, generated rather than
+committed:
+
+    go install github.com/akavel/rsrc@latest
+    go generate ./cmd/obxod-ui
+
+Then build without a console window:
+
+    go build -ldflags -H=windowsgui ./cmd/obxod-ui
+
+It needs the same WinDivert files next to it as the console does. Windows may warn
+"unknown publisher" the first time — the program is unsigned, so choose More info,
+then Run anyway.
 
 ## Rules
 
