@@ -31,7 +31,7 @@ var (
 )
 
 func main() {
-	a := app.New()
+	a := app.NewWithID("io.obxod.ui")
 	a.Settings().SetTheme(obxodTheme{})
 	window := a.NewWindow("Obxod")
 
@@ -64,6 +64,9 @@ func main() {
 	ownRows := container.NewVBox()
 
 	chosen := preset.All()[0]
+	if saved, ok := preset.Named(a.Preferences().String("method")); ok {
+		chosen = saved
+	}
 
 	var session *runner.Session
 	var rate meter.Rate
@@ -151,6 +154,7 @@ func main() {
 		}
 
 		chosen = found
+		a.Preferences().SetString("method", found.Name)
 		restart()
 	})
 	choose.SetSelected(chosen.Name)
