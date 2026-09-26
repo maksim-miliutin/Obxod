@@ -1,21 +1,28 @@
 package main
 
-//go:generate rsrc -manifest obxod-ui.manifest -arch amd64 -o rsrc_windows_amd64.syso
+//go:generate rsrc -manifest obxod-ui.manifest -ico icon.ico -arch amd64 -o rsrc_windows_amd64.syso
 
 import (
 	"fmt"
 	"image/color"
+	"os"
+	"path/filepath"
 	"strings"
+	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/driver/desktop"
 	"fyne.io/fyne/v2/widget"
 
+	"obxod/internal/logbook"
+	"obxod/internal/meter"
 	"obxod/internal/preset"
 	"obxod/internal/runner"
+	"obxod/internal/sites"
 )
 
 var (
@@ -24,18 +31,46 @@ var (
 )
 
 func main() {
-	window := app.New().NewWindow("Obxod")
+	a := app.NewWithID("io.obxod.ui")
+	a.Settings().SetTheme(obxodTheme{})
+	window := a.NewWindow("Obxod")
 
-	hosts := preset.Hosts()
+	driverErr := unpackDriver()
+
+	icon := fyne.NewStaticResource("icon.png", iconPNG)
+	a.SetIcon(icon)
+	window.SetIcon(icon)
+
+	if desk, ok := a.(desktop.App); ok {
+		desk.SetSystemTrayIcon(icon)
+		desk.SetSystemTrayMenu(fyne.NewMenu("Obxod",
+			fyne.NewMenuItem("Показать", window.Show),
+			fyne.NewMenuItem("Выход", a.Quit),
+		))
+	}
+
+	// The cross closes to the tray instead of quitting, so the bypass keeps running.
+	window.SetCloseIntercept(window.Hide)
+
+	own, _ := sites.Load(sitesFile())
+	book := logbook.New(200)
 
 	dot := canvas.NewText("●", idle)
 	word := widget.NewLabel("Выключено")
-	count := widget.NewLabel(fmt.Sprintf("Обходится сайтов: %d", len(hosts)))
-	list := widget.NewLabel(strings.Join(hosts, "\n"))
+	count := widget.NewLabel("")
+	speed := widget.NewLabel("Скорость: —")
+	logView := widget.NewLabel("")
+	always := widget.NewLabel(strings.Join(preset.Hosts(), "\n"))
+	ownRows := container.NewVBox()
 
 	chosen := preset.All()[0]
+	if saved, ok := preset.Named(a.Preferences().String("method")); ok {
+		chosen = saved
+	}
 
 	var session *runner.Session
+	var rate meter.Rate
+
 	button := widget.NewButton("Включить", nil)
 
 	turnOff := func() {
@@ -49,7 +84,7 @@ func main() {
 	}
 
 	turnOn := func() {
-		started, err := start(chosen)
+		started, err := start(chosen, own.List(), book.Add)
 		if err != nil {
 			dialog.ShowError(err, window)
 
@@ -57,6 +92,7 @@ func main() {
 		}
 
 		session = started
+		rate = meter.Rate{}
 		go session.Run()
 
 		dot.Color = working
@@ -64,6 +100,42 @@ func main() {
 		word.SetText("Работает")
 		button.SetText("Выключить")
 	}
+
+	restart := func() {
+		if session != nil {
+			turnOff()
+			turnOn()
+		}
+	}
+
+	save := func() {
+		if err := own.Save(sitesFile()); err != nil {
+			dialog.ShowError(err, window)
+		}
+	}
+
+	var show func()
+	show = func() {
+		count.SetText(fmt.Sprintf("Обходится сайтов: %d", len(preset.HostsWith(own.List()))))
+
+		ownRows.RemoveAll()
+
+		for _, name := range own.List() {
+			row := container.NewHBox(
+				widget.NewButton("×", func() {
+					own.Remove(name)
+					save()
+					show()
+					restart()
+				}),
+				widget.NewLabel(name),
+			)
+			ownRows.Add(row)
+		}
+
+		ownRows.Refresh()
+	}
+	show()
 
 	button.OnTapped = func() {
 		if session != nil {
@@ -82,29 +154,118 @@ func main() {
 		}
 
 		chosen = found
-
-		if session != nil {
-			turnOff()
-			turnOn()
-		}
+		a.Preferences().SetString("method", found.Name)
+		restart()
 	})
 	choose.SetSelected(chosen.Name)
 
-	top := container.NewVBox(
+	caveat := widget.NewLabel("Не подошёл — попробуйте другой.\nУ разных провайдеров работают разные.")
+
+	startup := widget.NewCheck("Запускать при старте Windows", func(on bool) {
+		if err := setAutostart(on); err != nil {
+			dialog.ShowError(err, window)
+		}
+	})
+	startup.Checked = autostartOn()
+
+	entry := widget.NewEntry()
+	entry.SetPlaceHolder("instagram.com")
+
+	add := widget.NewButton("Добавить сайт", func() {
+		if strings.TrimSpace(entry.Text) == "" {
+			return
+		}
+
+		own.Add(entry.Text)
+		save()
+		entry.SetText("")
+		show()
+		restart()
+	})
+
+	go func() {
+		for range time.Tick(time.Second) {
+			fyne.Do(func() {
+				logView.SetText(book.Text())
+
+				if session == nil {
+					speed.SetText("Скорость: —")
+
+					return
+				}
+
+				speed.SetText("Скорость: " + meter.Human(rate.Sample(session.Downloaded(), time.Now())))
+			})
+		}
+	}()
+
+	obhod := container.NewVBox(
 		container.NewHBox(dot, word),
 		button,
 		widget.NewLabel("Способ:"),
 		choose,
-		count,
+		caveat,
+		startup,
+		speed,
 	)
-	window.SetContent(container.NewBorder(top, nil, nil, nil, container.NewVScroll(list)))
-	window.Resize(fyne.NewSize(360, 420))
+
+	yourSites := container.NewBorder(
+		container.NewVBox(
+			container.NewBorder(nil, nil, nil, add, entry),
+			count,
+			widget.NewLabel("Ваши сайты:"),
+		),
+		nil, nil, nil,
+		container.NewVScroll(container.NewVBox(
+			ownRows,
+			widget.NewSeparator(),
+			widget.NewLabel("Всегда обходятся:"),
+			always,
+		)),
+	)
+
+	about := container.NewVBox(
+		widget.NewLabel("Obxod — обход DPI-блокировок."),
+		widget.NewLabel("Открывает то, что режут по имени хоста:\nDiscord, YouTube, X и добавленные вами."),
+		widget.NewSeparator(),
+		widget.NewLabel("При запуске Windows может сказать\n«неизвестный издатель» — это нормально,\nподписи пока нет: Подробнее, затем Всё равно запустить."),
+	)
+
+	logsTab := container.NewBorder(
+		widget.NewButton("Скопировать", func() {
+			window.Clipboard().SetContent(book.Text())
+		}),
+		nil, nil, nil,
+		container.NewScroll(logView),
+	)
+
+	tabs := container.NewAppTabs(
+		container.NewTabItem("Обход", obhod),
+		container.NewTabItem("Сайты", yourSites),
+		container.NewTabItem("Логи", logsTab),
+		container.NewTabItem("О программе", about),
+	)
+	window.SetContent(tabs)
+	window.Resize(fyne.NewSize(440, 620))
+
+	if driverErr != nil {
+		dialog.ShowError(driverErr, window)
+	}
 
 	window.ShowAndRun()
 }
 
-func start(p preset.Preset) (*runner.Session, error) {
-	set, err := p.Rules()
+func sitesFile() string {
+	exe, err := os.Executable()
+	if err != nil {
+		return "sites.txt"
+	}
+
+	return filepath.Join(filepath.Dir(exe), "sites.txt")
+}
+
+func start(p preset.Preset, extra []string, report func(string)) (*runner.Session, error) {
+	set, err := p.RulesVoice(extra)
 	if err != nil {
 		return nil, err
 	}
@@ -112,8 +273,10 @@ func start(p preset.Preset) (*runner.Session, error) {
 	return runner.Open(runner.Config{
 		Rules:    set,
 		Ports:    runner.DefaultPorts(),
+		Voice:    runner.DefaultVoice(),
+		Voiced:   voiceDatagram,
 		Wet:      true,
 		DropQUIC: true,
-		Report:   func(string) {},
+		Report:   report,
 	})
 }

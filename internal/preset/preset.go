@@ -6,7 +6,7 @@ import (
 	"obxod/internal/rules"
 )
 
-const blocked = "discord.com,discord.gg,discordapp.com,discordapp.net,discordcdn.com,discord.media,youtube.com,googlevideo.com,x.com"
+const blocked = "discord.com,discord.gg,discordapp.com,discordapp.net,discordcdn.com,discord.media,youtube.com,googlevideo.com,ytimg.com,x.com,twitter.com,twimg.com,t.co,instagram.com,cdninstagram.com,fbcdn.net,facebook.com,fbsbx.com,telegram.org,web.telegram.org,webk.telegram.org,webz.telegram.org,linkedin.com,licdn.com,soundcloud.com,sndcdn.com,rutracker.org,spotify.com,scdn.co,spotifycdn.com"
 
 type Preset struct {
 	Name string
@@ -48,6 +48,28 @@ func Hosts() []string {
 	return strings.Split(blocked, ",")
 }
 
+func HostsWith(extra []string) []string {
+	return append(Hosts(), extra...)
+}
+
 func (p Preset) Rules() (rules.Set, error) {
-	return rules.Several(blocked + "=" + p.way)
+	return p.RulesWith(nil)
+}
+
+func (p Preset) RulesWith(extra []string) (rules.Set, error) {
+	hosts := blocked
+	if len(extra) > 0 {
+		hosts += "," + strings.Join(extra, ",")
+	}
+
+	return rules.Several(hosts + "=" + p.way)
+}
+
+func (p Preset) RulesVoice(extra []string) (rules.Set, error) {
+	hosts := blocked
+	if len(extra) > 0 {
+		hosts += "," + strings.Join(extra, ",")
+	}
+
+	return rules.Several(hosts + "=" + p.way + ",fakeudp:5")
 }

@@ -64,3 +64,65 @@ func TestHostsAreTheBlockedSites(t *testing.T) {
 		}
 	}
 }
+
+func TestRulesWithKeepsBothPresetAndExtra(t *testing.T) {
+	set, err := All()[0].RulesWith([]string{"example.com"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, ok := set.For("example.com"); !ok {
+		t.Error("RulesWith dropped the extra host")
+	}
+
+	if _, ok := set.For("discord.com"); !ok {
+		t.Error("RulesWith dropped the preset hosts")
+	}
+}
+
+func TestRulesVoiceChangesTheDiscordRule(t *testing.T) {
+	for _, p := range All() {
+		plain, err := p.Rules()
+		if err != nil {
+			t.Fatalf("%s: %v", p.Name, err)
+		}
+
+		loud, err := p.RulesVoice(nil)
+		if err != nil {
+			t.Fatalf("%s: %v", p.Name, err)
+		}
+
+		before, _ := plain.For("discord.media")
+		after, _ := loud.For("discord.media")
+
+		if before.String() == after.String() {
+			t.Errorf("%s: voice left the discord rule unchanged (%q)", p.Name, after.String())
+		}
+	}
+}
+
+func TestBlockedCoversTheAddedSites(t *testing.T) {
+	set, err := All()[0].Rules()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, host := range []string{"instagram.com", "fbcdn.net", "web.telegram.org", "telegram.org"} {
+		if _, ok := set.For(host); !ok {
+			t.Errorf("preset misses %s", host)
+		}
+	}
+}
+
+func TestBlockedCoversTheNewServices(t *testing.T) {
+	set, err := All()[0].Rules()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, host := range []string{"twitter.com", "facebook.com", "linkedin.com", "soundcloud.com"} {
+		if _, ok := set.For(host); !ok {
+			t.Errorf("preset misses %s", host)
+		}
+	}
+}

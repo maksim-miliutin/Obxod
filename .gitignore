@@ -22,3 +22,8 @@ ACTIVE_DISCORD_UDP.bin
 *.syso
 /obxod-ui.exe
 *.exe~
+sites.txt
+cmd/obxod-ui/WinDivert*
+cmd/obxod-ui/ACTIVE_DISCORD_UDP.bin
+*.exe
+*.exe~
