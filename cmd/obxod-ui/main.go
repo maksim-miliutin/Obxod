@@ -31,6 +31,8 @@ var (
 func main() {
 	window := app.New().NewWindow("Obxod")
 
+	driverErr := unpackDriver()
+
 	own, _ := sites.Load(sitesFile())
 
 	dot := canvas.NewText("●", idle)
@@ -202,6 +204,10 @@ func main() {
 	)
 	window.SetContent(tabs)
 	window.Resize(fyne.NewSize(400, 520))
+
+	if driverErr != nil {
+		dialog.ShowError(driverErr, window)
+	}
 
 	window.ShowAndRun()
 }
