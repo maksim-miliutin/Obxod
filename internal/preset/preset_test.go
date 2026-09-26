@@ -113,3 +113,16 @@ func TestBlockedCoversTheAddedSites(t *testing.T) {
 		}
 	}
 }
+
+func TestBlockedCoversTheNewServices(t *testing.T) {
+	set, err := All()[0].Rules()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, host := range []string{"twitter.com", "facebook.com", "linkedin.com", "soundcloud.com"} {
+		if _, ok := set.For(host); !ok {
+			t.Errorf("preset misses %s", host)
+		}
+	}
+}
