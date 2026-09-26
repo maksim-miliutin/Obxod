@@ -1,221 +1,91 @@
-# Obxod :)
+# Obxod
 
-Bypasses DPI blocking of TLS on Windows. Intercepts outgoing packets through
-WinDivert, cuts the hello where the site name sits and puts a made up name of the
-very same size in its place. The inspector reads the packets in the order they
-arrive and matches the made up name; the server puts the stream back together by
-sequence number and gets the real one, because the real name follows and lands on
-top of the fake.
+Обход DPI-блокировок под Windows. Открывает сайты и сервисы, которые провайдер
+режет по имени хоста: на ходу подменяет имя в TLS-приветствии через драйвер
+WinDivert. Один проект, две формы — `obxod-ui` (окно) и `obxod` (консоль).
 
-There are two programs over the same engine: `obxod`, the console tool the rest of
-this file is about, and `obxod-ui`, a window over it for people who would rather
-click than type. The window is under "The window" below; everything else here is
-the engine both share.
+## Окно (obxod-ui)
 
-## Build
+Скачайте один файл `obxod-ui.exe` и запустите. Windows спросит права
+администратора (драйверу они нужны) — согласитесь. Драйвер вшит в exe и
+распаковывается рядом при первом запуске.
 
-    go build ./cmd/obxod
+Вкладки:
+- **Обход** — кнопка вкл/выкл, выбор способа, строка скорости.
+- **Сайты** — свои домены (добавить/убрать) и список тех, что обходятся всегда.
+- **Логи** — что делает движок, с кнопкой «Скопировать».
+- **О программе** — коротко о программе.
 
-## Run
+Способ не подошёл — попробуйте другой: у разных провайдеров работают разные.
+Обход открывает заблокированное по имени; он не ускоряет то, что не блокируют,
+и не пробивает блокировку по IP.
 
-Needs Windows, administrator privileges, and two files from WinDivert 2.2 sitting
-next to the executable:
+При первом запуске Windows может сказать «неизвестный издатель» (программа без
+подписи) — нажмите «Подробнее», затем «Всё равно запустить».
 
-    WinDivert.dll
-    WinDivert64.sys
+## Сборка окна
 
-Both come from the x64 folder of the official release at
-https://reqrypt.org/windivert.html and are signed by its author. The driver
-installs itself the first time the program opens it, which is what the
-administrator privileges are for. To remove it, delete both files and reboot.
-
-Nothing goes out until `-wet` is given. Without it the program only reports what
-it would have sent, which is the safe way to see whether a site is recognised at
-all.
-
-## The window
-
-`obxod-ui` is a single window over the same engine. A button turns the bypass on
-and off, a dropdown picks one of a few tested ways, a field adds your own sites
-with a delete beside each, and a line shows the download speed of the bypassed
-traffic. It asks for administrator rights on launch, the same the driver needs.
-
-It bypasses what the engine bypasses: the built in sites (Discord, YouTube, X) and
-whatever you add. It does not speed up what is not blocked and it does not beat
-throttling — a site `-check` calls clear will not go faster through it.
-
-### Building the window
-
-The window uses fyne, which needs cgo and a C compiler. On Windows install gcc
-(w64devkit, say) and turn cgo on:
+Нужен Go, C-компилятор (например w64devkit) и включённый cgo:
 
     go env -w CGO_ENABLED=1
-
-The administrator manifest compiles into a .syso with rsrc, generated rather than
-committed:
-
     go install github.com/akavel/rsrc@latest
     go generate ./cmd/obxod-ui
+    go build -ldflags -H=windowsgui -o obxod-ui.exe ./cmd/obxod-ui
 
-Then build without a console window:
+Рядом с `cmd/obxod-ui/main.go` должны лежать `WinDivert.dll`, `WinDivert64.sys`
+и `ACTIVE_DISCORD_UDP.bin` — они встраиваются через `//go:embed`.
 
-    go build -ldflags -H=windowsgui ./cmd/obxod-ui
+## Консоль (obxod)
 
-It needs the same WinDivert files next to it as the console does. Windows may warn
-"unknown publisher" the first time — the program is unsigned, so choose More info,
-then Run anyway.
+    go build ./cmd/obxod
+    obxod.exe -check discord.com               # режут ли сайт и как
+    obxod.exe -wet -noquic -rules rules.txt    # включить обход по правилам
 
-## Rules
+Флаги — запустите `obxod.exe` без аргументов; синтаксис правил — в коде.
 
-One rule per site, repeated as many times as there are sites. A bare domain
-covers its subdomains, so `discord.com` also covers `updates.discord.com`.
+---
 
-    host=way,way,way
+# Obxod (English)
 
-The host `all` is the default: it covers every name no other rule names. A site
-serves files from subdomains that change with every mirror or edge server
-(`2.na.dl.wireshark.org`, `rr7---sn-x.googlevideo.com`), and listing each is
-hopeless. One `all` rule reaches them; a named rule still beats it, so tuned
-hosts keep their own ways.
+Bypasses DPI blocking on Windows. Opens sites a provider blocks by host name, by
+swapping the name in the TLS handshake on the fly through the WinDivert driver.
+One project, two forms: `obxod-ui` (a window) and `obxod` (a console tool).
 
-    all=hostfake:mail.ru,ts
+## The window (obxod-ui)
 
-The catch: `all` touches every connection, including the ones that already work,
-and a way that suits one site can break another. It is the widest net, not the
-safest. Name the sites you can and keep `all` for the tail.
+Download the single `obxod-ui.exe` and run it. Windows asks for administrator
+rights (the driver needs them) — allow it. The driver is embedded in the exe and
+unpacked next to it on first run.
 
-Run `obxod.exe -h` for the ways and what each one does.
+Tabs:
+- **Обход (Bypass)** — an on/off button, a method picker, a speed line.
+- **Сайты (Sites)** — your own domains (add/remove) and the always-on list.
+- **Логи (Logs)** — what the engine is doing, with a Copy button.
+- **О программе (About)** — a short note.
 
-A site usually lives on more than one domain, and a missing one is invisible: the
-program says nothing about traffic no rule covers. Discord, for instance, serves
-its own content from `discordapp.com`, which `discord.com` does not cover.
+If a method does not work, try another: providers differ. The bypass opens what
+is blocked by name; it does not speed up what is not blocked, and it does not
+defeat blocking by IP.
 
-## What works
+On first run Windows may warn "unknown publisher" (the program is unsigned) —
+choose More info, then Run anyway.
 
-Measured against one provider, so read it as a starting point rather than a
-setting. Keep the rules in a file and edit them as you find more names:
+## Building the window
 
-    # rules.txt: one line may name as many hosts as share the ways
-    discord.com,discord.gg,discordapp.com,discordapp.net,discordcdn.com,discord.media=hostfake:mail.ru,ts
-    youtube.com,ytimg.com,ggpht.com,googlevideo.com=hostfake:mail.ru,ts
-    x.com=hostfake:mail.ru,ts
+Needs Go, a C compiler (w64devkit, say) and cgo on:
 
+    go env -w CGO_ENABLED=1
+    go install github.com/akavel/rsrc@latest
+    go generate ./cmd/obxod-ui
+    go build -ldflags -H=windowsgui -o obxod-ui.exe ./cmd/obxod-ui
+
+`WinDivert.dll`, `WinDivert64.sys` and `ACTIVE_DISCORD_UDP.bin` must sit next to
+`cmd/obxod-ui/main.go`; they are embedded via `//go:embed`.
+
+## The console (obxod)
+
+    go build ./cmd/obxod
+    obxod.exe -check discord.com
     obxod.exe -wet -noquic -rules rules.txt
 
-The same rule carried Discord, YouTube and X whole. Browsers reach for HTTP/3
-first, and nothing here touches datagrams, so `-noquic` is what makes them fall
-back to tcp where the rules apply. It drops every outgoing quic datagram, not
-only the ones for these sites.
-
-A site lives on more names than anyone remembers, and one missing name is
-invisible: traffic no rule covers goes out untouched and nothing is said about it.
-`-seen` names each one once, which is how the list above was written.
-
-Not every name wants a rule. One that nobody blocks works better left alone, and a
-rule on it is one more thing to go wrong.
-
-    obxod.exe -wet -noquic -seen -rules rules.txt
-
-Three things about those rules took a week to find, and none of them is obvious.
-
-`hostfake` swaps the name inside the stream. Sending a whole forged hello ahead of
-the real one instead, which is the obvious move, gets the handshake through and
-then stalls around a fifth of the page: the inspector throws the forged copy away
-along with the server and reads the real name off the packets that follow.
-
-`ts` and nothing else. The fake has to be spoiled so the server drops it, but the
-inspector still has to read it. Moving the timestamp back leaves the sequence
-number where it belongs, so the fake stays in the stream. Moving the sequence
-number instead puts it outside the window and nobody reads it, which is the same
-as not sending it.
-
-`md5sig` is the other kind of spoiling, and it drops the fake by a different rule:
-it hangs an md5 signature option on the segment, which a server that never agreed
-to one must refuse, while the inspector reads straight past it. Every spoiling so
-far leans on the sequence number; this one leans on what the two ends negotiated,
-so it is worth a try where the numbers get nowhere.
-
-The name matters as much as the method. `hostfake:mail.ru` loads the whole page;
-the made up name the program picks on its own gets a third of it. The inspector
-reads the name and judges it.
-
-## Working out the rules for a site
-
-Start with nothing and let the program say what it wants.
-
-Run it with `-seen` and use the site for a minute. Every name no rule covers is
-named once, and that list is the rules to write. A site reaches a dozen names and
-nobody remembers them all.
-
-Add them with the ways that already work elsewhere, then look again. A name that
-still will not carry anything is the one to sweep:
-
-    obxod.exe -wet -noquic -sweep that.name -seconds 12 -rules rules.txt
-
-A sweep judges live traffic, so keep reloading the site while it runs; a browser
-sitting on an open page opens no new connections and the sweep has nothing to go
-on. It prints what carried the most, ready to paste back as a rule.
-
-Not every name needs a rule. A name nobody blocks works better left alone, and a
-rule on it is one more thing to go wrong.
-
-## Voice
-
-A call runs on datagrams, and nothing said above touches those. Discord opens one
-by asking a voice server what its own address is, and that question is what gets
-dropped; without an answer the client sits on Connecting forever.
-
-What carries it through is a recorded datagram sent ahead of the real one, the
-same idea as a forged hello and with no spoiling at all. Record it once, point
-`-fakeudp` at the file, and ask for it in a rule:
-
-    discord.media=hostfake:mail.ru,ts,fakeudp:5
-
-    obxod.exe -wet -noquic -fakeudp ACTIVE_DISCORD_UDP.bin -rules rules.txt
-
-The datagram goes in front of what opens a call and of stun messages, and in front
-of nothing else. Those ports carry games and the audio itself, and a fake put in
-front of either breaks what was working, so the payload decides rather than the
-port.
-
-Where a call is opened moves between versions. `-voice` takes the ranges if the
-built in ones stop matching.
-
-## Running in the background
-
-The program prints to the console, which is fine while a console is there. Built
-without one, or left running behind the interface, it has nowhere to print — so
-`-log` writes the same lines to a file instead, appending rather than overwriting.
-
-    obxod.exe -wet -noquic -log obxod.log -rules rules.txt
-
-## What a failure looks like
-
-A page that never arrives and a page that arrives saying no are different
-problems, and only the first one is this program's.
-
-    This service is not available in your region.
-
-That is the site answering. The connection got there, the name went through, and
-the service turned it down on the address it came from. Nothing here can change
-which address that is.
-
-An empty answer after a long wait is the other kind, and that is the one worth
-chasing with rules.
-
-## Checking
-
-The program has no diagnostics of its own, and whether a site loads is too coarse
-to tell one rule from another. Ask for a page large enough to need more than the
-first few packets, and watch the bytes rather than the status:
-
-    curl -s -m 25 -o NUL -w "%{http_code} %{size_download} bytes %{time_total}s" https://discord.com/app
-
-A handshake that gets through but a stream that stops early looks like a status of
-200 with a fraction of the bytes.
-
-What a run means depends on what is blocked at that moment, and that changes.
-Measure the same thing twice with the rule on and off, one right after the other,
-and compare the neighbours. A single run on its own says nothing.
-
-![](assets/smile.png)
+Run `obxod.exe` with no arguments for the flags; the rule syntax is in the code.
