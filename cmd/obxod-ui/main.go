@@ -1,6 +1,6 @@
 package main
 
-//go:generate rsrc -manifest obxod-ui.manifest -arch amd64 -o rsrc_windows_amd64.syso
+//go:generate rsrc -manifest obxod-ui.manifest -ico icon.ico -arch amd64 -o rsrc_windows_amd64.syso
 
 import (
 	"fmt"
@@ -15,6 +15,7 @@ import (
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/driver/desktop"
 	"fyne.io/fyne/v2/widget"
 
 	"obxod/internal/logbook"
@@ -30,9 +31,25 @@ var (
 )
 
 func main() {
-	window := app.New().NewWindow("Obxod")
+	a := app.New()
+	window := a.NewWindow("Obxod")
 
 	driverErr := unpackDriver()
+
+	icon := fyne.NewStaticResource("icon.png", iconPNG)
+	a.SetIcon(icon)
+	window.SetIcon(icon)
+
+	if desk, ok := a.(desktop.App); ok {
+		desk.SetSystemTrayIcon(icon)
+		desk.SetSystemTrayMenu(fyne.NewMenu("Obxod",
+			fyne.NewMenuItem("Показать", window.Show),
+			fyne.NewMenuItem("Выход", a.Quit),
+		))
+	}
+
+	// The cross closes to the tray instead of quitting, so the bypass keeps running.
+	window.SetCloseIntercept(window.Hide)
 
 	own, _ := sites.Load(sitesFile())
 	book := logbook.New(200)
