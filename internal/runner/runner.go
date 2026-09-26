@@ -38,6 +38,13 @@ type Session struct {
 	stopped atomic.Bool
 }
 
+func DefaultVoice() []filter.PortRange {
+	return []filter.PortRange{
+		{From: 19294, To: 19344},
+		{From: 50000, To: 50100},
+	}
+}
+
 func DefaultPorts() []uint16 {
 	return []uint16{443, 2053, 2083, 2087, 2096, 8443}
 }

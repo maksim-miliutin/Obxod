@@ -111,3 +111,10 @@ func TestDefaultPortsGiveTheFilterSomethingToCatch(t *testing.T) {
 		t.Fatalf("outbound filter on default ports: %v", err)
 	}
 }
+
+func TestDefaultVoiceHasTheDiscordRanges(t *testing.T) {
+	got := DefaultVoice()
+	if len(got) != 2 || got[0].From != 19294 || got[1].To != 50100 {
+		t.Fatalf("DefaultVoice = %v, want the two Discord ranges", got)
+	}
+}
