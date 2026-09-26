@@ -132,6 +132,8 @@ func main() {
 	})
 	choose.SetSelected(chosen.Name)
 
+	caveat := widget.NewLabel("Не подошёл — попробуйте другой.\nУ разных провайдеров работают разные.")
+
 	entry := widget.NewEntry()
 	entry.SetPlaceHolder("instagram.com")
 
@@ -161,23 +163,45 @@ func main() {
 		}
 	}()
 
-	top := container.NewVBox(
+	obhod := container.NewVBox(
 		container.NewHBox(dot, word),
 		button,
 		widget.NewLabel("Способ:"),
 		choose,
-		container.NewBorder(nil, nil, nil, add, entry),
-		count,
+		caveat,
+		speed,
 	)
-	body := container.NewVBox(
-		widget.NewLabel("Ваши сайты:"),
-		ownRows,
+
+	yourSites := container.NewBorder(
+		container.NewVBox(
+			container.NewBorder(nil, nil, nil, add, entry),
+			count,
+			widget.NewLabel("Ваши сайты:"),
+		),
+		nil, nil, nil,
+		container.NewVScroll(container.NewVBox(
+			ownRows,
+			widget.NewSeparator(),
+			widget.NewLabel("Всегда обходятся:"),
+			always,
+		)),
+	)
+
+	about := container.NewVBox(
+		widget.NewLabel("Obxod — обход DPI-блокировок."),
+		widget.NewLabel("Открывает то, что режут по имени хоста:\nDiscord, YouTube, X и добавленные вами."),
+		widget.NewLabel("Не ускоряет то, что не блокируют."),
 		widget.NewSeparator(),
-		widget.NewLabel("Всегда обходятся:"),
-		always,
+		widget.NewLabel("При запуске Windows может сказать\n«неизвестный издатель» — это нормально,\nподписи пока нет: Подробнее → Всё равно запустить."),
 	)
-	window.SetContent(container.NewBorder(top, speed, nil, nil, container.NewVScroll(body)))
-	window.Resize(fyne.NewSize(380, 520))
+
+	tabs := container.NewAppTabs(
+		container.NewTabItem("Обход", obhod),
+		container.NewTabItem("Сайты", yourSites),
+		container.NewTabItem("О программе", about),
+	)
+	window.SetContent(tabs)
+	window.Resize(fyne.NewSize(400, 520))
 
 	window.ShowAndRun()
 }
