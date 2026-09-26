@@ -17,6 +17,7 @@ import (
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/widget"
 
+	"obxod/internal/logbook"
 	"obxod/internal/meter"
 	"obxod/internal/preset"
 	"obxod/internal/runner"
@@ -34,11 +35,13 @@ func main() {
 	driverErr := unpackDriver()
 
 	own, _ := sites.Load(sitesFile())
+	book := logbook.New(200)
 
 	dot := canvas.NewText("●", idle)
 	word := widget.NewLabel("Выключено")
 	count := widget.NewLabel("")
 	speed := widget.NewLabel("↓ —")
+	logView := widget.NewLabel("")
 	always := widget.NewLabel(strings.Join(preset.Hosts(), "\n"))
 	ownRows := container.NewVBox()
 
@@ -60,7 +63,7 @@ func main() {
 	}
 
 	turnOn := func() {
-		started, err := start(chosen, own.List(), func(string) {})
+		started, err := start(chosen, own.List(), book.Add)
 		if err != nil {
 			dialog.ShowError(err, window)
 
@@ -154,6 +157,8 @@ func main() {
 	go func() {
 		for range time.Tick(time.Second) {
 			fyne.Do(func() {
+				logView.SetText(book.Text())
+
 				if session == nil {
 					speed.SetText("↓ —")
 
@@ -200,6 +205,7 @@ func main() {
 	tabs := container.NewAppTabs(
 		container.NewTabItem("Обход", obhod),
 		container.NewTabItem("Сайты", yourSites),
+		container.NewTabItem("Логи", container.NewVScroll(logView)),
 		container.NewTabItem("О программе", about),
 	)
 	window.SetContent(tabs)
