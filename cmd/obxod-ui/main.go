@@ -202,14 +202,23 @@ func main() {
 		widget.NewLabel("При запуске Windows может сказать\n«неизвестный издатель» — это нормально,\nподписи пока нет: Подробнее → Всё равно запустить."),
 	)
 
+	logsTab := container.NewBorder(
+		widget.NewButton("Скопировать", func() {
+			window.Clipboard().SetContent(book.Text())
+		}),
+		nil, nil, nil,
+		container.NewVScroll(logView),
+	)
+
 	tabs := container.NewAppTabs(
 		container.NewTabItem("Обход", obhod),
 		container.NewTabItem("Сайты", yourSites),
-		container.NewTabItem("Логи", container.NewVScroll(logView)),
+		container.NewTabItem("Логи", logsTab),
 		container.NewTabItem("О программе", about),
 	)
 	window.SetContent(tabs)
-	window.Resize(fyne.NewSize(400, 520))
+	window.Resize(fyne.NewSize(440, 600))
+	window.SetFixedSize(true)
 
 	if driverErr != nil {
 		dialog.ShowError(driverErr, window)
