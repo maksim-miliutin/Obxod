@@ -32,6 +32,7 @@ var (
 
 func main() {
 	a := app.New()
+	a.Settings().SetTheme(obxodTheme{})
 	window := a.NewWindow("Obxod")
 
 	driverErr := unpackDriver()
@@ -234,8 +235,7 @@ func main() {
 		container.NewTabItem("О программе", about),
 	)
 	window.SetContent(tabs)
-	window.Resize(fyne.NewSize(440, 600))
-	window.SetFixedSize(true)
+	window.Resize(fyne.NewSize(440, 620))
 
 	if driverErr != nil {
 		dialog.ShowError(driverErr, window)
