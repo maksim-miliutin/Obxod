@@ -36,15 +36,9 @@ func main() {
 	dot := canvas.NewText("●", idle)
 	word := widget.NewLabel("Выключено")
 	count := widget.NewLabel("")
-	list := widget.NewLabel("")
 	speed := widget.NewLabel("↓ —")
-
-	show := func() {
-		hosts := preset.HostsWith(own.List())
-		count.SetText(fmt.Sprintf("Обходится сайтов: %d", len(hosts)))
-		list.SetText(strings.Join(hosts, "\n"))
-	}
-	show()
+	always := widget.NewLabel(strings.Join(preset.Hosts(), "\n"))
+	ownRows := container.NewVBox()
 
 	chosen := preset.All()[0]
 
@@ -88,6 +82,35 @@ func main() {
 		}
 	}
 
+	save := func() {
+		if err := own.Save(sitesFile()); err != nil {
+			dialog.ShowError(err, window)
+		}
+	}
+
+	var show func()
+	show = func() {
+		count.SetText(fmt.Sprintf("Обходится сайтов: %d", len(preset.HostsWith(own.List()))))
+
+		ownRows.RemoveAll()
+
+		for _, name := range own.List() {
+			row := container.NewHBox(
+				widget.NewButton("×", func() {
+					own.Remove(name)
+					save()
+					show()
+					restart()
+				}),
+				widget.NewLabel(name),
+			)
+			ownRows.Add(row)
+		}
+
+		ownRows.Refresh()
+	}
+	show()
+
 	button.OnTapped = func() {
 		if session != nil {
 			turnOff()
@@ -110,32 +133,14 @@ func main() {
 	choose.SetSelected(chosen.Name)
 
 	entry := widget.NewEntry()
-	entry.SetPlaceHolder("example.com")
+	entry.SetPlaceHolder("instagram.com")
 
-	save := func() {
-		if err := own.Save(sitesFile()); err != nil {
-			dialog.ShowError(err, window)
-		}
-	}
-
-	add := widget.NewButton("Добавить", func() {
+	add := widget.NewButton("Добавить сайт", func() {
 		if strings.TrimSpace(entry.Text) == "" {
 			return
 		}
 
 		own.Add(entry.Text)
-		save()
-		entry.SetText("")
-		show()
-		restart()
-	})
-
-	remove := widget.NewButton("Убрать", func() {
-		if strings.TrimSpace(entry.Text) == "" {
-			return
-		}
-
-		own.Remove(entry.Text)
 		save()
 		entry.SetText("")
 		show()
@@ -161,12 +166,18 @@ func main() {
 		button,
 		widget.NewLabel("Способ:"),
 		choose,
-		entry,
-		container.NewHBox(add, remove),
+		container.NewBorder(nil, nil, nil, add, entry),
 		count,
 	)
-	window.SetContent(container.NewBorder(top, speed, nil, nil, container.NewVScroll(list)))
-	window.Resize(fyne.NewSize(360, 480))
+	body := container.NewVBox(
+		widget.NewLabel("Ваши сайты:"),
+		ownRows,
+		widget.NewSeparator(),
+		widget.NewLabel("Всегда обходятся:"),
+		always,
+	)
+	window.SetContent(container.NewBorder(top, speed, nil, nil, container.NewVScroll(body)))
+	window.Resize(fyne.NewSize(380, 520))
 
 	window.ShowAndRun()
 }
