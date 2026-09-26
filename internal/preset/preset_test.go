@@ -79,3 +79,24 @@ func TestRulesWithKeepsBothPresetAndExtra(t *testing.T) {
 		t.Error("RulesWith dropped the preset hosts")
 	}
 }
+
+func TestRulesVoiceChangesTheDiscordRule(t *testing.T) {
+	for _, p := range All() {
+		plain, err := p.Rules()
+		if err != nil {
+			t.Fatalf("%s: %v", p.Name, err)
+		}
+
+		loud, err := p.RulesVoice(nil)
+		if err != nil {
+			t.Fatalf("%s: %v", p.Name, err)
+		}
+
+		before, _ := plain.For("discord.media")
+		after, _ := loud.For("discord.media")
+
+		if before.String() == after.String() {
+			t.Errorf("%s: voice left the discord rule unchanged (%q)", p.Name, after.String())
+		}
+	}
+}

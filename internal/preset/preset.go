@@ -64,3 +64,12 @@ func (p Preset) RulesWith(extra []string) (rules.Set, error) {
 
 	return rules.Several(hosts + "=" + p.way)
 }
+
+func (p Preset) RulesVoice(extra []string) (rules.Set, error) {
+	hosts := blocked
+	if len(extra) > 0 {
+		hosts += "," + strings.Join(extra, ",")
+	}
+
+	return rules.Several(hosts + "=" + p.way + ",fakeudp:5")
+}
