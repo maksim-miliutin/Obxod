@@ -60,7 +60,7 @@ func main() {
 	}
 
 	turnOn := func() {
-		started, err := start(chosen, own.List())
+		started, err := start(chosen, own.List(), func(string) {})
 		if err != nil {
 			dialog.ShowError(err, window)
 
@@ -221,8 +221,8 @@ func sitesFile() string {
 	return filepath.Join(filepath.Dir(exe), "sites.txt")
 }
 
-func start(p preset.Preset, extra []string) (*runner.Session, error) {
-	set, err := p.RulesWith(extra)
+func start(p preset.Preset, extra []string, report func(string)) (*runner.Session, error) {
+	set, err := p.RulesVoice(extra)
 	if err != nil {
 		return nil, err
 	}
@@ -230,8 +230,10 @@ func start(p preset.Preset, extra []string) (*runner.Session, error) {
 	return runner.Open(runner.Config{
 		Rules:    set,
 		Ports:    runner.DefaultPorts(),
+		Voice:    runner.DefaultVoice(),
+		Voiced:   voiceDatagram,
 		Wet:      true,
 		DropQUIC: true,
-		Report:   func(string) {},
+		Report:   report,
 	})
 }
