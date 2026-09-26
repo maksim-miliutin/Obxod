@@ -58,7 +58,7 @@ func main() {
 	dot := canvas.NewText("●", idle)
 	word := widget.NewLabel("Выключено")
 	count := widget.NewLabel("")
-	speed := widget.NewLabel("↓ —")
+	speed := widget.NewLabel("Скорость: —")
 	logView := widget.NewLabel("")
 	always := widget.NewLabel(strings.Join(preset.Hosts(), "\n"))
 	ownRows := container.NewVBox()
@@ -178,12 +178,12 @@ func main() {
 				logView.SetText(book.Text())
 
 				if session == nil {
-					speed.SetText("↓ —")
+					speed.SetText("Скорость: —")
 
 					return
 				}
 
-				speed.SetText("↓ " + meter.Human(rate.Sample(session.Downloaded(), time.Now())))
+				speed.SetText("Скорость: " + meter.Human(rate.Sample(session.Downloaded(), time.Now())))
 			})
 		}
 	}()
@@ -215,9 +215,8 @@ func main() {
 	about := container.NewVBox(
 		widget.NewLabel("Obxod — обход DPI-блокировок."),
 		widget.NewLabel("Открывает то, что режут по имени хоста:\nDiscord, YouTube, X и добавленные вами."),
-		widget.NewLabel("Не ускоряет то, что не блокируют."),
 		widget.NewSeparator(),
-		widget.NewLabel("При запуске Windows может сказать\n«неизвестный издатель» — это нормально,\nподписи пока нет: Подробнее → Всё равно запустить."),
+		widget.NewLabel("При запуске Windows может сказать\n«неизвестный издатель» — это нормально,\nподписи пока нет: Подробнее, затем Всё равно запустить."),
 	)
 
 	logsTab := container.NewBorder(
@@ -225,7 +224,7 @@ func main() {
 			window.Clipboard().SetContent(book.Text())
 		}),
 		nil, nil, nil,
-		container.NewVScroll(logView),
+		container.NewScroll(logView),
 	)
 
 	tabs := container.NewAppTabs(
