@@ -6,7 +6,7 @@ import (
 	"obxod/internal/rules"
 )
 
-const blocked = "discord.com,discord.gg,discordapp.com,discordapp.net,discordcdn.com,discord.media,youtube.com,googlevideo.com,x.com"
+const blocked = "discord.com,discord.gg,discordapp.com,discordapp.net,discordcdn.com,discord.media,youtube.com,googlevideo.com,x.com,instagram.com,cdninstagram.com,fbcdn.net,telegram.org,web.telegram.org,webk.telegram.org,webz.telegram.org"
 
 type Preset struct {
 	Name string
