@@ -3,36 +3,22 @@
 package main
 
 import (
+	"fmt"
 	"os"
-
-	"golang.org/x/sys/windows/registry"
+	"os/exec"
+	"syscall"
 )
 
-const runPath = `Software\Microsoft\Windows\CurrentVersion\Run`
-const runName = "Obxod"
+const taskName = "Obxod"
 
 func autostartOn() bool {
-	k, err := registry.OpenKey(registry.CURRENT_USER, runPath, registry.QUERY_VALUE)
-	if err != nil {
-		return false
-	}
-	defer k.Close()
-
-	_, _, err = k.GetStringValue(runName)
-
-	return err == nil
+	return schtasks("/Query", "/TN", taskName) == nil
 }
 
 func setAutostart(on bool) error {
-	k, _, err := registry.CreateKey(registry.CURRENT_USER, runPath, registry.SET_VALUE)
-	if err != nil {
-		return err
-	}
-	defer k.Close()
-
 	if !on {
-		// An absent value is already off, so a delete error is not a failure.
-		_ = k.DeleteValue(runName)
+		// An absent task is already off, so a delete error is not a failure.
+		_ = schtasks("/Delete", "/TN", taskName, "/F")
 
 		return nil
 	}
@@ -42,5 +28,18 @@ func setAutostart(on bool) error {
 		return err
 	}
 
-	return k.SetStringValue(runName, exe)
+	// ONLOGON with HIGHEST runs at sign-in, elevated, without a UAC prompt.
+	return schtasks("/Create", "/TN", taskName, "/TR", "\""+exe+"\"", "/SC", "ONLOGON", "/RL", "HIGHEST", "/F")
+}
+
+func schtasks(args ...string) error {
+	cmd := exec.Command("schtasks", args...)
+	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("schtasks: %w: %s", err, out)
+	}
+
+	return nil
 }
