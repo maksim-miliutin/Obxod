@@ -18,6 +18,7 @@ import (
 	"fyne.io/fyne/v2/driver/desktop"
 	"fyne.io/fyne/v2/widget"
 
+	"obxod/internal/lang"
 	"obxod/internal/logbook"
 	"obxod/internal/meter"
 	"obxod/internal/preset"
@@ -41,11 +42,14 @@ func main() {
 	a.SetIcon(icon)
 	window.SetIcon(icon)
 
+	code := a.Preferences().String("lang")
+	l := lang.Of(code)
+
 	if desk, ok := a.(desktop.App); ok {
 		desk.SetSystemTrayIcon(icon)
 		desk.SetSystemTrayMenu(fyne.NewMenu("Obxod",
-			fyne.NewMenuItem("Показать", window.Show),
-			fyne.NewMenuItem("Выход", a.Quit),
+			fyne.NewMenuItem(l.T(lang.TrayShow), window.Show),
+			fyne.NewMenuItem(l.T(lang.TrayQuit), a.Quit),
 		))
 	}
 
@@ -56,9 +60,9 @@ func main() {
 	book := logbook.New(200)
 
 	dot := canvas.NewText("●", idle)
-	word := widget.NewLabel("Выключено")
+	word := widget.NewLabel(l.T(lang.StatusOff))
 	count := widget.NewLabel("")
-	speed := widget.NewLabel("Скорость: —")
+	speed := widget.NewLabel(fmt.Sprintf(l.T(lang.SpeedFmt), "—"))
 	logView := widget.NewLabel("")
 	always := widget.NewLabel(strings.Join(preset.Hosts(), "\n"))
 	ownRows := container.NewVBox()
@@ -71,7 +75,7 @@ func main() {
 	var session *runner.Session
 	var rate meter.Rate
 
-	button := widget.NewButton("Включить", nil)
+	button := widget.NewButton(l.T(lang.TurnOn), nil)
 
 	turnOff := func() {
 		session.Stop()
@@ -79,8 +83,8 @@ func main() {
 
 		dot.Color = idle
 		dot.Refresh()
-		word.SetText("Выключено")
-		button.SetText("Включить")
+		word.SetText(l.T(lang.StatusOff))
+		button.SetText(l.T(lang.TurnOn))
 	}
 
 	turnOn := func() {
@@ -97,8 +101,8 @@ func main() {
 
 		dot.Color = working
 		dot.Refresh()
-		word.SetText("Работает")
-		button.SetText("Выключить")
+		word.SetText(l.T(lang.StatusOn))
+		button.SetText(l.T(lang.TurnOff))
 	}
 
 	restart := func() {
@@ -116,7 +120,7 @@ func main() {
 
 	var show func()
 	show = func() {
-		count.SetText(fmt.Sprintf("Обходится сайтов: %d", len(preset.HostsWith(own.List()))))
+		count.SetText(fmt.Sprintf(l.T(lang.CountFmt), len(preset.HostsWith(own.List()))))
 
 		ownRows.RemoveAll()
 
@@ -147,21 +151,21 @@ func main() {
 		turnOn()
 	}
 
-	choose := widget.NewSelect(preset.Names(), func(name string) {
-		found, ok := preset.Named(name)
+	choose := widget.NewSelect(preset.Names(code), func(name string) {
+		found, ok := preset.ByName(name, code)
 		if !ok {
 			return
 		}
 
 		chosen = found
-		a.Preferences().SetString("method", found.Name)
+		a.Preferences().SetString("method", found.Key)
 		restart()
 	})
-	choose.SetSelected(chosen.Name)
+	choose.SetSelected(chosen.Name(code))
 
-	caveat := widget.NewLabel("Не подошёл — попробуйте другой.\nУ разных провайдеров работают разные.")
+	caveat := widget.NewLabel(l.T(lang.Caveat))
 
-	startup := widget.NewCheck("Запускать при старте Windows", func(on bool) {
+	startup := widget.NewCheck(l.T(lang.Autostart), func(on bool) {
 		if err := setAutostart(on); err != nil {
 			dialog.ShowError(err, window)
 		}
@@ -171,7 +175,7 @@ func main() {
 	entry := widget.NewEntry()
 	entry.SetPlaceHolder("instagram.com")
 
-	add := widget.NewButton("Добавить сайт", func() {
+	add := widget.NewButton(l.T(lang.AddSite), func() {
 		if strings.TrimSpace(entry.Text) == "" {
 			return
 		}
@@ -189,20 +193,34 @@ func main() {
 				logView.SetText(book.Text())
 
 				if session == nil {
-					speed.SetText("Скорость: —")
+					speed.SetText(fmt.Sprintf(l.T(lang.SpeedFmt), "—"))
 
 					return
 				}
 
-				speed.SetText("Скорость: " + meter.Human(rate.Sample(session.Downloaded(), time.Now())))
+				speed.SetText(fmt.Sprintf(l.T(lang.SpeedFmt), meter.Human(rate.Sample(session.Downloaded(), time.Now()))))
 			})
 		}
 	}()
 
+	language := widget.NewSelect([]string{"Русский", "English"}, func(name string) {
+		picked := "ru"
+		if name == "English" {
+			picked = "en"
+		}
+
+		a.Preferences().SetString("lang", picked)
+	})
+	if code == "en" {
+		language.SetSelected("English")
+	} else {
+		language.SetSelected("Русский")
+	}
+
 	obhod := container.NewVBox(
 		container.NewHBox(dot, word),
 		button,
-		widget.NewLabel("Способ:"),
+		widget.NewLabel(l.T(lang.MethodLabel)),
 		choose,
 		caveat,
 		startup,
@@ -213,39 +231,42 @@ func main() {
 		container.NewVBox(
 			container.NewBorder(nil, nil, nil, add, entry),
 			count,
-			widget.NewLabel("Ваши сайты:"),
+			widget.NewLabel(l.T(lang.YourSites)),
 		),
 		nil, nil, nil,
 		container.NewVScroll(container.NewVBox(
 			ownRows,
 			widget.NewSeparator(),
-			widget.NewLabel("Всегда обходятся:"),
+			widget.NewLabel(l.T(lang.AlwaysSites)),
 			always,
 		)),
 	)
 
-	about := container.NewVBox(
-		widget.NewLabel("Obxod — обход DPI-блокировок."),
-		widget.NewLabel("Открывает то, что режут по имени хоста:\nDiscord, YouTube, X и добавленные вами."),
-		widget.NewSeparator(),
-		widget.NewLabel("При запуске Windows может сказать\n«неизвестный издатель» — это нормально,\nподписи пока нет: Подробнее, затем Всё равно запустить."),
-	)
-
 	logsTab := container.NewBorder(
-		widget.NewButton("Скопировать", func() {
+		widget.NewButton(l.T(lang.Copy), func() {
 			window.Clipboard().SetContent(book.Text())
 		}),
 		nil, nil, nil,
 		container.NewScroll(logView),
 	)
 
-	tabs := container.NewAppTabs(
-		container.NewTabItem("Обход", obhod),
-		container.NewTabItem("Сайты", yourSites),
-		container.NewTabItem("Логи", logsTab),
-		container.NewTabItem("О программе", about),
+	about := container.NewVBox(
+		widget.NewLabel(l.T(lang.AboutWhat)),
+		widget.NewLabel(l.T(lang.AboutOpens)),
+		widget.NewSeparator(),
+		widget.NewLabel(l.T(lang.AboutUnsigned)),
+		widget.NewSeparator(),
+		widget.NewLabel(l.T(lang.RestartNote)),
 	)
-	window.SetContent(tabs)
+
+	tabs := container.NewAppTabs(
+		container.NewTabItem(l.T(lang.TabBypass), obhod),
+		container.NewTabItem(l.T(lang.TabSites), yourSites),
+		container.NewTabItem(l.T(lang.TabLogs), logsTab),
+		container.NewTabItem(l.T(lang.TabAbout), about),
+	)
+	top := container.NewBorder(nil, nil, language, nil)
+	window.SetContent(container.NewBorder(top, nil, nil, nil, tabs))
 	window.Resize(fyne.NewSize(440, 620))
 
 	if driverErr != nil {
