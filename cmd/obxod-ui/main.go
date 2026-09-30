@@ -58,6 +58,11 @@ func main() {
 
 	own, _ := sites.Load(sitesFile())
 	book := logbook.New(200)
+	keep := func(line string) {
+		if logbook.Worth(line) {
+			book.Add(line)
+		}
+	}
 
 	dot := canvas.NewText("●", idle)
 	word := widget.NewLabel(l.T(lang.StatusOff))
@@ -88,7 +93,7 @@ func main() {
 	}
 
 	turnOn := func() {
-		started, err := start(chosen, own.List(), book.Add)
+		started, err := start(chosen, own.List(), keep)
 		if err != nil {
 			dialog.ShowError(err, window)
 
@@ -256,6 +261,8 @@ func main() {
 		widget.NewSeparator(),
 		widget.NewLabel(l.T(lang.AboutUnsigned)),
 		widget.NewSeparator(),
+		widget.NewLabel(l.T(lang.LanguageLabel)),
+		language,
 		widget.NewLabel(l.T(lang.RestartNote)),
 	)
 
@@ -265,8 +272,7 @@ func main() {
 		container.NewTabItem(l.T(lang.TabLogs), logsTab),
 		container.NewTabItem(l.T(lang.TabAbout), about),
 	)
-	top := container.NewBorder(nil, nil, language, nil)
-	window.SetContent(container.NewBorder(top, nil, nil, nil, tabs))
+	window.SetContent(tabs)
 	window.Resize(fyne.NewSize(440, 620))
 
 	if driverErr != nil {

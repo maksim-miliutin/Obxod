@@ -35,3 +35,15 @@ func (b *Book) Text() string {
 
 	return strings.Join(b.lines, "\n")
 }
+
+// Worth drops the engine's high-frequency counter and retry lines, which
+// otherwise bury the useful events under thousands of near-identical entries.
+func Worth(line string) bool {
+	for _, noise := range []string{"replies watched", "asking again", "quic dropped"} {
+		if strings.Contains(line, noise) {
+			return false
+		}
+	}
+
+	return true
+}
