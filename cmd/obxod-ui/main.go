@@ -69,6 +69,7 @@ func main() {
 	count := widget.NewLabel("")
 	speed := widget.NewLabel(fmt.Sprintf(l.T(lang.SpeedFmt), "—"))
 	logView := widget.NewLabel("")
+	logHead := widget.NewLabel("")
 	always := widget.NewLabel(strings.Join(preset.Hosts(), "\n"))
 	ownRows := container.NewVBox()
 
@@ -197,6 +198,12 @@ func main() {
 			fyne.Do(func() {
 				logView.SetText(book.Text())
 
+				status := l.T(lang.StatusOff)
+				if session != nil {
+					status = l.T(lang.StatusOn)
+				}
+				logHead.SetText(l.T(lang.MethodLabel) + " " + chosen.Name(code) + " · " + status)
+
 				if session == nil {
 					speed.SetText(fmt.Sprintf(l.T(lang.SpeedFmt), "—"))
 
@@ -248,9 +255,12 @@ func main() {
 	)
 
 	logsTab := container.NewBorder(
-		widget.NewButton(l.T(lang.Copy), func() {
-			window.Clipboard().SetContent(book.Text())
-		}),
+		container.NewVBox(
+			logHead,
+			widget.NewButton(l.T(lang.Copy), func() {
+				window.Clipboard().SetContent(book.Text())
+			}),
+		),
 		nil, nil, nil,
 		container.NewScroll(logView),
 	)
