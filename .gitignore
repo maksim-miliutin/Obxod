@@ -11,3 +11,7 @@ sites.txt
 release-notes.md
 *.log
 *.etl
+
+WinDivert*
+ACTIVE_DISCORD_UDP.bin
+*.ps1
