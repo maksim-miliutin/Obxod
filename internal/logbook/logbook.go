@@ -29,6 +29,13 @@ func (b *Book) Add(line string) {
 	}
 }
 
+func (b *Book) Clear() {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	b.lines = nil
+}
+
 func (b *Book) Text() string {
 	b.mu.Lock()
 	defer b.mu.Unlock()

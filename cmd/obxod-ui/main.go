@@ -257,9 +257,19 @@ func main() {
 	logsTab := container.NewBorder(
 		container.NewVBox(
 			logHead,
-			widget.NewButton(l.T(lang.Copy), func() {
-				window.Clipboard().SetContent(book.Text())
-			}),
+			container.NewHBox(
+				widget.NewButton(l.T(lang.Copy), func() {
+					if logView.Text == "" {
+						return
+					}
+
+					window.Clipboard().SetContent(logView.Text)
+				}),
+				widget.NewButton(l.T(lang.Clear), func() {
+					book.Clear()
+					logView.SetText("")
+				}),
+			),
 		),
 		nil, nil, nil,
 		container.NewScroll(logView),

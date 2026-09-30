@@ -56,3 +56,14 @@ func TestWorthKeepsRealEvents(t *testing.T) {
 		}
 	}
 }
+
+func TestClearEmptiesTheBook(t *testing.T) {
+	b := New(200)
+	b.Add("one")
+	b.Add("two")
+	b.Clear()
+
+	if b.Text() != "" {
+		t.Errorf("after Clear the book still holds %q", b.Text())
+	}
+}
