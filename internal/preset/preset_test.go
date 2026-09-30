@@ -9,13 +9,13 @@ func TestEveryPresetParses(t *testing.T) {
 	for _, p := range All() {
 		set, err := p.Rules()
 		if err != nil {
-			t.Errorf("%s: %v", p.Name, err)
+			t.Errorf("%s: %v", p.Key, err)
 
 			continue
 		}
 
 		if len(set) == 0 {
-			t.Errorf("%s: no rules", p.Name)
+			t.Errorf("%s: no rules", p.Key)
 		}
 	}
 }
@@ -34,7 +34,7 @@ func TestDefaultCoversTheBlockedSites(t *testing.T) {
 }
 
 func TestNamedFindsAndRejects(t *testing.T) {
-	if _, ok := Named("Обычный"); !ok {
+	if _, ok := Named("plain"); !ok {
 		t.Error("Named missed a real preset")
 	}
 
@@ -44,8 +44,8 @@ func TestNamedFindsAndRejects(t *testing.T) {
 }
 
 func TestNamesCoverEveryPreset(t *testing.T) {
-	if len(Names()) != len(All()) {
-		t.Fatalf("Names %d, All %d", len(Names()), len(All()))
+	if len(Names("ru")) != len(All()) {
+		t.Fatalf("Names %d, All %d", len(Names("ru")), len(All()))
 	}
 }
 
@@ -84,19 +84,19 @@ func TestRulesVoiceChangesTheDiscordRule(t *testing.T) {
 	for _, p := range All() {
 		plain, err := p.Rules()
 		if err != nil {
-			t.Fatalf("%s: %v", p.Name, err)
+			t.Fatalf("%s: %v", p.Key, err)
 		}
 
 		loud, err := p.RulesVoice(nil)
 		if err != nil {
-			t.Fatalf("%s: %v", p.Name, err)
+			t.Fatalf("%s: %v", p.Key, err)
 		}
 
 		before, _ := plain.For("discord.media")
 		after, _ := loud.For("discord.media")
 
 		if before.String() == after.String() {
-			t.Errorf("%s: voice left the discord rule unchanged (%q)", p.Name, after.String())
+			t.Errorf("%s: voice left the discord rule unchanged (%q)", p.Key, after.String())
 		}
 	}
 }
@@ -124,5 +124,24 @@ func TestBlockedCoversTheNewServices(t *testing.T) {
 		if _, ok := set.For(host); !ok {
 			t.Errorf("preset misses %s", host)
 		}
+	}
+}
+
+func TestByNameRoundTripsInBothLanguages(t *testing.T) {
+	for _, p := range All() {
+		if got, ok := ByName(p.Name("ru"), "ru"); !ok || got.Key != p.Key {
+			t.Errorf("ByName ru failed for %s", p.Key)
+		}
+
+		if got, ok := ByName(p.Name("en"), "en"); !ok || got.Key != p.Key {
+			t.Errorf("ByName en failed for %s", p.Key)
+		}
+	}
+}
+
+func TestNameDiffersByLanguage(t *testing.T) {
+	p := All()[0]
+	if p.Name("ru") == p.Name("en") {
+		t.Errorf("name is the same in both languages: %q", p.Name("ru"))
 	}
 }

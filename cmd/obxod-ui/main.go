@@ -58,12 +58,18 @@ func main() {
 
 	own, _ := sites.Load(sitesFile())
 	book := logbook.New(200)
+	keep := func(line string) {
+		if logbook.Worth(line) {
+			book.Add(line)
+		}
+	}
 
 	dot := canvas.NewText("●", idle)
 	word := widget.NewLabel(l.T(lang.StatusOff))
 	count := widget.NewLabel("")
 	speed := widget.NewLabel(fmt.Sprintf(l.T(lang.SpeedFmt), "—"))
 	logView := widget.NewLabel("")
+	logHead := widget.NewLabel("")
 	always := widget.NewLabel(strings.Join(preset.Hosts(), "\n"))
 	ownRows := container.NewVBox()
 
@@ -88,7 +94,7 @@ func main() {
 	}
 
 	turnOn := func() {
-		started, err := start(chosen, own.List(), book.Add)
+		started, err := start(chosen, own.List(), keep)
 		if err != nil {
 			dialog.ShowError(err, window)
 
@@ -192,6 +198,12 @@ func main() {
 			fyne.Do(func() {
 				logView.SetText(book.Text())
 
+				status := l.T(lang.StatusOff)
+				if session != nil {
+					status = l.T(lang.StatusOn)
+				}
+				logHead.SetText(l.T(lang.MethodLabel) + " " + chosen.Name(code) + " · " + status)
+
 				if session == nil {
 					speed.SetText(fmt.Sprintf(l.T(lang.SpeedFmt), "—"))
 
@@ -243,9 +255,22 @@ func main() {
 	)
 
 	logsTab := container.NewBorder(
-		widget.NewButton(l.T(lang.Copy), func() {
-			window.Clipboard().SetContent(book.Text())
-		}),
+		container.NewVBox(
+			logHead,
+			container.NewHBox(
+				widget.NewButton(l.T(lang.Copy), func() {
+					if logView.Text == "" {
+						return
+					}
+
+					window.Clipboard().SetContent(logView.Text)
+				}),
+				widget.NewButton(l.T(lang.Clear), func() {
+					book.Clear()
+					logView.SetText("")
+				}),
+			),
+		),
 		nil, nil, nil,
 		container.NewScroll(logView),
 	)
@@ -256,6 +281,8 @@ func main() {
 		widget.NewSeparator(),
 		widget.NewLabel(l.T(lang.AboutUnsigned)),
 		widget.NewSeparator(),
+		widget.NewLabel(l.T(lang.LanguageLabel)),
+		language,
 		widget.NewLabel(l.T(lang.RestartNote)),
 	)
 
@@ -265,8 +292,7 @@ func main() {
 		container.NewTabItem(l.T(lang.TabLogs), logsTab),
 		container.NewTabItem(l.T(lang.TabAbout), about),
 	)
-	top := container.NewBorder(nil, nil, language, nil)
-	window.SetContent(container.NewBorder(top, nil, nil, nil, tabs))
+	window.SetContent(tabs)
 	window.Resize(fyne.NewSize(440, 620))
 
 	if driverErr != nil {
