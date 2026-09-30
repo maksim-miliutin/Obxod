@@ -27,6 +27,10 @@ func All() []Preset {
 		{Key: "signed_repeats", ru: "Подпись с повторами", en: "Signature + repeats", way: "hostfake:mail.ru,ts,md5sig,repeats:3"},
 		{Key: "decoy_shift", ru: "Обманка со сдвигом", en: "Decoy + shift", way: "decoy,badseq:-10000,ts"},
 		{Key: "short_ttl", ru: "Короткий TTL", en: "Short TTL", way: "hostfake:mail.ru,ts,ttl:4"},
+		{Key: "badsum", ru: "Битая сумма", en: "Bad checksum", way: "hostfake:mail.ru,ts,badsum"},
+		{Key: "cut_start", ru: "Разрез в начале", en: "Cut at start", way: "hostfake:mail.ru,ts,cut:start"},
+		{Key: "signed_shift", ru: "Подпись со сдвигом", en: "Signature + shift", way: "hostfake:mail.ru,ts,md5sig,badseq:-10000"},
+		{Key: "overlap_disorder", ru: "Наложение с разнобоем", en: "Overlap + disorder", way: "hostfake:mail.ru,ts,overlap:3,disorder"},
 	}
 }
 
