@@ -3,8 +3,10 @@ package main
 //go:generate rsrc -manifest obxod-ui.manifest -ico icon.ico -arch amd64 -o rsrc_windows_amd64.syso
 
 import (
+	"errors"
 	"fmt"
 	"image/color"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -18,10 +20,12 @@ import (
 	"fyne.io/fyne/v2/driver/desktop"
 	"fyne.io/fyne/v2/widget"
 
+	"obxod/internal/autopick"
 	"obxod/internal/lang"
 	"obxod/internal/logbook"
 	"obxod/internal/meter"
 	"obxod/internal/preset"
+	"obxod/internal/probe"
 	"obxod/internal/runner"
 	"obxod/internal/sites"
 )
@@ -30,6 +34,8 @@ var (
 	working = color.NRGBA{R: 0x2f, G: 0x9e, B: 0x44, A: 0xff}
 	idle    = color.NRGBA{R: 0x88, G: 0x88, B: 0x88, A: 0xff}
 )
+
+var errNoMethod = errors.New("obxod-ui: method not found")
 
 func main() {
 	a := app.NewWithID("io.obxod.ui")
@@ -70,6 +76,7 @@ func main() {
 	speed := widget.NewLabel(fmt.Sprintf(l.T(lang.SpeedFmt), "—"))
 	logView := widget.NewLabel("")
 	logHead := widget.NewLabel("")
+	progress := widget.NewLabel("")
 	always := widget.NewLabel(strings.Join(preset.Hosts(), "\n"))
 	ownRows := container.NewVBox()
 
@@ -80,6 +87,7 @@ func main() {
 
 	var session *runner.Session
 	var rate meter.Rate
+	searching := false
 
 	button := widget.NewButton(l.T(lang.TurnOn), nil)
 
@@ -169,6 +177,77 @@ func main() {
 	})
 	choose.SetSelected(chosen.Name(code))
 
+	pick := widget.NewButton(l.T(lang.AutoPick), nil)
+
+	apply := func(name string) error {
+		found, ok := preset.ByName(name, code)
+		if !ok {
+			return errNoMethod
+		}
+
+		if session != nil {
+			session.Stop()
+			session = nil
+		}
+
+		started, err := start(found, own.List(), keep)
+		if err != nil {
+			return err
+		}
+
+		session = started
+		chosen = found
+		go session.Run()
+
+		fyne.Do(func() {
+			progress.SetText(fmt.Sprintf(l.T(lang.Searching), found.Name(code)))
+		})
+
+		// Let the fresh tunnel settle before the probe, or it reads a half-open state.
+		time.Sleep(2 * time.Second)
+
+		return nil
+	}
+
+	works := func() bool {
+		verdict, _ := probe.Host(&net.Dialer{Timeout: 5 * time.Second}, "discord.com", 5*time.Second)
+
+		return verdict == probe.Clear
+	}
+
+	pick.OnTapped = func() {
+		if searching {
+			return
+		}
+
+		searching = true
+		button.Disable()
+		choose.Disable()
+		pick.Disable()
+		progress.SetText("")
+
+		go func() {
+			name, ok := autopick.Try(preset.Names(code), apply, works)
+
+			fyne.Do(func() {
+				searching = false
+				button.Enable()
+				choose.Enable()
+				pick.Enable()
+
+				if !ok {
+					progress.SetText(l.T(lang.NoneWorked))
+
+					return
+				}
+
+				choose.SetSelected(name)
+				a.Preferences().SetString("method", chosen.Key)
+				progress.SetText("")
+			})
+		}()
+	}
+
 	caveat := widget.NewLabel(l.T(lang.Caveat))
 
 	startup := widget.NewCheck(l.T(lang.Autostart), func(on bool) {
@@ -197,6 +276,10 @@ func main() {
 		for range time.Tick(time.Second) {
 			fyne.Do(func() {
 				logView.SetText(book.Text())
+
+				if searching {
+					return
+				}
 
 				status := l.T(lang.StatusOff)
 				if session != nil {
@@ -234,6 +317,9 @@ func main() {
 		button,
 		widget.NewLabel(l.T(lang.MethodLabel)),
 		choose,
+		pick,
+		widget.NewLabel(l.T(lang.AutoPickNote)),
+		progress,
 		caveat,
 		startup,
 		speed,

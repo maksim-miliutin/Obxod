@@ -28,6 +28,10 @@ const (
 	AboutUnsigned
 	LanguageLabel
 	RestartNote
+	AutoPick
+	Searching
+	AutoPickNote
+	NoneWorked
 	last
 )
 
@@ -59,6 +63,10 @@ var ru = Lang{
 	AboutUnsigned: "При запуске Windows может сказать\n«неизвестный издатель» — это нормально,\nподписи пока нет: Подробнее, затем Всё равно запустить.",
 	LanguageLabel: "Язык:",
 	RestartNote:   "Смена языка вступит в силу после перезапуска.",
+	AutoPick:      "Подобрать",
+	Searching:     "Пробую: %s",
+	AutoPickNote:  "Проверяет только, открывается ли сайт.\nГолос и стримы проверьте сами.",
+	NoneWorked:    "Ни один способ не подошёл.",
 }
 
 var en = Lang{
@@ -87,6 +95,10 @@ var en = Lang{
 	AboutUnsigned: "Windows may say \"unknown publisher\" —\nthat is normal, the app is unsigned:\nMore info, then Run anyway.",
 	LanguageLabel: "Language:",
 	RestartNote:   "The language changes after a restart.",
+	AutoPick:      "Auto-pick",
+	Searching:     "Trying: %s",
+	AutoPickNote:  "Only checks that the site opens.\nCheck voice and streams yourself.",
+	NoneWorked:    "No method worked.",
 }
 
 func Of(code string) Lang {
