@@ -29,6 +29,9 @@ const (
 	LanguageLabel
 	RestartNote
 	AutoPick
+	Now
+	AddFav
+	DropFav
 	Searching
 	AutoPickNote
 	NoneWorked
@@ -64,6 +67,9 @@ var ru = Lang{
 	LanguageLabel: "Язык:",
 	RestartNote:   "Смена языка вступит в силу после перезапуска.",
 	AutoPick:      "Подобрать",
+	Now:           "Сейчас: %s",
+	AddFav:        "В избранное",
+	DropFav:       "Убрать",
 	Searching:     "Пробую: %s",
 	AutoPickNote:  "Проверяет только, открывается ли сайт.\nГолос и стримы проверьте сами.",
 	NoneWorked:    "Ни один способ не подошёл.",
@@ -96,6 +102,9 @@ var en = Lang{
 	LanguageLabel: "Language:",
 	RestartNote:   "The language changes after a restart.",
 	AutoPick:      "Auto-pick",
+	Now:           "Now: %s",
+	AddFav:        "Pin to top",
+	DropFav:       "Unpin",
 	Searching:     "Trying: %s",
 	AutoPickNote:  "Only checks that the site opens.\nCheck voice and streams yourself.",
 	NoneWorked:    "No method worked.",

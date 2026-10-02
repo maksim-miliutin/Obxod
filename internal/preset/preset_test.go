@@ -145,3 +145,50 @@ func TestNameDiffersByLanguage(t *testing.T) {
 		t.Errorf("name is the same in both languages: %q", p.Name("ru"))
 	}
 }
+
+func TestNamesByFavouriteWithNoneKeepsOrder(t *testing.T) {
+	plain := Names("en")
+	sorted := NamesByFavourite("en", nil)
+
+	for i := range plain {
+		if plain[i] != sorted[i] {
+			t.Fatalf("order changed at %d: %q vs %q", i, plain[i], sorted[i])
+		}
+	}
+}
+
+func TestNamesByFavouriteFloatsStarredToTop(t *testing.T) {
+	fav := []string{"signature"}
+	sorted := NamesByFavourite("en", fav)
+	want, _ := Named("signature")
+
+	if sorted[0] != Label(want, "en", fav) {
+		t.Errorf("a starred method is not first: %q", sorted[0])
+	}
+
+	if len(sorted) != len(All()) {
+		t.Errorf("a method went missing: %d of %d", len(sorted), len(All()))
+	}
+}
+
+func TestLabelMarksOnlyFavourites(t *testing.T) {
+	p, _ := Named("signature")
+
+	if Label(p, "en", nil) != p.Name("en") {
+		t.Error("unstarred label carries a mark")
+	}
+
+	if Label(p, "en", []string{"signature"}) == p.Name("en") {
+		t.Error("starred label is missing its mark")
+	}
+}
+
+func TestByLabelFindsAMarkedName(t *testing.T) {
+	p, _ := Named("signature")
+	label := Label(p, "en", []string{"signature"})
+
+	back, ok := ByLabel(label, "en")
+	if !ok || back.Key != "signature" {
+		t.Errorf("a marked label did not map back: %q -> %v %v", label, back.Key, ok)
+	}
+}

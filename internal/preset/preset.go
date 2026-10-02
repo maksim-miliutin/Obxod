@@ -73,6 +73,51 @@ func Names(code string) []string {
 	return names
 }
 
+const favouriteMark = "* "
+
+// Label is how a method shows in a favourite-sorted list: its name, with a leading
+// mark when the method is among the favourites.
+func Label(p Preset, code string, favourite []string) string {
+	for _, key := range favourite {
+		if key == p.Key {
+			return favouriteMark + p.Name(code)
+		}
+	}
+
+	return p.Name(code)
+}
+
+// NamesByFavourite lists method labels with the favourites first and marked, each
+// group kept in All's order. favourite holds preset keys; a key that names nothing
+// is ignored.
+func NamesByFavourite(code string, favourite []string) []string {
+	starred := map[string]bool{}
+	for _, key := range favourite {
+		starred[key] = true
+	}
+
+	top := make([]string, 0, len(All()))
+	rest := make([]string, 0, len(All()))
+
+	for _, p := range All() {
+		if starred[p.Key] {
+			top = append(top, Label(p, code, favourite))
+
+			continue
+		}
+
+		rest = append(rest, Label(p, code, favourite))
+	}
+
+	return append(top, rest...)
+}
+
+// ByLabel finds the preset for a label from a favourite-sorted list, removing the
+// leading mark a favourite carries before matching the plain name.
+func ByLabel(label, code string) (Preset, bool) {
+	return ByName(strings.TrimPrefix(label, favouriteMark), code)
+}
+
 func Hosts() []string {
 	return strings.Split(blocked, ",")
 }
