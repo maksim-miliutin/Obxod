@@ -37,6 +37,31 @@ var (
 
 var errNoMethod = errors.New("obxod-ui: method not found")
 
+func starredKey(list []string, key string) bool {
+	for _, k := range list {
+		if k == key {
+			return true
+		}
+	}
+
+	return false
+}
+
+func flip(list []string, key string) []string {
+	next := make([]string, 0, len(list)+1)
+	for _, k := range list {
+		if k != key {
+			next = append(next, k)
+		}
+	}
+
+	if !starredKey(list, key) {
+		next = append(next, key)
+	}
+
+	return next
+}
+
 func main() {
 	a := app.NewWithID("io.obxod.ui")
 	a.Settings().SetTheme(obxodTheme{})
@@ -77,12 +102,18 @@ func main() {
 	logView := widget.NewLabel("")
 	logHead := widget.NewLabel("")
 	progress := widget.NewLabel("")
+	now := widget.NewLabel("")
 	always := widget.NewLabel(strings.Join(preset.Hosts(), "\n"))
 	ownRows := container.NewVBox()
 
 	chosen := preset.All()[0]
 	if saved, ok := preset.Named(a.Preferences().String("method")); ok {
 		chosen = saved
+	}
+
+	favourite := []string{}
+	if saved := a.Preferences().String("favourites"); saved != "" {
+		favourite = strings.Split(saved, ",")
 	}
 
 	var session *runner.Session
@@ -165,17 +196,41 @@ func main() {
 		turnOn()
 	}
 
-	choose := widget.NewSelect(preset.Names(code), func(name string) {
-		found, ok := preset.ByName(name, code)
-		if !ok {
+	choose := widget.NewSelect(preset.NamesByFavourite(code, favourite), nil)
+	fav := widget.NewButton("", nil)
+
+	refreshFav := func() {
+		if starredKey(favourite, chosen.Key) {
+			fav.SetText(l.T(lang.DropFav))
+
+			return
+		}
+
+		fav.SetText(l.T(lang.AddFav))
+	}
+
+	choose.OnChanged = func(label string) {
+		found, ok := preset.ByLabel(label, code)
+		if !ok || found.Key == chosen.Key {
 			return
 		}
 
 		chosen = found
 		a.Preferences().SetString("method", found.Key)
 		restart()
-	})
-	choose.SetSelected(chosen.Name(code))
+		refreshFav()
+	}
+
+	fav.OnTapped = func() {
+		favourite = flip(favourite, chosen.Key)
+		a.Preferences().SetString("favourites", strings.Join(favourite, ","))
+		choose.Options = preset.NamesByFavourite(code, favourite)
+		choose.SetSelected(preset.Label(chosen, code, favourite))
+		refreshFav()
+	}
+
+	choose.SetSelected(preset.Label(chosen, code, favourite))
+	refreshFav()
 
 	pick := widget.NewButton(l.T(lang.AutoPick), nil)
 
@@ -227,7 +282,7 @@ func main() {
 		progress.SetText("")
 
 		go func() {
-			name, ok := autopick.Try(preset.Names(code), apply, works)
+			_, ok := autopick.Try(preset.Names(code), apply, works)
 
 			fyne.Do(func() {
 				searching = false
@@ -241,9 +296,10 @@ func main() {
 					return
 				}
 
-				choose.SetSelected(name)
+				choose.SetSelected(preset.Label(chosen, code, favourite))
 				a.Preferences().SetString("method", chosen.Key)
 				progress.SetText("")
+				refreshFav()
 			})
 		}()
 	}
@@ -286,6 +342,7 @@ func main() {
 					status = l.T(lang.StatusOn)
 				}
 				logHead.SetText(l.T(lang.MethodLabel) + " " + chosen.Name(code) + " · " + status)
+				now.SetText(fmt.Sprintf(l.T(lang.Now), chosen.Name(code)))
 
 				if session == nil {
 					speed.SetText(fmt.Sprintf(l.T(lang.SpeedFmt), "—"))
@@ -316,7 +373,8 @@ func main() {
 		container.NewHBox(dot, word),
 		button,
 		widget.NewLabel(l.T(lang.MethodLabel)),
-		choose,
+		container.NewBorder(nil, nil, nil, fav, choose),
+		now,
 		pick,
 		widget.NewLabel(l.T(lang.AutoPickNote)),
 		progress,
