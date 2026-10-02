@@ -26,6 +26,7 @@ const (
 	AboutWhat
 	AboutOpens
 	AboutUnsigned
+	AboutMethods
 	LanguageLabel
 	RestartNote
 	AutoPick
@@ -64,6 +65,7 @@ var ru = Lang{
 	AboutWhat:     "Obxod — обход DPI-блокировок.",
 	AboutOpens:    "Открывает то, что режут по имени хоста:\nDiscord, YouTube, X и добавленные вами.",
 	AboutUnsigned: "При запуске Windows может сказать\n«неизвестный издатель» — это нормально,\nподписи пока нет: Подробнее, затем Всё равно запустить.",
+	AboutMethods:  "Способы перебирайте, если сайт не открылся.\nСтримы и демонстрация экрана — «Битая сумма»\n(включается не сразу). Быстрее всего — «Разрез в начале».\nНачните с «Обычный» или «Подпись».",
 	LanguageLabel: "Язык:",
 	RestartNote:   "Смена языка вступит в силу после перезапуска.",
 	AutoPick:      "Подобрать",
@@ -99,6 +101,7 @@ var en = Lang{
 	AboutWhat:     "Obxod — a DPI bypass.",
 	AboutOpens:    "Opens what is blocked by host name:\nDiscord, YouTube, X and sites you add.",
 	AboutUnsigned: "Windows may say \"unknown publisher\" —\nthat is normal, the app is unsigned:\nMore info, then Run anyway.",
+	AboutMethods:  "Try methods in turn if a site stays blocked.\nFor streams and screen share, try Bad checksum\n(it connects a bit slowly). Quickest to connect: Cut at start.\nStart with Plain or Signature.",
 	LanguageLabel: "Language:",
 	RestartNote:   "The language changes after a restart.",
 	AutoPick:      "Auto-pick",

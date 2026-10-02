@@ -423,6 +423,8 @@ func main() {
 		widget.NewLabel(l.T(lang.AboutWhat)),
 		widget.NewLabel(l.T(lang.AboutOpens)),
 		widget.NewSeparator(),
+		widget.NewLabel(l.T(lang.AboutMethods)),
+		widget.NewSeparator(),
 		widget.NewLabel(l.T(lang.AboutUnsigned)),
 		widget.NewSeparator(),
 		widget.NewLabel(l.T(lang.LanguageLabel)),
