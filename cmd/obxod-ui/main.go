@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -119,6 +120,7 @@ func main() {
 	var session *runner.Session
 	var rate meter.Rate
 	searching := false
+	var stopFlag atomic.Bool
 
 	button := widget.NewButton(l.T(lang.TurnOn), nil)
 
@@ -233,6 +235,12 @@ func main() {
 	refreshFav()
 
 	pick := widget.NewButton(l.T(lang.AutoPick), nil)
+	stopBtn := widget.NewButton(l.T(lang.Stop), nil)
+	stopBtn.Disable()
+	stopBtn.OnTapped = func() {
+		stopFlag.Store(true)
+		stopBtn.Disable()
+	}
 
 	apply := func(name string) error {
 		found, ok := preset.ByName(name, code)
@@ -276,22 +284,29 @@ func main() {
 		}
 
 		searching = true
+		stopFlag.Store(false)
 		button.Disable()
 		choose.Disable()
 		pick.Disable()
+		stopBtn.Enable()
 		progress.SetText("")
 
 		go func() {
-			_, ok := autopick.Try(preset.Names(code), apply, works)
+			_, ok := autopick.Try(preset.Names(code), apply, works, func() bool { return stopFlag.Load() })
 
 			fyne.Do(func() {
 				searching = false
 				button.Enable()
 				choose.Enable()
 				pick.Enable()
+				stopBtn.Disable()
 
 				if !ok {
-					progress.SetText(l.T(lang.NoneWorked))
+					if stopFlag.Load() {
+						progress.SetText("")
+					} else {
+						progress.SetText(l.T(lang.NoneWorked))
+					}
 
 					return
 				}
@@ -375,7 +390,7 @@ func main() {
 		widget.NewLabel(l.T(lang.MethodLabel)),
 		container.NewBorder(nil, nil, nil, fav, choose),
 		now,
-		pick,
+		container.NewBorder(nil, nil, nil, stopBtn, pick),
 		widget.NewLabel(l.T(lang.AutoPickNote)),
 		progress,
 		caveat,
