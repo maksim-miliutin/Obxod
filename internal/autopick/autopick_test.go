@@ -13,6 +13,7 @@ func TestTryReturnsTheFirstThatWorks(t *testing.T) {
 		[]string{"a", "b", "c"},
 		func(n string) error { tried = append(tried, n); return nil },
 		func() bool { return works[tried[len(tried)-1]] },
+		func() bool { return false },
 	)
 
 	if !ok || name != "b" {
@@ -28,6 +29,7 @@ func TestTryReportsNoneWhenAllFail(t *testing.T) {
 	name, ok := Try(
 		[]string{"a", "b"},
 		func(string) error { return nil },
+		func() bool { return false },
 		func() bool { return false },
 	)
 
@@ -47,9 +49,29 @@ func TestTrySkipsAMethodThatWillNotApply(t *testing.T) {
 			return nil
 		},
 		func() bool { return true },
+		func() bool { return false },
 	)
 
 	if !ok || name != "good" {
 		t.Errorf("got %q %v, want good true", name, ok)
+	}
+}
+
+func TestTryStopsWhenAsked(t *testing.T) {
+	tried := []string{}
+
+	name, ok := Try(
+		[]string{"a", "b", "c"},
+		func(n string) error { tried = append(tried, n); return nil },
+		func() bool { return false },
+		func() bool { return len(tried) >= 1 },
+	)
+
+	if ok || name != "" {
+		t.Errorf("got %q %v, want empty false after stop", name, ok)
+	}
+
+	if len(tried) != 1 {
+		t.Errorf("tried %v, should have stopped after the first", tried)
 	}
 }
