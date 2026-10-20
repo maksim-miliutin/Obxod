@@ -26,7 +26,8 @@ type Hello struct {
 	Record    []byte // record header and body, aliases payload
 	Body      []byte // hello itself, past the handshake header, aliases payload
 
-	payload []byte
+	payload  []byte
+	bodyBase int
 }
 
 func Parse(payload []byte) (Hello, error) {
@@ -68,7 +69,31 @@ func Parse(payload []byte) (Hello, error) {
 		RecordLen: recordLen,
 		Record:    payload[:recordEnd],
 		Body:      payload[recordHeaderLen+handshakeHeaderLen : bodyEnd],
+		bodyBase:  recordHeaderLen + handshakeHeaderLen,
 	}
 
 	return h, nil
+}
+
+func FromHandshake(handshake []byte) (Hello, error) {
+	if len(handshake) < handshakeHeaderLen {
+		return Hello{}, ErrTooShort
+	}
+
+	if handshake[0] != typeClientHello {
+		return Hello{}, ErrNotClientHello
+	}
+
+	bodyLen := int(handshake[1])<<16 | int(handshake[2])<<8 | int(handshake[3])
+
+	bodyEnd := handshakeHeaderLen + bodyLen
+	if bodyEnd > len(handshake) {
+		bodyEnd = len(handshake)
+	}
+
+	return Hello{
+		payload:  handshake,
+		Body:     handshake[handshakeHeaderLen:bodyEnd],
+		bodyBase: handshakeHeaderLen,
+	}, nil
 }
