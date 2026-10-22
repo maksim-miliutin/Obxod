@@ -18,7 +18,7 @@ func TestOutbound(t *testing.T) {
 			"discord voice",
 			discordVoice,
 			"outbound and not loopback and not impostor and ip and " +
-				"((tcp.DstPort == 443 and tcp.PayloadLength > 0) or " +
+				"((tcp.DstPort == 443 and tcp.Payload[0] == 0x16) or " +
 				"(udp.DstPort >= 19294 and udp.DstPort <= 19344) or " +
 				"(udp.DstPort >= 50000 and udp.DstPort <= 50100)) and " +
 				"(ip.DstAddr <= 25.255.255.255 or ip.DstAddr >= 27.0.0.0)",
@@ -27,14 +27,14 @@ func TestOutbound(t *testing.T) {
 			"no voice at all",
 			nil,
 			"outbound and not loopback and not impostor and ip and " +
-				"((tcp.DstPort == 443 and tcp.PayloadLength > 0)) and " +
+				"((tcp.DstPort == 443 and tcp.Payload[0] == 0x16)) and " +
 				"(ip.DstAddr <= 25.255.255.255 or ip.DstAddr >= 27.0.0.0)",
 		},
 		{
 			"a single port needs no range",
 			[]PortRange{{50000, 50000}},
 			"outbound and not loopback and not impostor and ip and " +
-				"((tcp.DstPort == 443 and tcp.PayloadLength > 0) or udp.DstPort == 50000) and " +
+				"((tcp.DstPort == 443 and tcp.Payload[0] == 0x16) or udp.DstPort == 50000) and " +
 				"(ip.DstAddr <= 25.255.255.255 or ip.DstAddr >= 27.0.0.0)",
 		},
 	}
@@ -213,6 +213,21 @@ func TestOutboundCatchesQUIC(t *testing.T) {
 func TestRepliesLetsFinThrough(t *testing.T) {
 	if !strings.Contains(repliesFor(t, 443), "tcp.Fin") {
 		t.Error("a fin would never reach the watcher")
+	}
+}
+
+func TestOutboundCatchesOnlyHandshakes(t *testing.T) {
+	got, err := Outbound(Ports{TCP: []uint16{443}})
+	if err != nil {
+		t.Fatalf("Outbound: %v", err)
+	}
+
+	if !strings.Contains(got, "tcp.Payload[0] == 0x16") {
+		t.Errorf("the filter no longer narrows to the tls handshake: %s", got)
+	}
+
+	if strings.Contains(got, "PayloadLength") {
+		t.Errorf("the filter still catches every data packet: %s", got)
 	}
 }
 

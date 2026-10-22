@@ -37,7 +37,9 @@ func Outbound(p Ports) (string, error) {
 			return "", ErrZeroPort
 		}
 
-		clauses = append(clauses, fmt.Sprintf("(tcp.DstPort == %d and tcp.PayloadLength > 0)", port))
+		// 0x16 is the TLS handshake record type; catching only it leaves the bulk
+		// application data out of the engine, which needs nothing but the hello.
+		clauses = append(clauses, fmt.Sprintf("(tcp.DstPort == %d and tcp.Payload[0] == 0x16)", port))
 	}
 
 	if p.QUIC {
