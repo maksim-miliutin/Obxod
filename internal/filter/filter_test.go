@@ -20,19 +20,22 @@ func TestOutbound(t *testing.T) {
 			"outbound and not loopback and not impostor and ip and " +
 				"((tcp.DstPort == 443 and tcp.PayloadLength > 0) or " +
 				"(udp.DstPort >= 19294 and udp.DstPort <= 19344) or " +
-				"(udp.DstPort >= 50000 and udp.DstPort <= 50100))",
+				"(udp.DstPort >= 50000 and udp.DstPort <= 50100)) and " +
+				"(ip.DstAddr <= 25.255.255.255 or ip.DstAddr >= 27.0.0.0)",
 		},
 		{
 			"no voice at all",
 			nil,
 			"outbound and not loopback and not impostor and ip and " +
-				"((tcp.DstPort == 443 and tcp.PayloadLength > 0))",
+				"((tcp.DstPort == 443 and tcp.PayloadLength > 0)) and " +
+				"(ip.DstAddr <= 25.255.255.255 or ip.DstAddr >= 27.0.0.0)",
 		},
 		{
 			"a single port needs no range",
 			[]PortRange{{50000, 50000}},
 			"outbound and not loopback and not impostor and ip and " +
-				"((tcp.DstPort == 443 and tcp.PayloadLength > 0) or udp.DstPort == 50000)",
+				"((tcp.DstPort == 443 and tcp.PayloadLength > 0) or udp.DstPort == 50000) and " +
+				"(ip.DstAddr <= 25.255.255.255 or ip.DstAddr >= 27.0.0.0)",
 		},
 	}
 
@@ -210,5 +213,16 @@ func TestOutboundCatchesQUIC(t *testing.T) {
 func TestRepliesLetsFinThrough(t *testing.T) {
 	if !strings.Contains(repliesFor(t, 443), "tcp.Fin") {
 		t.Error("a fin would never reach the watcher")
+	}
+}
+
+func TestOutboundSkipsRadminRange(t *testing.T) {
+	got, err := Outbound(Ports{TCP: []uint16{443}, QUIC: true})
+	if err != nil {
+		t.Fatalf("Outbound: %v", err)
+	}
+
+	if !strings.Contains(got, ") and (ip.DstAddr <= 25.255.255.255 or ip.DstAddr >= 27.0.0.0)") {
+		t.Errorf("radmin range is not skipped, or not anded with the catch: %s", got)
 	}
 }

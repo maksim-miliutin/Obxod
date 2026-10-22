@@ -12,6 +12,10 @@ var (
 	ErrNoPorts    = errors.New("filter: nothing to catch")
 )
 
+// Radmin VPN gives its adapter an address in 26.0.0.0/8 and squats that range, so
+// skipping it leaves the user's own lan tunnel to the driver untouched.
+const outsideRadmin = "(ip.DstAddr <= 25.255.255.255 or ip.DstAddr >= 27.0.0.0)"
+
 // Ports says where to look. Discord alone speaks TLS on 443 as well as 2053,
 // 2083, 2087, 2096 and 8443, so the list is not a constant.
 type Ports struct {
@@ -66,7 +70,7 @@ func Outbound(p Ports) (string, error) {
 
 	head := "outbound and not loopback and not impostor and ip and "
 
-	return head + "(" + strings.Join(clauses, " or ") + ")", nil
+	return head + "(" + strings.Join(clauses, " or ") + ") and " + outsideRadmin, nil
 }
 
 // Meant for a handle opened in sniffing mode: replies are watched, never held up.
