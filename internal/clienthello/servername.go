@@ -32,7 +32,7 @@ type ServerName struct {
 }
 
 func (h Hello) ServerName() (ServerName, error) {
-	r := reader{data: h.Body, base: h.bodyBase}
+	r := reader{data: h.Body, base: recordHeaderLen + handshakeHeaderLen}
 
 	if !r.skip(legacyVersionLen + randomLen) {
 		return ServerName{}, ErrMalformed
