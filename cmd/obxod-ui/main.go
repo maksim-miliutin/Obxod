@@ -65,6 +65,38 @@ func flip(list []string, key string) []string {
 	return next
 }
 
+// tappableIcon turns the app mark into the on/off button: the whole icon takes the tap.
+type tappableIcon struct {
+	widget.BaseWidget
+	res      fyne.Resource
+	onTap    func()
+	disabled bool
+}
+
+func newTappableIcon(res fyne.Resource, onTap func()) *tappableIcon {
+	t := &tappableIcon{res: res, onTap: onTap}
+	t.ExtendBaseWidget(t)
+
+	return t
+}
+
+func (t *tappableIcon) Tapped(_ *fyne.PointEvent) {
+	if !t.disabled && t.onTap != nil {
+		t.onTap()
+	}
+}
+
+func (t *tappableIcon) Disable() { t.disabled = true }
+
+func (t *tappableIcon) Enable() { t.disabled = false }
+
+func (t *tappableIcon) CreateRenderer() fyne.WidgetRenderer {
+	img := canvas.NewImageFromResource(t.res)
+	img.FillMode = canvas.ImageFillContain
+
+	return widget.NewSimpleRenderer(img)
+}
+
 func main() {
 	a := app.NewWithID("io.obxod.ui")
 	a.Settings().SetTheme(obxodTheme{})
@@ -131,8 +163,6 @@ func main() {
 	searching := false
 	var stopFlag atomic.Bool
 
-	button := widget.NewButton(l.T(lang.TurnOn), nil)
-
 	turnOff := func() {
 		session.Stop()
 		session = nil
@@ -140,7 +170,6 @@ func main() {
 		dot.Color = idle
 		dot.Refresh()
 		word.SetText(l.T(lang.StatusOff))
-		button.SetText(l.T(lang.TurnOn))
 	}
 
 	turnOn := func() {
@@ -158,8 +187,19 @@ func main() {
 		dot.Color = working
 		dot.Refresh()
 		word.SetText(l.T(lang.StatusOn))
-		button.SetText(l.T(lang.TurnOff))
 	}
+
+	toggle := func() {
+		if session != nil {
+			turnOff()
+
+			return
+		}
+
+		turnOn()
+	}
+
+	znak := newTappableIcon(icon, toggle)
 
 	restart := func() {
 		if session != nil {
@@ -196,16 +236,6 @@ func main() {
 		ownRows.Refresh()
 	}
 	show()
-
-	button.OnTapped = func() {
-		if session != nil {
-			turnOff()
-
-			return
-		}
-
-		turnOn()
-	}
 
 	choose := widget.NewSelect(preset.NamesByFavourite(code, favourite), nil)
 	fav := widget.NewButton("", nil)
@@ -294,7 +324,7 @@ func main() {
 
 		searching = true
 		stopFlag.Store(false)
-		button.Disable()
+		znak.Disable()
 		choose.Disable()
 		pick.Disable()
 		stopBtn.Enable()
@@ -305,7 +335,7 @@ func main() {
 
 			fyne.Do(func() {
 				searching = false
-				button.Enable()
+				znak.Enable()
 				choose.Enable()
 				pick.Enable()
 				stopBtn.Disable()
@@ -395,12 +425,13 @@ func main() {
 	}
 
 	obhod := container.NewVBox(
-		container.NewHBox(dot, word),
-		button,
-		widget.NewLabel(l.T(lang.MethodLabel)),
-		container.NewBorder(nil, nil, nil, fav, choose),
+		container.NewCenter(container.NewGridWrap(fyne.NewSize(132, 132), znak)),
+		container.NewCenter(container.NewHBox(dot, word)),
 		now,
 		desc,
+		widget.NewSeparator(),
+		widget.NewLabel(l.T(lang.MethodLabel)),
+		container.NewBorder(nil, nil, nil, fav, choose),
 		container.NewBorder(nil, nil, nil, stopBtn, pick),
 		widget.NewLabel(l.T(lang.AutoPickNote)),
 		progress,
