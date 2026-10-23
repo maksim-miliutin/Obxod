@@ -1,6 +1,6 @@
 module obxod
 
-go 1.23
+go 1.26.0
 
 require fyne.io/fyne/v2 v2.8.2
 
@@ -36,7 +36,7 @@ require (
 	github.com/yuin/goldmark v1.8.6 // indirect
 	golang.org/x/image v0.24.0 // indirect
 	golang.org/x/net v0.35.0 // indirect
-	golang.org/x/sys v0.30.0 // indirect
+	golang.org/x/sys v0.49.0 // indirect
 	golang.org/x/text v0.22.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
