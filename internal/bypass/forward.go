@@ -13,6 +13,7 @@ import (
 	"obxod/internal/forge"
 	"obxod/internal/hello"
 	"obxod/internal/ip"
+	"obxod/internal/ipfrag"
 	"obxod/internal/rules"
 	"obxod/internal/seal"
 	"obxod/internal/tcp"
@@ -84,11 +85,51 @@ func (e *Engine) forward(h sender, packet []byte, addr *divert.Addr) (bool, erro
 		return e.multisplit(j)
 	}
 
+	if r.IPFrag != 0 {
+		return e.ipfragment(j)
+	}
+
 	if r.Cut != "" {
 		return e.split(j)
 	}
 
 	return false, nil
+}
+
+// ipfragment splits the hello at the ip layer, below tcp, so an inspector that reads
+// one packet finds no tcp header in the second fragment and no whole hello in either.
+// The segment is sealed first: windows offload often leaves the outgoing tcp checksum
+// uncomputed, and fragmenting would carry that straight to a server that then drops
+// the reassembled segment.
+func (e *Engine) ipfragment(j job) (bool, error) {
+	whole := append([]byte(nil), j.packet...)
+
+	if err := seal.Sums(whole, false); err != nil {
+		e.say("  %s: cannot seal before fragmenting: %v", j.found.Host, err)
+
+		return false, nil
+	}
+
+	first, second, err := ipfrag.At(whole, j.rule.IPFrag)
+	if err != nil {
+		e.say("  %s: cannot fragment: %v", j.found.Host, err)
+
+		return false, nil
+	}
+
+	if !e.wet {
+		e.say("  %s: would fragment the ip packet at %d bytes", j.found.Host, j.rule.IPFrag)
+
+		return false, nil
+	}
+
+	e.once(j.found.Host, "ip packet fragmented at %d bytes", j.rule.IPFrag)
+
+	if err := j.to.Send(first, j.addr); err != nil {
+		return true, err
+	}
+
+	return true, j.to.Send(second, j.addr)
 }
 
 // multisplit cuts the hello at a list of positions and sends the pieces in stream

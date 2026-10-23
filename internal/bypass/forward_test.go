@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"obxod/internal/checksum"
 	"obxod/internal/cut"
 	"obxod/internal/divert"
 	"obxod/internal/forge"
@@ -595,6 +596,101 @@ func TestMultiSplitPastTheHelloIsSkipped(t *testing.T) {
 
 	if sent || len(r.sent) != 0 {
 		t.Errorf("sent %d pieces for a position past the hello", len(r.sent))
+	}
+}
+
+func TestIPFragSendsTwoFragments(t *testing.T) {
+	const host = "updates.discord.com"
+
+	packet := packet443(clientHello(host))
+
+	r := &recorder{}
+	sent, err := engineFor(t, true, nil, host+"=ipfrag:24").forward(r, packet, &divert.Addr{})
+	if err != nil {
+		t.Fatalf("forward: %v", err)
+	}
+
+	if !sent {
+		t.Error("ipfrag did not take over sending, so the original would follow its own fragments")
+	}
+
+	if len(r.sent) != 2 {
+		t.Fatalf("sent %d packets, want two fragments", len(r.sent))
+	}
+
+	const moreFragments = 0x2000
+	if binary.BigEndian.Uint16(r.sent[0][6:8])&moreFragments == 0 {
+		t.Error("the first fragment does not say more follow")
+	}
+
+	ipPayload := func(p []byte) []byte {
+		outer, err := ip.Parse(p)
+		if err != nil {
+			t.Fatalf("ip.Parse: %v", err)
+		}
+
+		return outer.Payload
+	}
+
+	// The two fragments' payloads add back up to the whole ip payload.
+	if got := len(ipPayload(r.sent[0])) + len(ipPayload(r.sent[1])); got != len(ipPayload(packet)) {
+		t.Errorf("fragments carry %d bytes in all, want the original %d", got, len(ipPayload(packet)))
+	}
+
+	for i, out := range r.sent {
+		if bytes.Equal(out, packet) {
+			t.Errorf("fragment %d is the whole original", i)
+		}
+	}
+}
+
+// Reassembled, the fragments carry a correct tcp checksum. Windows offload leaves
+// the outgoing one uncomputed, so the engine must seal the segment before fragmenting
+// it, or the server drops what it puts back together.
+func TestIPFragSealsTheSegmentFirst(t *testing.T) {
+	const host = "updates.discord.com"
+
+	r := &recorder{}
+	if _, err := engineFor(t, true, nil, host+"=ipfrag:24").forward(r, packet443(clientHello(host)), &divert.Addr{}); err != nil {
+		t.Fatalf("forward: %v", err)
+	}
+
+	if len(r.sent) != 2 {
+		t.Fatalf("sent %d packets, want two fragments", len(r.sent))
+	}
+
+	first, err := ip.Parse(r.sent[0])
+	if err != nil {
+		t.Fatalf("ip.Parse: %v", err)
+	}
+
+	second, err := ip.Parse(r.sent[1])
+	if err != nil {
+		t.Fatalf("ip.Parse: %v", err)
+	}
+
+	segment := append(append([]byte(nil), first.Payload...), second.Payload...)
+
+	stored := binary.BigEndian.Uint16(segment[16:18])
+	if want := checksum.TCP(first.Src, first.Dst, segment); stored != want {
+		t.Errorf("reassembled tcp checksum = %#04x, want %#04x; the segment was not sealed before fragmenting", stored, want)
+	}
+}
+
+// A position past the hello cannot be fragmented; like any rule it cannot apply, it
+// is reported and skipped, not a reason to stop or to send a broken packet.
+func TestIPFragPastTheHelloIsSkipped(t *testing.T) {
+	const host = "updates.discord.com"
+
+	r := &recorder{}
+
+	sent, err := engineFor(t, true, nil, host+"=ipfrag:2000").forward(r, packet443(clientHello(host)), &divert.Addr{})
+	if err != nil {
+		t.Fatalf("forward returned %v, want the run to carry on", err)
+	}
+
+	if sent || len(r.sent) != 0 {
+		t.Errorf("sent %d fragments for a position past the hello", len(r.sent))
 	}
 }
 
