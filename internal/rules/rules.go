@@ -32,6 +32,7 @@ type Rule struct {
 	Cut    string // empty, "name", "after" or "start"
 
 	MultiSplit    string // empty, or positions joined by +, each a byte count or name/after/start
+	IPFrag        int    // 0, or a byte position (multiple of 8) to fragment the ip packet at
 	Overlap       int
 	Repeats       int
 	Recorded      bool

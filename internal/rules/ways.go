@@ -214,6 +214,21 @@ var ways = []way{
 		},
 	},
 	{
+		name: "ipfrag", hint: "ipfrag:24", kind: counts,
+		read: func(r *Rule, value string, _ bool) error {
+			at, err := strconv.Atoi(value)
+			if err != nil || at < 8 || at%8 != 0 {
+				return fmt.Errorf("rules: ipfrag wants a byte position to fragment at, a multiple of 8, at least 8, e.g. 24")
+			}
+
+			r.IPFrag = at
+
+			return nil
+		},
+		write: func(r Rule) string { return number("ipfrag", int64(r.IPFrag), r.IPFrag == 0) },
+		say:   func(r Rule) string { return words("ip fragmented at", int64(r.IPFrag), r.IPFrag == 0) },
+	},
+	{
 		name: "overlap", hint: "overlap:1", kind: counts,
 		read: func(r *Rule, value string, _ bool) error {
 			at, err := strconv.Atoi(value)

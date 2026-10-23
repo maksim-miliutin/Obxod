@@ -221,6 +221,33 @@ func TestMultiSplitRejectsNonsense(t *testing.T) {
 	}
 }
 
+func TestIPFragParses(t *testing.T) {
+	r, err := Parse("discord.com=ipfrag:24")
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+
+	if r.IPFrag != 24 {
+		t.Errorf("IPFrag = %d, want 24", r.IPFrag)
+	}
+}
+
+func TestIPFragRejectsNonsense(t *testing.T) {
+	for _, text := range []string{
+		"ipfrag",    // no position
+		"ipfrag:0",  // nothing before it to fragment off
+		"ipfrag:-8", // not a position
+		"ipfrag:20", // a fragment offset counts eights, so 20 does not land
+		"ipfrag:some",
+	} {
+		t.Run(text, func(t *testing.T) {
+			if _, err := Parse("discord.com=badsum," + text); err == nil {
+				t.Error("nonsense was accepted")
+			}
+		})
+	}
+}
+
 func TestBlankCountsEveryWay(t *testing.T) {
 	if !(Rule{Host: "a"}).Blank() {
 		t.Error("a rule with nothing set was not called blank")
@@ -234,6 +261,7 @@ func TestBlankCountsEveryWay(t *testing.T) {
 		{Decoy: "auto"},
 		{Cut: "name"},
 		{MultiSplit: "1+name"},
+		{IPFrag: 24},
 		{Overlap: 1},
 	}
 
@@ -372,6 +400,7 @@ func TestEveryWayWritesBackAndParsesAgain(t *testing.T) {
 		"ts": "ts:1000", "badsum": "badsum", "md5sig": "md5sig", "decoy": "decoy:mail.ru",
 		"fake": "fake", "fakeudp": "fakeudp:5", "hostfake": "hostfake:mail.ru", "cut": "cut:name", "overlap": "overlap:1",
 		"disorder": "disorder", "repeats": "repeats:5", "multidisorder": "multidisorder:4", "multisplit": "multisplit:1+name",
+		"ipfrag": "ipfrag:24",
 	}
 
 	for _, w := range ways {
@@ -417,7 +446,7 @@ func TestOnlyTheRightWaysCountAsOne(t *testing.T) {
 	cases := map[string]bool{
 		"ttl:4": false, "badseq:2": false, "badack:-1": false, "ts": false,
 		"badsum": false, "md5sig": false, "decoy": false, "fake": false, "fakeudp:5": false, "hostfake": false, "cut:name": false, "overlap:1": false,
-		"disorder": true, "repeats:5": true, "multidisorder:4": false, "multisplit:1+name": false,
+		"disorder": true, "repeats:5": true, "multidisorder:4": false, "multisplit:1+name": false, "ipfrag:24": false,
 	}
 
 	for text, blank := range cases {
