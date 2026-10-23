@@ -2,9 +2,8 @@ package quic
 
 // clientHello builds the smallest TLS 1.3 ClientHello that still carries a server
 // name where a dpi looks for it: one cipher suite, no key share, and the three
-// extensions a quic hello would look wrong without. The random is left zero: a
-// decoy that dies before the server needs no entropy, only the name.
-func clientHello(name string) []byte {
+// extensions a quic hello would look wrong without.
+func clientHello(name string, random []byte) []byte {
 	var ext []byte
 	ext = append(ext, serverName(name)...)
 	ext = append(ext, supportedVersions()...)
@@ -12,7 +11,7 @@ func clientHello(name string) []byte {
 
 	var body []byte
 	body = append(body, 0x03, 0x03)             // legacy version
-	body = append(body, make([]byte, 32)...)    // random
+	body = append(body, random...)              // 32 bytes of it, so a fixed one is not a signature
 	body = append(body, 0x00)                   // empty session id
 	body = append(body, 0x00, 0x02, 0x13, 0x01) // one cipher suite: aes-128-gcm-sha256
 	body = append(body, 0x01, 0x00)             // one compression method: none

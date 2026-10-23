@@ -17,20 +17,22 @@ const (
 	headerLen = 1 + 4 + 1 + dcidLen + 1 + 1 + 2 + pnLen
 )
 
-// Decoy builds a fake client Initial for name under a fresh random connection id,
-// padded to the smallest legal size. It is a real, decryptable Initial: on the wire
-// a dpi reads name out of it, which is the point.
+const helloRandomLen = 32
+
+// Decoy builds a fake client Initial for name under a fresh random connection id
+// and a fresh random hello, padded to the smallest legal size. It is a real,
+// decryptable Initial: on the wire a dpi reads name out of it, which is the point.
 func Decoy(name string) ([]byte, error) {
-	dcid := make([]byte, dcidLen)
-	if _, err := rand.Read(dcid); err != nil {
+	seed := make([]byte, dcidLen+helloRandomLen)
+	if _, err := rand.Read(seed); err != nil {
 		return nil, err
 	}
 
-	return decoyWith(dcid, name)
+	return decoyWith(seed[:dcidLen], seed[dcidLen:], name)
 }
 
-func decoyWith(dcid []byte, name string) ([]byte, error) {
-	plaintext := pad(cryptoFrame(clientHello(name)))
+func decoyWith(dcid []byte, random []byte, name string) ([]byte, error) {
+	plaintext := pad(cryptoFrame(clientHello(name, random)))
 
 	keys, err := InitialKeys(dcid)
 	if err != nil {

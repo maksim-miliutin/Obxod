@@ -1,6 +1,7 @@
 package quic
 
 import (
+	"bytes"
 	"crypto/aes"
 	"crypto/cipher"
 	"encoding/binary"
@@ -37,7 +38,7 @@ func TestDecoyCarriesTheName(t *testing.T) {
 
 	dcid := []byte{1, 2, 3, 4, 5, 6, 7, 8}
 
-	decoy, err := decoyWith(dcid, name)
+	decoy, err := decoyWith(dcid, make([]byte, helloRandomLen), name)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -127,4 +128,38 @@ func readVarint(b []byte) (uint64, int) {
 	}
 
 	return v, size
+}
+
+// Two decoys for the same name must not share a client hello random, or a dpi could
+// flag the fixed value and drop every fake.
+func TestDecoyRandomizesTheHello(t *testing.T) {
+	first, err := Decoy("www.google.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	second, err := Decoy("www.google.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if bytes.Equal(helloRandom(t, first), helloRandom(t, second)) {
+		t.Error("two decoys share a client hello random")
+	}
+}
+
+func helloRandom(t *testing.T, decoy []byte) []byte {
+	t.Helper()
+
+	plain := openInitial(t, decoy[6:6+dcidLen], decoy, headerLen-pnLen)
+
+	at := 1
+	_, n := readVarint(plain[at:])
+	at += n
+	_, n = readVarint(plain[at:])
+	at += n
+	hello := plain[at:]
+
+	// hello is 0x01, a three-byte length, the two-byte legacy version, then the random.
+	return hello[6 : 6+helloRandomLen]
 }
