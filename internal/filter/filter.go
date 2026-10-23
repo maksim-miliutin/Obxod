@@ -23,6 +23,7 @@ type Ports struct {
 	Voice            []PortRange
 	QUIC             bool
 	QUICInitialsOnly bool // with QUIC, catch only the handshake's first packet, not every datagram
+	SynData          bool // also catch opening syns, which carry no handshake byte to match on
 }
 
 type PortRange struct {
@@ -41,6 +42,10 @@ func Outbound(p Ports) (string, error) {
 		// 0x16 is the TLS handshake record type; catching only it leaves the bulk
 		// application data out of the engine, which needs nothing but the hello.
 		clauses = append(clauses, fmt.Sprintf("(tcp.DstPort == %d and tcp.Payload[0] == 0x16)", port))
+
+		if p.SynData {
+			clauses = append(clauses, fmt.Sprintf("(tcp.DstPort == %d and tcp.Syn and not tcp.Ack)", port))
+		}
 	}
 
 	if p.QUIC {

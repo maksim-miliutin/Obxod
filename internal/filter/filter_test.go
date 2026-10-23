@@ -208,6 +208,42 @@ func TestOutboundCatchesQUIC(t *testing.T) {
 	}
 }
 
+// An opening syn carries no handshake byte to match, so with syndata on it needs
+// a clause of its own; without it, syns stay out of the engine entirely.
+func TestOutboundCatchesSynsOnlyWhenAsked(t *testing.T) {
+	with, err := Outbound(Ports{TCP: []uint16{443}, SynData: true})
+	if err != nil {
+		t.Fatalf("Outbound: %v", err)
+	}
+
+	if !strings.Contains(with, "tcp.DstPort == 443 and tcp.Syn and not tcp.Ack") {
+		t.Errorf("syndata was asked for but opening syns go uncaught: %s", with)
+	}
+
+	without, err := Outbound(Ports{TCP: []uint16{443}})
+	if err != nil {
+		t.Fatalf("Outbound: %v", err)
+	}
+
+	if strings.Contains(without, "tcp.Syn") {
+		t.Errorf("syns are caught though syndata was not asked for: %s", without)
+	}
+}
+
+// Each watched port needs its own syn clause, the way each gets its own handshake one.
+func TestOutboundCatchesSynsOnEveryPort(t *testing.T) {
+	got, err := Outbound(Ports{TCP: []uint16{443, 8443}, SynData: true})
+	if err != nil {
+		t.Fatalf("Outbound: %v", err)
+	}
+
+	for _, port := range []string{"443", "8443"} {
+		if !strings.Contains(got, "tcp.DstPort == "+port+" and tcp.Syn and not tcp.Ack") {
+			t.Errorf("opening syns to %s would go uncaught: %s", port, got)
+		}
+	}
+}
+
 // The bug this guards: the watcher learned to read fin while the filter still
 // dropped it, so every finished connection looked like a killed one.
 func TestRepliesLetsFinThrough(t *testing.T) {

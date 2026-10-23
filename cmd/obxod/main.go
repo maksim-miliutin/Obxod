@@ -53,6 +53,7 @@ func run() error {
 	silence := flag.Int("silence", 45, "seconds of silence after which a connection counts as killed")
 	noQUIC := flag.Bool("noquic", false, "drop outgoing quic so the browser falls back to tcp, which we can unblock")
 	fakeQUIC := flag.String("fakequic", "", "instead of dropping quic, send a fake initial for this server name ahead of each real one, e.g. www.google.com")
+	synData := flag.Bool("syndata", false, "experimental: carry a payload in every opening tcp syn to the watched ports and drop the empty one; fires on all sites, not just blocked ones, and may break connections to servers that refuse data in a syn")
 	seen := flag.Bool("seen", false, "name every host no rule covers, once each, so the missing ones can be found")
 	wet := flag.Bool("wet", false, "actually send copies; off by default, only reports")
 	check := flag.String("check", "", "test how these hosts behave with no bypass, comma separated, then exit")
@@ -158,6 +159,7 @@ func run() error {
 		Silence:  time.Duration(*silence) * time.Second,
 		DropQUIC: *noQUIC,
 		FakeQUIC: *fakeQUIC,
+		SynData:  *synData,
 		Wet:      *wet,
 		Seen:     *seen,
 		Report:   report,

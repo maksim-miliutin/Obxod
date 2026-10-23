@@ -42,6 +42,7 @@ type Settings struct {
 	Silence  time.Duration
 	DropQUIC bool
 	FakeQUIC string // fake a quic initial for this name ahead of each real one, instead of dropping quic; empty leaves quic alone
+	SynData  bool   // carry a payload in every opening tcp syn to the watched ports and drop the empty original
 	Wet      bool
 	Seen     bool // name the hosts no rule covers, so the missing ones can be added
 
@@ -59,6 +60,7 @@ type Engine struct {
 	silence  time.Duration
 	dropQUIC bool
 	fakeQUIC string
+	synData  bool
 	wet      bool
 
 	report func(text string)
@@ -91,6 +93,7 @@ func New(s Settings) *Engine {
 		silence:  s.Silence,
 		dropQUIC: s.DropQUIC,
 		fakeQUIC: s.FakeQUIC,
+		synData:  s.SynData,
 		wet:      s.Wet,
 		report:   s.Report,
 		tries:    attempt.New(forget),
@@ -141,6 +144,17 @@ func (e *Engine) Run(wire Wire, eyes Eyes) error {
 			}
 
 			continue
+		}
+
+		if e.synData && isClientSYN(packet) {
+			sent, err := e.syndata(wire, packet, &addr)
+			if err != nil {
+				return err
+			}
+
+			if sent {
+				continue
+			}
 		}
 
 		if sent, err := e.voice(wire, packet, &addr); err != nil {

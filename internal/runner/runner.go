@@ -25,6 +25,7 @@ type Config struct {
 	Silence  time.Duration
 	DropQUIC bool
 	FakeQUIC string
+	SynData  bool
 	Wet      bool
 	Seen     bool
 	Report   func(string)
@@ -51,7 +52,7 @@ func DefaultPorts() []uint16 {
 }
 
 func Open(cfg Config) (*Session, error) {
-	outbound, err := filter.Outbound(filter.Ports{TCP: cfg.Ports, Voice: cfg.Voice, QUIC: cfg.DropQUIC || cfg.FakeQUIC != "", QUICInitialsOnly: cfg.FakeQUIC != ""})
+	outbound, err := filter.Outbound(filter.Ports{TCP: cfg.Ports, Voice: cfg.Voice, QUIC: cfg.DropQUIC || cfg.FakeQUIC != "", QUICInitialsOnly: cfg.FakeQUIC != "", SynData: cfg.SynData})
 	if err != nil {
 		return nil, err
 	}
@@ -82,6 +83,7 @@ func Open(cfg Config) (*Session, error) {
 		Silence:  cfg.Silence,
 		DropQUIC: cfg.DropQUIC,
 		FakeQUIC: cfg.FakeQUIC,
+		SynData:  cfg.SynData,
 		Wet:      cfg.Wet,
 		Seen:     cfg.Seen,
 		Report:   cfg.Report,
