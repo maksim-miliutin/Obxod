@@ -19,9 +19,10 @@ const outsideRadmin = "(ip.DstAddr <= 25.255.255.255 or ip.DstAddr >= 27.0.0.0)"
 // Ports says where to look. Discord alone speaks TLS on 443 as well as 2053,
 // 2083, 2087, 2096 and 8443, so the list is not a constant.
 type Ports struct {
-	TCP   []uint16
-	Voice []PortRange
-	QUIC  bool
+	TCP              []uint16
+	Voice            []PortRange
+	QUIC             bool
+	QUICInitialsOnly bool // with QUIC, catch only the handshake's first packet, not every datagram
 }
 
 type PortRange struct {
@@ -43,7 +44,7 @@ func Outbound(p Ports) (string, error) {
 	}
 
 	if p.QUIC {
-		clauses = append(clauses, "udp.DstPort == 443")
+		clauses = append(clauses, quicClause(p.QUICInitialsOnly))
 	}
 
 	for _, r := range p.Voice {
@@ -73,6 +74,16 @@ func Outbound(p Ports) (string, error) {
 	head := "outbound and not loopback and not impostor and ip and "
 
 	return head + "(" + strings.Join(clauses, " or ") + ") and " + outsideRadmin, nil
+}
+
+func quicClause(initialsOnly bool) string {
+	if !initialsOnly {
+		return "udp.DstPort == 443"
+	}
+
+	// On the wire an Initial's first byte is 0xc0..0xcf, so narrowing to it lets the
+	// later packets of a connection pass in the kernel instead of round-tripping here.
+	return "(udp.DstPort == 443 and udp.Payload[0] >= 0xc0 and udp.Payload[0] <= 0xcf)"
 }
 
 // Meant for a handle opened in sniffing mode: replies are watched, never held up.

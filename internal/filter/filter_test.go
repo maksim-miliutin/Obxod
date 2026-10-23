@@ -241,3 +241,25 @@ func TestOutboundSkipsRadminRange(t *testing.T) {
 		t.Errorf("radmin range is not skipped, or not anded with the catch: %s", got)
 	}
 }
+
+// Fake mode narrows udp 443 to the handshake's first packet; drop mode still takes
+// every quic datagram.
+func TestOutboundCatchesOnlyQUICInitials(t *testing.T) {
+	narrow, err := Outbound(Ports{TCP: []uint16{443}, QUIC: true, QUICInitialsOnly: true})
+	if err != nil {
+		t.Fatalf("Outbound: %v", err)
+	}
+
+	if !strings.Contains(narrow, "udp.Payload[0] >= 0xc0 and udp.Payload[0] <= 0xcf") {
+		t.Errorf("fake mode does not narrow udp 443 to initials: %s", narrow)
+	}
+
+	wide, err := Outbound(Ports{TCP: []uint16{443}, QUIC: true})
+	if err != nil {
+		t.Fatalf("Outbound: %v", err)
+	}
+
+	if strings.Contains(wide, "udp.Payload") {
+		t.Errorf("drop mode should catch every quic datagram, not just initials: %s", wide)
+	}
+}
