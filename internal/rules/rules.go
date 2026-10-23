@@ -7,10 +7,11 @@ import (
 )
 
 var (
-	ErrManyHosts = errors.New("rules: a host name cannot hold a comma")
-	ErrNoHost    = errors.New("rules: a rule starts with a host name and an equals sign")
-	ErrNoWay     = errors.New("rules: a rule needs a way to bypass, such as decoy or cut:name")
-	ErrCutWhere  = errors.New("rules: cut takes name, after or start")
+	ErrManyHosts  = errors.New("rules: a host name cannot hold a comma")
+	ErrNoHost     = errors.New("rules: a rule starts with a host name and an equals sign")
+	ErrNoWay      = errors.New("rules: a rule needs a way to bypass, such as decoy or cut:name")
+	ErrCutWhere   = errors.New("rules: cut takes name, after or start")
+	ErrSplitWhere = errors.New("rules: multisplit takes positions joined by +, each a byte count or name, after, start")
 )
 
 // Ten minutes of ticks: old enough for the server to call the copy a stale
@@ -30,6 +31,7 @@ type Rule struct {
 	Decoy  string // empty, "auto", or a name of the very same length
 	Cut    string // empty, "name", "after" or "start"
 
+	MultiSplit    string // empty, or positions joined by +, each a byte count or name/after/start
 	Overlap       int
 	Repeats       int
 	Recorded      bool

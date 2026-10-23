@@ -193,6 +193,34 @@ func TestParseOverlapRejectsNonsense(t *testing.T) {
 	}
 }
 
+func TestMultiSplitParses(t *testing.T) {
+	r, err := Parse("discord.com=multisplit:1+name+after")
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+
+	if r.MultiSplit != "1+name+after" {
+		t.Errorf("MultiSplit = %q, want %q", r.MultiSplit, "1+name+after")
+	}
+}
+
+func TestMultiSplitRejectsNonsense(t *testing.T) {
+	for _, text := range []string{
+		"multisplit",            // no positions at all
+		"multisplit:",           // nothing after the colon
+		"multisplit:0",          // a split at the very start cuts nothing off
+		"multisplit:-1",         // not a byte count
+		"multisplit:1+sideways", // an unknown named point
+		"multisplit:1+",         // a trailing empty position
+	} {
+		t.Run(text, func(t *testing.T) {
+			if _, err := Parse("discord.com=badsum," + text); !errors.Is(err, ErrSplitWhere) {
+				t.Errorf("%q: err = %v, want ErrSplitWhere", text, err)
+			}
+		})
+	}
+}
+
 func TestBlankCountsEveryWay(t *testing.T) {
 	if !(Rule{Host: "a"}).Blank() {
 		t.Error("a rule with nothing set was not called blank")
@@ -205,6 +233,7 @@ func TestBlankCountsEveryWay(t *testing.T) {
 		{BadSum: true},
 		{Decoy: "auto"},
 		{Cut: "name"},
+		{MultiSplit: "1+name"},
 		{Overlap: 1},
 	}
 
@@ -342,7 +371,7 @@ func TestEveryWayWritesBackAndParsesAgain(t *testing.T) {
 		"ttl": "ttl:4", "badseq": "badseq:100000", "badack": "badack:-66000",
 		"ts": "ts:1000", "badsum": "badsum", "md5sig": "md5sig", "decoy": "decoy:mail.ru",
 		"fake": "fake", "fakeudp": "fakeudp:5", "hostfake": "hostfake:mail.ru", "cut": "cut:name", "overlap": "overlap:1",
-		"disorder": "disorder", "repeats": "repeats:5", "multidisorder": "multidisorder:4",
+		"disorder": "disorder", "repeats": "repeats:5", "multidisorder": "multidisorder:4", "multisplit": "multisplit:1+name",
 	}
 
 	for _, w := range ways {
@@ -388,7 +417,7 @@ func TestOnlyTheRightWaysCountAsOne(t *testing.T) {
 	cases := map[string]bool{
 		"ttl:4": false, "badseq:2": false, "badack:-1": false, "ts": false,
 		"badsum": false, "md5sig": false, "decoy": false, "fake": false, "fakeudp:5": false, "hostfake": false, "cut:name": false, "overlap:1": false,
-		"disorder": true, "repeats:5": true, "multidisorder:4": false,
+		"disorder": true, "repeats:5": true, "multidisorder:4": false, "multisplit:1+name": false,
 	}
 
 	for text, blank := range cases {

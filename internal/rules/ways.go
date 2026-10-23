@@ -188,6 +188,32 @@ var ways = []way{
 		},
 	},
 	{
+		name: "multisplit", hint: "multisplit:1+name", kind: counts,
+		read: func(r *Rule, value string, _ bool) error {
+			if value == "" {
+				return ErrSplitWhere
+			}
+
+			for _, token := range strings.Split(value, "+") {
+				if !splitPosition(token) {
+					return ErrSplitWhere
+				}
+			}
+
+			r.MultiSplit = value
+
+			return nil
+		},
+		write: func(r Rule) string { return text("multisplit", r.MultiSplit) },
+		say: func(r Rule) string {
+			if r.MultiSplit == "" {
+				return ""
+			}
+
+			return "split at " + r.MultiSplit
+		},
+	},
+	{
 		name: "overlap", hint: "overlap:1", kind: counts,
 		read: func(r *Rule, value string, _ bool) error {
 			at, err := strconv.Atoi(value)
@@ -250,6 +276,18 @@ var ways = []way{
 		write: func(r Rule) string { return number("repeats", int64(r.Repeats), r.Repeats == 0) },
 		say:   func(r Rule) string { return words("copies", int64(r.Repeats), r.Repeats == 0) },
 	},
+}
+
+// A split position is either a named point the hello supplies or a plain byte count.
+func splitPosition(token string) bool {
+	switch token {
+	case "name", "after", "start":
+		return true
+	}
+
+	at, err := strconv.Atoi(token)
+
+	return err == nil && at > 0
 }
 
 func bare(field *bool, name string, given bool) error {
