@@ -22,6 +22,17 @@ var ErrNotUDP = errors.New("seal: only udp packets are made into datagrams")
 // checksum made true again. A datagram has no sequence number and no window, so
 // there is nothing here to shift or to overlap.
 func Datagram(packet []byte, payload []byte) ([]byte, error) {
+	return withSum(packet, payload, false)
+}
+
+// SpoiledDatagram is Datagram with a deliberately wrong udp checksum: the copy
+// passes the routers and an inspector, but the destination drops it. A decoy must
+// die before the server, or the server answers a connection the client never opened.
+func SpoiledDatagram(packet []byte, payload []byte) ([]byte, error) {
+	return withSum(packet, payload, true)
+}
+
+func withSum(packet []byte, payload []byte, spoil bool) ([]byte, error) {
 	outer, err := ip.Parse(packet)
 	if err != nil {
 		return nil, err
@@ -51,7 +62,18 @@ func Datagram(packet []byte, payload []byte) ([]byte, error) {
 	copy(src[:], packet[12:16])
 	copy(dst[:], packet[16:20])
 
-	binary.BigEndian.PutUint16(datagram[udpChecksumAt:udpChecksumAt+2], checksum.UDP(src, dst, datagram))
+	sum := checksum.UDP(src, dst, datagram)
+
+	if spoil {
+		sum = ^sum
+		if sum == 0 {
+			// Zero in a udp datagram means "no checksum", which the server would accept;
+			// any other wrong value keeps the field present and failing.
+			sum = 0x0001
+		}
+	}
+
+	binary.BigEndian.PutUint16(datagram[udpChecksumAt:udpChecksumAt+2], sum)
 
 	return made, nil
 }

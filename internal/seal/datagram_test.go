@@ -134,3 +134,37 @@ func TestDatagramCarriesThePayloadUntouched(t *testing.T) {
 		t.Error("the payload came out different from what went in")
 	}
 }
+
+// A decoy must not reach the server, so SpoiledDatagram is Datagram with its udp
+// checksum flipped and nothing else moved.
+func TestSpoiledDatagramBreaksOnlyTheUDPChecksum(t *testing.T) {
+	payload := bytes.Repeat([]byte{0xcd}, 1200)
+	packet := datagramTo(443, []byte("real"))
+
+	good, err := Datagram(packet, payload)
+	if err != nil {
+		t.Fatalf("Datagram: %v", err)
+	}
+
+	bad, err := SpoiledDatagram(packet, payload)
+	if err != nil {
+		t.Fatalf("SpoiledDatagram: %v", err)
+	}
+
+	// The udp checksum sits two bytes into the datagram's own header, past the ip
+	// header and the udp ports and length: offsets 26 and 27 of the whole packet.
+	if !bytes.Equal(good[:26], bad[:26]) || !bytes.Equal(good[28:], bad[28:]) {
+		t.Error("spoiling moved more than the checksum")
+	}
+
+	gsum := binary.BigEndian.Uint16(good[26:28])
+	bsum := binary.BigEndian.Uint16(bad[26:28])
+
+	if bsum == gsum {
+		t.Error("the spoiled checksum equals the good one, so the server would accept it")
+	}
+
+	if bsum == 0 {
+		t.Error("a zero checksum tells udp there is none to check")
+	}
+}
