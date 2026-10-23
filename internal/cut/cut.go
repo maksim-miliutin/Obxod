@@ -2,6 +2,7 @@ package cut
 
 import (
 	"errors"
+	"sort"
 
 	"obxod/internal/ip"
 	"obxod/internal/seal"
@@ -50,6 +51,69 @@ func Pieces(packet []byte, n int) ([][]byte, error) {
 	}
 
 	return out, nil
+}
+
+// AtPositions breaks the payload at the given offsets into one more piece than
+// there are offsets, each sealed at its own sequence number so the server puts them
+// back whole whatever order they arrive in. The offsets are sorted and deduplicated,
+// and any at or past the edges are refused, since every piece must carry a byte.
+func AtPositions(packet []byte, points []int) ([][]byte, error) {
+	_, segment, err := layers(packet)
+	if err != nil {
+		return nil, err
+	}
+
+	bounds, err := interior(points, len(segment.Payload))
+	if err != nil {
+		return nil, err
+	}
+
+	out := make([][]byte, 0, len(bounds)+1)
+	from := 0
+
+	for _, to := range bounds {
+		piece, err := seal.Remade(packet, segment.Payload[from:to], segment.Seq+uint32(from))
+		if err != nil {
+			return nil, err
+		}
+
+		out = append(out, piece)
+		from = to
+	}
+
+	last, err := seal.Remade(packet, segment.Payload[from:], segment.Seq+uint32(from))
+	if err != nil {
+		return nil, err
+	}
+
+	return append(out, last), nil
+}
+
+func interior(points []int, total int) ([]int, error) {
+	seen := make(map[int]bool, len(points))
+
+	var kept []int
+
+	for _, p := range points {
+		if p <= 0 || p >= total {
+			return nil, ErrBadPoint
+		}
+
+		if seen[p] {
+			continue
+		}
+
+		seen[p] = true
+		kept = append(kept, p)
+	}
+
+	if len(kept) == 0 {
+		return nil, ErrNoRoomLeft
+	}
+
+	sort.Ints(kept)
+
+	return kept, nil
 }
 
 func Filler(pattern []byte, size int) []byte {

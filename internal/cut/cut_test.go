@@ -125,6 +125,122 @@ func payloadOf(t *testing.T, packet []byte) []byte {
 	return segment.Payload
 }
 
+// One more piece than there are points; ordered by sequence they rebuild the hello,
+// and each number sits where its bytes begin — what the server needs to reassemble.
+func TestAtPositions(t *testing.T) {
+	payload := hello("updates.discord.com")
+
+	pieces, err := AtPositions(packetWith(1000, payload), []int{1, 10, 40})
+	if err != nil {
+		t.Fatalf("AtPositions: %v", err)
+	}
+
+	if len(pieces) != 4 {
+		t.Fatalf("got %d pieces, want 4 for three points", len(pieces))
+	}
+
+	var joined []byte
+
+	for _, piece := range pieces {
+		if got := seqOf(t, piece); got != 1000+uint32(len(joined)) {
+			t.Errorf("piece at %d bytes carries seq %d, want %d", len(joined), got, 1000+uint32(len(joined)))
+		}
+
+		joined = append(joined, payloadOf(t, piece)...)
+	}
+
+	if !bytes.Equal(joined, payload) {
+		t.Error("the pieces do not rebuild the hello")
+	}
+}
+
+// Order and repeats among the points make no difference: a split is defined by the
+// set of offsets, not how the caller happened to list them.
+func TestAtPositionsSortsAndDeduplicates(t *testing.T) {
+	payload := hello("updates.discord.com")
+
+	scrambled, err := AtPositions(packetWith(1000, payload), []int{40, 1, 10, 10})
+	if err != nil {
+		t.Fatalf("AtPositions: %v", err)
+	}
+
+	ordered, err := AtPositions(packetWith(1000, payload), []int{1, 10, 40})
+	if err != nil {
+		t.Fatalf("AtPositions: %v", err)
+	}
+
+	if len(scrambled) != len(ordered) {
+		t.Fatalf("scrambled points gave %d pieces, want %d", len(scrambled), len(ordered))
+	}
+
+	for i := range ordered {
+		if !bytes.Equal(scrambled[i], ordered[i]) {
+			t.Errorf("piece %d differs: the points were not sorted and deduplicated", i)
+		}
+	}
+}
+
+func TestAtPositionsErrors(t *testing.T) {
+	payload := hello("updates.discord.com")
+
+	cases := []struct {
+		name   string
+		packet []byte
+		points []int
+		want   error
+	}{
+		{"udp", udpPacket(), []int{5}, ErrNotTCP},
+		{"bare ack", packetWith(1000, nil), []int{5}, ErrNoPayload},
+		{"no points", packetWith(1000, payload), nil, ErrNoRoomLeft},
+		{"a split at the start", packetWith(1000, payload), []int{0}, ErrBadPoint},
+		{"a negative point", packetWith(1000, payload), []int{-1}, ErrBadPoint},
+		{"a point at the end", packetWith(1000, payload), []int{len(payload)}, ErrBadPoint},
+		{"a point past the end", packetWith(1000, payload), []int{len(payload) + 1}, ErrBadPoint},
+		{"one good, one past the end", packetWith(1000, payload), []int{5, len(payload) + 9}, ErrBadPoint},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if _, err := AtPositions(c.packet, c.points); !errors.Is(err, c.want) {
+				t.Errorf("err = %v, want %v", err, c.want)
+			}
+		})
+	}
+}
+
+func TestAtPositionsLeavesTheOriginalAlone(t *testing.T) {
+	packet := packetWith(1000, hello("updates.discord.com"))
+	before := append([]byte(nil), packet...)
+
+	if _, err := AtPositions(packet, []int{5, 20}); err != nil {
+		t.Fatalf("AtPositions: %v", err)
+	}
+
+	if !bytes.Equal(packet, before) {
+		t.Error("AtPositions wrote into the packet it was given")
+	}
+}
+
+func TestAtPositionsPiecesAreWellFormed(t *testing.T) {
+	pieces, err := AtPositions(packetWith(1000, hello("updates.discord.com")), []int{2, 30})
+	if err != nil {
+		t.Fatalf("AtPositions: %v", err)
+	}
+
+	for _, piece := range pieces {
+		verify(t, piece)
+
+		outer, err := ip.Parse(piece)
+		if err != nil {
+			t.Fatalf("ip.Parse: %v", err)
+		}
+
+		if outer.TotalLen != len(piece) {
+			t.Errorf("total length says %d, packet is %d bytes", outer.TotalLen, len(piece))
+		}
+	}
+}
+
 func seqOf(t *testing.T, packet []byte) uint32 {
 	t.Helper()
 
