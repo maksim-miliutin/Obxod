@@ -37,6 +37,7 @@ const (
 	Searching
 	AutoPickNote
 	NoneWorked
+	FastQUIC
 	last
 )
 
@@ -77,6 +78,7 @@ var ru = Lang{
 	Searching:     "Пробую: %s",
 	AutoPickNote:  "Проверяет только, открывается ли сайт.\nГолос и стримы проверьте сами.",
 	NoneWorked:    "Ни один способ не подошёл.",
+	FastQUIC:      "Фейковать QUIC (быстрее)",
 }
 
 var en = Lang{
@@ -114,6 +116,7 @@ var en = Lang{
 	Searching:     "Trying: %s",
 	AutoPickNote:  "Only checks that the site opens.\nCheck voice and streams yourself.",
 	NoneWorked:    "No method worked.",
+	FastQUIC:      "Fake QUIC (faster)",
 }
 
 func Of(code string) Lang {

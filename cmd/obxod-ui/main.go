@@ -38,6 +38,8 @@ var (
 
 var errNoMethod = errors.New("obxod-ui: method not found")
 
+const fakeQUICName = "www.google.com"
+
 func starredKey(list []string, key string) bool {
 	for _, k := range list {
 		if k == key {
@@ -117,6 +119,10 @@ func main() {
 		favourite = strings.Split(saved, ",")
 	}
 
+	useFake := func() bool {
+		return a.Preferences().BoolWithFallback("fakequic", true)
+	}
+
 	var session *runner.Session
 	var rate meter.Rate
 	searching := false
@@ -135,7 +141,7 @@ func main() {
 	}
 
 	turnOn := func() {
-		started, err := start(chosen, own.List(), keep)
+		started, err := start(chosen, own.List(), keep, useFake())
 		if err != nil {
 			dialog.ShowError(err, window)
 
@@ -253,7 +259,7 @@ func main() {
 			session = nil
 		}
 
-		started, err := start(found, own.List(), keep)
+		started, err := start(found, own.List(), keep, useFake())
 		if err != nil {
 			return err
 		}
@@ -434,11 +440,19 @@ func main() {
 		container.NewScroll(logView),
 	)
 
+	fastQUIC := widget.NewCheck(l.T(lang.FastQUIC), func(on bool) {
+		a.Preferences().SetBool("fakequic", on)
+		restart()
+	})
+	fastQUIC.Checked = a.Preferences().BoolWithFallback("fakequic", true)
+
 	about := container.NewVBox(
 		widget.NewLabel(l.T(lang.AboutWhat)),
 		widget.NewLabel(l.T(lang.AboutOpens)),
 		widget.NewSeparator(),
 		widget.NewLabel(l.T(lang.AboutMethods)),
+		widget.NewSeparator(),
+		fastQUIC,
 		widget.NewSeparator(),
 		widget.NewLabel(l.T(lang.AboutUnsigned)),
 		widget.NewSeparator(),
@@ -472,19 +486,28 @@ func sitesFile() string {
 	return filepath.Join(filepath.Dir(exe), "sites.txt")
 }
 
-func start(p preset.Preset, extra []string, report func(string)) (*runner.Session, error) {
+func start(p preset.Preset, extra []string, report func(string), fakeQUIC bool) (*runner.Session, error) {
 	set, err := p.RulesVoice(extra)
 	if err != nil {
 		return nil, err
 	}
 
-	return runner.Open(runner.Config{
-		Rules:    set,
-		Ports:    runner.DefaultPorts(),
-		Voice:    runner.DefaultVoice(),
-		Voiced:   voiceDatagram,
-		Wet:      true,
-		DropQUIC: true,
-		Report:   report,
-	})
+	cfg := runner.Config{
+		Rules:  set,
+		Ports:  runner.DefaultPorts(),
+		Voice:  runner.DefaultVoice(),
+		Voiced: voiceDatagram,
+		Wet:    true,
+		Report: report,
+	}
+
+	// Faking the Initial keeps the real handshake alive, so http/3 goes on working;
+	// dropping is the fallback for a dpi the fake does not fool.
+	if fakeQUIC {
+		cfg.FakeQUIC = fakeQUICName
+	} else {
+		cfg.DropQUIC = true
+	}
+
+	return runner.Open(cfg)
 }
