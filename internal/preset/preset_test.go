@@ -3,6 +3,8 @@ package preset
 import (
 	"strings"
 	"testing"
+
+	"obxod/internal/rules"
 )
 
 func TestEveryPresetParses(t *testing.T) {
@@ -17,6 +19,35 @@ func TestEveryPresetParses(t *testing.T) {
 		if len(set) == 0 {
 			t.Errorf("%s: no rules", p.Key)
 		}
+	}
+}
+
+// The pure-desync presets must actually carry their way, or a typo in the way string
+// would leave a method in the list that quietly does nothing.
+func TestDesyncPresetsCarryTheirWay(t *testing.T) {
+	carries := map[string]func(rules.Rule) bool{
+		"scatter":    func(r rules.Rule) bool { return r.MultiDisorder != 0 },
+		"multisplit": func(r rules.Rule) bool { return r.MultiSplit != "" },
+		"ipfrag":     func(r rules.Rule) bool { return r.IPFrag != 0 },
+	}
+
+	for key, ok := range carries {
+		t.Run(key, func(t *testing.T) {
+			p, found := Named(key)
+			if !found {
+				t.Fatalf("preset %q is missing", key)
+			}
+
+			set, err := p.Rules()
+			if err != nil {
+				t.Fatalf("Rules: %v", err)
+			}
+
+			r, _ := set.For("discord.com")
+			if !ok(r) {
+				t.Errorf("preset %q does not carry its way: %+v", key, r)
+			}
+		})
 	}
 }
 
