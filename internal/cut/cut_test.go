@@ -64,6 +64,51 @@ func packetWith(seq uint32, payload []byte) []byte {
 	return packet
 }
 
+// Ordered by sequence, the pieces rebuild the whole hello, and each one's number
+// sits where its bytes begin — the two facts the server needs to reassemble them.
+func TestPieces(t *testing.T) {
+	payload := hello("discord.com")
+
+	pieces, err := Pieces(packetWith(1000, payload), 4)
+	if err != nil {
+		t.Fatalf("Pieces: %v", err)
+	}
+
+	if len(pieces) != 4 {
+		t.Fatalf("got %d pieces, want 4", len(pieces))
+	}
+
+	var joined []byte
+
+	for _, piece := range pieces {
+		outer, err := ip.Parse(piece)
+		if err != nil {
+			t.Fatalf("piece does not parse: %v", err)
+		}
+
+		segment, err := tcp.Parse(outer.Payload)
+		if err != nil {
+			t.Fatalf("segment does not parse: %v", err)
+		}
+
+		if segment.Seq != 1000+uint32(len(joined)) {
+			t.Errorf("piece at %d bytes carries seq %d, want %d", len(joined), segment.Seq, 1000+uint32(len(joined)))
+		}
+
+		joined = append(joined, segment.Payload...)
+	}
+
+	if !bytes.Equal(joined, payload) {
+		t.Error("the pieces do not rebuild the hello")
+	}
+}
+
+func TestPiecesNeedsAtLeastTwo(t *testing.T) {
+	if _, err := Pieces(packetWith(1, hello("x.com")), 1); !errors.Is(err, ErrTooFewPieces) {
+		t.Errorf("Pieces into one: err = %v, want ErrTooFewPieces", err)
+	}
+}
+
 func payloadOf(t *testing.T, packet []byte) []byte {
 	t.Helper()
 

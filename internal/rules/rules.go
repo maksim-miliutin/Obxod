@@ -30,15 +30,16 @@ type Rule struct {
 	Decoy  string // empty, "auto", or a name of the very same length
 	Cut    string // empty, "name", "after" or "start"
 
-	Overlap  int
-	Repeats  int
-	Recorded bool
-	BadAck   int32
-	Stale    uint32
-	Signed   bool
-	Disorder bool
-	HostFake string
-	FakeUDP  int
+	Overlap       int
+	Repeats       int
+	Recorded      bool
+	BadAck        int32
+	Stale         uint32
+	Signed        bool
+	Disorder      bool
+	MultiDisorder int
+	HostFake      string
+	FakeUDP       int
 }
 
 // Parse reads one rule, written as host=way,way,way.

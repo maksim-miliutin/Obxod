@@ -156,6 +156,29 @@ func TestRunDoesNotResendACutHello(t *testing.T) {
 	}
 }
 
+func TestRunScattersTheHello(t *testing.T) {
+	const host = "gateway.discord.gg"
+
+	packet := packet443(clientHello(host))
+
+	wire := runOver(t, Settings{Rules: setOf(t, host+"=multidisorder:3"), Wet: true}, packet)
+
+	if len(wire.sent) != 3 {
+		t.Fatalf("sent %d pieces, want the three it split into", len(wire.sent))
+	}
+
+	for i, out := range wire.sent {
+		if bytes.Equal(out, packet) {
+			t.Errorf("piece %d is the whole original, which must not follow its own pieces", i)
+		}
+	}
+
+	// Newest first: the piece sent first sits latest in the stream.
+	if seqOf(wire.sent[0]) <= seqOf(wire.sent[2]) {
+		t.Error("the pieces were not sent out of order")
+	}
+}
+
 func TestRunDropsQUICOnlyWhenAsked(t *testing.T) {
 	cases := map[string]struct {
 		drop bool

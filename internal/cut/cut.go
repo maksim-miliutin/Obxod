@@ -9,12 +9,48 @@ import (
 )
 
 var (
-	ErrNotTCP     = errors.New("cut: only tcp packets are split")
-	ErrNoPayload  = errors.New("cut: the packet carries nothing to split")
-	ErrBadPoint   = errors.New("cut: the split point lies outside the payload")
-	ErrNoRoomLeft = errors.New("cut: a split needs at least one byte on each side")
-	ErrNoPattern  = errors.New("cut: an overlap needs a recorded hello to lay over")
+	ErrNotTCP       = errors.New("cut: only tcp packets are split")
+	ErrNoPayload    = errors.New("cut: the packet carries nothing to split")
+	ErrBadPoint     = errors.New("cut: the split point lies outside the payload")
+	ErrNoRoomLeft   = errors.New("cut: a split needs at least one byte on each side")
+	ErrNoPattern    = errors.New("cut: an overlap needs a recorded hello to lay over")
+	ErrTooFewPieces = errors.New("cut: a scatter needs at least two pieces")
 )
+
+// Pieces breaks the payload into n parts, each sealed at its own sequence number,
+// so sending them in any order still reassembles whole on the server. The parts
+// come back in stream order; the caller is what sends them scrambled.
+func Pieces(packet []byte, n int) ([][]byte, error) {
+	if n < 2 {
+		return nil, ErrTooFewPieces
+	}
+
+	_, segment, err := layers(packet)
+	if err != nil {
+		return nil, err
+	}
+
+	total := len(segment.Payload)
+	if n > total {
+		n = total
+	}
+
+	out := make([][]byte, 0, n)
+
+	for i := 0; i < n; i++ {
+		from := i * total / n
+		to := (i + 1) * total / n
+
+		piece, err := seal.Remade(packet, segment.Payload[from:to], segment.Seq+uint32(from))
+		if err != nil {
+			return nil, err
+		}
+
+		out = append(out, piece)
+	}
+
+	return out, nil
+}
 
 func Filler(pattern []byte, size int) []byte {
 	if size <= 0 {

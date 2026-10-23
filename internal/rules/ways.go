@@ -215,6 +215,27 @@ var ways = []way{
 		},
 	},
 	{
+		name: "multidisorder", hint: "multidisorder:4", kind: counts,
+		read: func(r *Rule, value string, _ bool) error {
+			pieces, err := strconv.Atoi(value)
+			if err != nil || pieces < 2 || pieces > 8 {
+				return fmt.Errorf("rules: multidisorder wants how many pieces the hello breaks into, 2 to 8")
+			}
+
+			r.MultiDisorder = pieces
+
+			return nil
+		},
+		write: func(r Rule) string { return number("multidisorder", int64(r.MultiDisorder), r.MultiDisorder == 0) },
+		say: func(r Rule) string {
+			if r.MultiDisorder == 0 {
+				return ""
+			}
+
+			return fmt.Sprintf("%d pieces out of order", r.MultiDisorder)
+		},
+	},
+	{
 		name: "repeats", hint: "repeats:5", kind: 0,
 		read: func(r *Rule, value string, _ bool) error {
 			copies, err := strconv.Atoi(value)

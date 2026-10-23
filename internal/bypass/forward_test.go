@@ -50,6 +50,10 @@ func clientHello(host string) []byte {
 	return append(record, handshake...)
 }
 
+func seqOf(packet []byte) uint32 {
+	return binary.BigEndian.Uint32(packet[24:28])
+}
+
 func packet443(payload []byte) []byte {
 	transport := make([]byte, 20)
 	binary.BigEndian.PutUint16(transport[2:4], 443)

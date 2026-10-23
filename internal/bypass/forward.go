@@ -75,11 +75,43 @@ func (e *Engine) forward(h sender, packet []byte, addr *divert.Addr) (bool, erro
 		return e.overlay(j)
 	}
 
+	if r.MultiDisorder != 0 {
+		return e.scatter(j)
+	}
+
 	if r.Cut != "" {
 		return e.split(j)
 	}
 
 	return false, nil
+}
+
+// scatter breaks the hello into pieces and sends them newest first, so an inspector
+// reading in arrival order never sees it whole; the server orders them by sequence
+// number regardless.
+func (e *Engine) scatter(j job) (bool, error) {
+	pieces, err := cut.Pieces(j.packet, j.rule.MultiDisorder)
+	if err != nil {
+		e.say("  %s: cannot scatter: %v", j.found.Host, err)
+
+		return false, nil
+	}
+
+	if !e.wet {
+		e.say("  %s: would scatter into %d pieces", j.found.Host, len(pieces))
+
+		return false, nil
+	}
+
+	e.once(j.found.Host, "scattered into %d pieces", len(pieces))
+
+	for i := len(pieces) - 1; i >= 0; i-- {
+		if err := j.to.Send(pieces[i], j.addr); err != nil {
+			return true, err
+		}
+	}
+
+	return true, nil
 }
 
 // What one hello asks for: where it goes, what it says, and the rule that covers
