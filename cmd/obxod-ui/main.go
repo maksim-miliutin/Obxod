@@ -114,6 +114,9 @@ func main() {
 		chosen = saved
 	}
 
+	desc := widget.NewLabel(chosen.Desc(code))
+	desc.Wrapping = fyne.TextWrapWord
+
 	favourite := []string{}
 	if saved := a.Preferences().String("favourites"); saved != "" {
 		favourite = strings.Split(saved, ",")
@@ -364,6 +367,7 @@ func main() {
 				}
 				logHead.SetText(l.T(lang.MethodLabel) + " " + chosen.Name(code) + " · " + status)
 				now.SetText(fmt.Sprintf(l.T(lang.Now), chosen.Name(code)))
+				desc.SetText(chosen.Desc(code))
 
 				if session == nil {
 					speed.SetText(fmt.Sprintf(l.T(lang.SpeedFmt), "—"))
@@ -396,6 +400,7 @@ func main() {
 		widget.NewLabel(l.T(lang.MethodLabel)),
 		container.NewBorder(nil, nil, nil, fav, choose),
 		now,
+		desc,
 		container.NewBorder(nil, nil, nil, stopBtn, pick),
 		widget.NewLabel(l.T(lang.AutoPickNote)),
 		progress,
