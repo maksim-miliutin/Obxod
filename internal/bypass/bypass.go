@@ -41,6 +41,7 @@ type Settings struct {
 
 	Silence  time.Duration
 	DropQUIC bool
+	FakeQUIC string // fake a quic initial for this name ahead of each real one, instead of dropping quic; empty leaves quic alone
 	Wet      bool
 	Seen     bool // name the hosts no rule covers, so the missing ones can be added
 
@@ -57,6 +58,7 @@ type Engine struct {
 
 	silence  time.Duration
 	dropQUIC bool
+	fakeQUIC string
 	wet      bool
 
 	report func(text string)
@@ -88,6 +90,7 @@ func New(s Settings) *Engine {
 		voiced:   s.Voiced,
 		silence:  s.Silence,
 		dropQUIC: s.DropQUIC,
+		fakeQUIC: s.FakeQUIC,
 		wet:      s.Wet,
 		report:   s.Report,
 		tries:    attempt.New(forget),
@@ -124,7 +127,13 @@ func (e *Engine) Run(wire Wire, eyes Eyes) error {
 
 		packet := buf[:n]
 
-		if e.dropQUIC && isQUIC(packet) {
+		if e.fakeQUIC != "" {
+			if isQUICInitial(packet) {
+				if err := e.fakeInitial(wire, packet, &addr); err != nil {
+					return err
+				}
+			}
+		} else if e.dropQUIC && isQUIC(packet) {
 			e.dropped++
 
 			if e.dropped%50 == 1 {
