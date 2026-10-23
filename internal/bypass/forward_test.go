@@ -507,6 +507,97 @@ func TestOverlapGoesOutBackToFrontToo(t *testing.T) {
 	}
 }
 
+func TestMultiSplitSendsAPieceMoreThanPositions(t *testing.T) {
+	const host = "updates.discord.com"
+
+	r := &recorder{}
+
+	sent, err := engineFor(t, true, nil, host+"=multisplit:1+name").forward(r, packet443(clientHello(host)), &divert.Addr{})
+	if err != nil {
+		t.Fatalf("forward: %v", err)
+	}
+
+	if !sent {
+		t.Error("multisplit did not take over sending, so the original would follow its own pieces")
+	}
+
+	if len(r.sent) != 3 {
+		t.Fatalf("sent %d pieces, want 3 for two positions", len(r.sent))
+	}
+
+	// In stream order: every piece's sequence number is higher than the last.
+	if seqOf(r.sent[0]) >= seqOf(r.sent[1]) || seqOf(r.sent[1]) >= seqOf(r.sent[2]) {
+		t.Error("the pieces did not go out in stream order")
+	}
+}
+
+// Ordered back to front on the wire, the pieces still carry the sequence numbers
+// that let the server reassemble them; an inspector reading arrival order does not.
+func TestMultiSplitGoesBackToFrontWithDisorder(t *testing.T) {
+	const host = "updates.discord.com"
+
+	packet := packet443(clientHello(host))
+
+	inOrder := &recorder{}
+	if _, err := engineFor(t, true, nil, host+"=multisplit:1+name").forward(inOrder, packet, &divert.Addr{}); err != nil {
+		t.Fatalf("forward: %v", err)
+	}
+
+	backwards := &recorder{}
+	if _, err := engineFor(t, true, nil, host+"=multisplit:1+name,disorder").forward(backwards, packet, &divert.Addr{}); err != nil {
+		t.Fatalf("forward: %v", err)
+	}
+
+	if len(inOrder.sent) != 3 || len(backwards.sent) != 3 {
+		t.Fatalf("sent %d and %d pieces, want three each", len(inOrder.sent), len(backwards.sent))
+	}
+
+	for i := range inOrder.sent {
+		if !bytes.Equal(backwards.sent[i], inOrder.sent[len(inOrder.sent)-1-i]) {
+			t.Errorf("piece %d is not the in-order pieces reversed", i)
+		}
+	}
+}
+
+func TestMultiSplitPiecesRebuildTheHello(t *testing.T) {
+	const host = "updates.discord.com"
+
+	payload := clientHello(host)
+
+	r := &recorder{}
+	if _, err := engineFor(t, true, nil, host+"=multisplit:1+name").forward(r, packet443(payload), &divert.Addr{}); err != nil {
+		t.Fatalf("forward: %v", err)
+	}
+
+	var joined []byte
+
+	// 20 bytes of ip header plus 20 of tcp: the rest is the piece's slice of the hello.
+	for _, piece := range r.sent {
+		joined = append(joined, piece[40:]...)
+	}
+
+	if !bytes.Equal(joined, payload) {
+		t.Error("the pieces do not rebuild the original hello")
+	}
+}
+
+// A position past the hello cannot be applied, and a rule the engine cannot apply
+// is reported and skipped, not a reason to stop or to send a broken piece.
+func TestMultiSplitPastTheHelloIsSkipped(t *testing.T) {
+	const host = "updates.discord.com"
+
+	r := &recorder{}
+
+	sent, err := engineFor(t, true, nil, host+"=multisplit:99999").forward(r, packet443(clientHello(host)), &divert.Addr{})
+	if err != nil {
+		t.Fatalf("forward returned %v, want the run to carry on", err)
+	}
+
+	if sent || len(r.sent) != 0 {
+		t.Errorf("sent %d pieces for a position past the hello", len(r.sent))
+	}
+}
+
 // A hello too big for one packet declares a record longer than it carries.
 func splitHello(host string) []byte {
 	payload := clientHello(host)

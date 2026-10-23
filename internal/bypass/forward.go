@@ -3,6 +3,7 @@ package bypass
 import (
 	"fmt"
 	"math/rand/v2"
+	"strconv"
 	"strings"
 	"time"
 
@@ -79,11 +80,84 @@ func (e *Engine) forward(h sender, packet []byte, addr *divert.Addr) (bool, erro
 		return e.scatter(j)
 	}
 
+	if r.MultiSplit != "" {
+		return e.multisplit(j)
+	}
+
 	if r.Cut != "" {
 		return e.split(j)
 	}
 
 	return false, nil
+}
+
+// multisplit cuts the hello at a list of positions and sends the pieces in stream
+// order, or back to front with disorder. Unlike scatter's equal pieces, the cuts
+// land where asked: through the record start and the name, where an inspector looks.
+func (e *Engine) multisplit(j job) (bool, error) {
+	points, err := positionsFor(j.found, j.rule.MultiSplit)
+	if err != nil {
+		e.say("  %s: cannot read the split positions: %v", j.found.Host, err)
+
+		return false, nil
+	}
+
+	pieces, err := cut.AtPositions(j.packet, points)
+	if err != nil {
+		e.say("  %s: cannot split: %v", j.found.Host, err)
+
+		return false, nil
+	}
+
+	if !e.wet {
+		e.say("  %s: would split into %d pieces at %s", j.found.Host, len(pieces), j.rule.MultiSplit)
+
+		return false, nil
+	}
+
+	e.once(j.found.Host, "split into %d pieces at %s%s", len(pieces), j.rule.MultiSplit, backwards(j.rule.Disorder))
+
+	if j.rule.Disorder {
+		for lo, hi := 0, len(pieces)-1; lo < hi; lo, hi = lo+1, hi-1 {
+			pieces[lo], pieces[hi] = pieces[hi], pieces[lo]
+		}
+	}
+
+	for _, piece := range pieces {
+		if err := j.to.Send(piece, j.addr); err != nil {
+			return true, err
+		}
+	}
+
+	return true, nil
+}
+
+// positionsFor turns a multisplit spec into byte offsets: a named point asks the
+// hello where it sits, a number is the offset itself. The spec was checked when the
+// rule was read, so a number parses here.
+func positionsFor(found hello.Outgoing, spec string) ([]int, error) {
+	var points []int
+
+	for _, token := range strings.Split(spec, "+") {
+		switch token {
+		case "name", "after", "start":
+			at, err := pointFor(found, token)
+			if err != nil {
+				return nil, err
+			}
+
+			points = append(points, at)
+		default:
+			at, err := strconv.Atoi(token)
+			if err != nil {
+				return nil, err
+			}
+
+			points = append(points, at)
+		}
+	}
+
+	return points, nil
 }
 
 // scatter breaks the hello into pieces and sends them newest first, so an inspector
