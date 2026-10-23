@@ -9,31 +9,67 @@ import (
 const blocked = "discord.com,discord.gg,discordapp.com,discordapp.net,discordcdn.com,discord.media,youtube.com,googlevideo.com,ytimg.com,x.com,twitter.com,twimg.com,t.co,instagram.com,cdninstagram.com,fbcdn.net,facebook.com,fbsbx.com,telegram.org,web.telegram.org,webk.telegram.org,webz.telegram.org,linkedin.com,licdn.com,soundcloud.com,sndcdn.com,rutracker.org,spotify.com,scdn.co,spotifycdn.com"
 
 type Preset struct {
-	Key string
-	ru  string
-	en  string
-	way string
+	Key    string
+	ru     string
+	en     string
+	way    string
+	descRu string
+	descEn string
 }
 
 func All() []Preset {
 	return []Preset{
-		{Key: "plain", ru: "Обычный", en: "Plain", way: "hostfake:mail.ru,ts"},
-		{Key: "repeats", ru: "С повторами", en: "With repeats", way: "hostfake:mail.ru,ts,repeats:3"},
-		{Key: "signature", ru: "Подпись", en: "Signature", way: "hostfake:mail.ru,md5sig"},
-		{Key: "cut", ru: "Разрез", en: "Cut", way: "hostfake:mail.ru,cut:name"},
-		{Key: "aggressive", ru: "Агрессивный", en: "Aggressive", way: "decoy,cut:name,ttl:4"},
-		{Key: "disorder", ru: "Разнобой", en: "Disorder", way: "hostfake:mail.ru,ts,disorder"},
-		{Key: "overlap", ru: "Наложение", en: "Overlap", way: "hostfake:mail.ru,ts,overlap:2"},
-		{Key: "signed_repeats", ru: "Подпись с повторами", en: "Signature + repeats", way: "hostfake:mail.ru,ts,md5sig,repeats:3"},
-		{Key: "decoy_shift", ru: "Обманка со сдвигом", en: "Decoy + shift", way: "decoy,badseq:-10000,ts"},
-		{Key: "short_ttl", ru: "Короткий TTL", en: "Short TTL", way: "hostfake:mail.ru,ts,ttl:4"},
-		{Key: "badsum", ru: "Битая сумма", en: "Bad checksum", way: "hostfake:mail.ru,ts,badsum"},
-		{Key: "cut_start", ru: "Разрез в начале", en: "Cut at start", way: "hostfake:mail.ru,ts,cut:start"},
-		{Key: "signed_shift", ru: "Подпись со сдвигом", en: "Signature + shift", way: "hostfake:mail.ru,ts,md5sig,badseq:-10000"},
-		{Key: "overlap_disorder", ru: "Наложение с разнобоем", en: "Overlap + disorder", way: "hostfake:mail.ru,ts,overlap:3,disorder"},
-		{Key: "scatter", ru: "Вразнобой кусками", en: "Scatter", way: "multidisorder:4"},
-		{Key: "multisplit", ru: "Разрез в точках", en: "Multi-split", way: "multisplit:1+name"},
-		{Key: "ipfrag", ru: "IP-фрагменты", en: "IP fragment", way: "ipfrag:24"},
+		{Key: "plain", ru: "Обычный", en: "Plain", way: "hostfake:mail.ru,ts",
+			descRu: "Подменяет имя сайта и состаривает копию. Базовый — начните с него.",
+			descEn: "Swaps the site name and ages the copy. The baseline — start here."},
+		{Key: "repeats", ru: "С повторами", en: "With repeats", way: "hostfake:mail.ru,ts,repeats:3",
+			descRu: "То же, но подмена шлётся трижды — на случай потери пакетов.",
+			descEn: "The same, but the swap is sent three times, for lossy links."},
+		{Key: "signature", ru: "Подпись", en: "Signature", way: "hostfake:mail.ru,md5sig",
+			descRu: "Подмена имени плюс TCP-подпись, которую сервер отвергнет.",
+			descEn: "Name swap plus a TCP signature the server rejects."},
+		{Key: "cut", ru: "Разрез", en: "Cut", way: "hostfake:mail.ru,cut:name",
+			descRu: "Подмена имени и разрез посреди имени на два пакета.",
+			descEn: "Name swap, then a cut through the middle of the name."},
+		{Key: "aggressive", ru: "Агрессивный", en: "Aggressive", way: "decoy,cut:name,ttl:4",
+			descRu: "Обманный хелло с коротким TTL и разрез. Пожёстче.",
+			descEn: "A decoy hello with a short TTL, plus a cut. Harder."},
+		{Key: "disorder", ru: "Разнобой", en: "Disorder", way: "hostfake:mail.ru,ts,disorder",
+			descRu: "Подмена имени, половинки уходят задом наперёд.",
+			descEn: "Name swap, the halves go out back to front."},
+		{Key: "overlap", ru: "Наложение", en: "Overlap", way: "hostfake:mail.ru,ts,overlap:2",
+			descRu: "Поверх потока кладётся кусок, который сервер отбросит.",
+			descEn: "A chunk the server discards is laid over the stream."},
+		{Key: "signed_repeats", ru: "Подпись с повторами", en: "Signature + repeats", way: "hostfake:mail.ru,ts,md5sig,repeats:3",
+			descRu: "Подпись плюс три копии.",
+			descEn: "Signature, plus three copies."},
+		{Key: "decoy_shift", ru: "Обманка со сдвигом", en: "Decoy + shift", way: "decoy,badseq:-10000,ts",
+			descRu: "Обманка со сдвинутым номером и старой меткой времени.",
+			descEn: "A decoy with a shifted number and a stale timestamp."},
+		{Key: "short_ttl", ru: "Короткий TTL", en: "Short TTL", way: "hostfake:mail.ru,ts,ttl:4",
+			descRu: "Подмена имени, копия живёт лишь несколько хопов.",
+			descEn: "Name swap, the copy lives only a few hops."},
+		{Key: "badsum", ru: "Битая сумма", en: "Bad checksum", way: "hostfake:mail.ru,ts,badsum",
+			descRu: "Подмена имени, у копии битая сумма. Для стримов.",
+			descEn: "Name swap, the copy has a bad checksum. For streams."},
+		{Key: "cut_start", ru: "Разрез в начале", en: "Cut at start", way: "hostfake:mail.ru,ts,cut:start",
+			descRu: "Подмена имени и разрез у начала записи. Быстрый.",
+			descEn: "Name swap, a cut near the record start. Quick."},
+		{Key: "signed_shift", ru: "Подпись со сдвигом", en: "Signature + shift", way: "hostfake:mail.ru,ts,md5sig,badseq:-10000",
+			descRu: "Подпись со сдвинутым номером последовательности.",
+			descEn: "Signature with a shifted sequence number."},
+		{Key: "overlap_disorder", ru: "Наложение с разнобоем", en: "Overlap + disorder", way: "hostfake:mail.ru,ts,overlap:3,disorder",
+			descRu: "Наложение плюс половинки задом наперёд.",
+			descEn: "Overlap, plus the halves back to front."},
+		{Key: "scatter", ru: "Вразнобой кусками", en: "Scatter", way: "multidisorder:4",
+			descRu: "Режет хелло на 4 куска вразнобой. Без подмены имени.",
+			descEn: "Cuts the hello into four out-of-order pieces. No name swap."},
+		{Key: "multisplit", ru: "Разрез в точках", en: "Multi-split", way: "multisplit:1+name",
+			descRu: "Режет хелло в начале и посреди имени. Без подмены имени.",
+			descEn: "Cuts the hello at the start and mid-name. No name swap."},
+		{Key: "ipfrag", ru: "IP-фрагменты", en: "IP fragment", way: "ipfrag:24",
+			descRu: "Рвёт пакет на IP-фрагменты. Без подмены имени; не на всех DPI.",
+			descEn: "Splits the packet into IP fragments. No name swap; not on every DPI."},
 	}
 }
 
@@ -43,6 +79,14 @@ func (p Preset) Name(code string) string {
 	}
 
 	return p.ru
+}
+
+func (p Preset) Desc(code string) string {
+	if code == "en" {
+		return p.descEn
+	}
+
+	return p.descRu
 }
 
 func Named(key string) (Preset, bool) {

@@ -170,6 +170,18 @@ func TestByNameRoundTripsInBothLanguages(t *testing.T) {
 	}
 }
 
+func TestEveryPresetHasADescription(t *testing.T) {
+	for _, p := range All() {
+		if p.Desc("ru") == "" {
+			t.Errorf("%s has no ru description", p.Key)
+		}
+
+		if p.Desc("en") == "" {
+			t.Errorf("%s has no en description", p.Key)
+		}
+	}
+}
+
 func TestNameDiffersByLanguage(t *testing.T) {
 	p := All()[0]
 	if p.Name("ru") == p.Name("en") {
