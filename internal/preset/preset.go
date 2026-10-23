@@ -31,6 +31,7 @@ func All() []Preset {
 		{Key: "cut_start", ru: "Разрез в начале", en: "Cut at start", way: "hostfake:mail.ru,ts,cut:start"},
 		{Key: "signed_shift", ru: "Подпись со сдвигом", en: "Signature + shift", way: "hostfake:mail.ru,ts,md5sig,badseq:-10000"},
 		{Key: "overlap_disorder", ru: "Наложение с разнобоем", en: "Overlap + disorder", way: "hostfake:mail.ru,ts,overlap:3,disorder"},
+		{Key: "scatter", ru: "Вразнобой кусками", en: "Scatter", way: "multidisorder:4"},
 	}
 }
 
