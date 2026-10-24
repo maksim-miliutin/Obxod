@@ -145,7 +145,7 @@ func run(w *app.Window) error {
 	}()
 
 	var ops op.Ops
-	var anim float32
+	var anim, navAnim float32
 	var lastT time.Time
 
 	for {
@@ -192,26 +192,18 @@ func run(w *app.Window) error {
 				_ = setAutostart(autoOn)
 			}
 
-			target := float32(0)
+			onTarget := float32(0)
 			if session != nil {
-				target = 1
+				onTarget = 1
 			}
+			navTarget := float32(activeNav(screen))
 			if !lastT.IsZero() {
-				step := float32(gtx.Now.Sub(lastT).Seconds()) * 6
-				if anim < target {
-					anim += step
-					if anim > target {
-						anim = target
-					}
-				} else if anim > target {
-					anim -= step
-					if anim < target {
-						anim = target
-					}
-				}
+				step := float32(gtx.Now.Sub(lastT).Seconds())
+				anim = approach(anim, onTarget, step*6)
+				navAnim = approach(navAnim, navTarget, step*10)
 			}
 			lastT = gtx.Now
-			if anim != target {
+			if anim != onTarget || navAnim != navTarget {
 				gtx.Execute(op.InvalidateCmd{})
 			}
 
@@ -219,7 +211,7 @@ func run(w *app.Window) error {
 
 			layout.Flex{Axis: layout.Vertical}.Layout(gtx,
 				layout.Rigid(func(gtx C) D {
-					return navBar(gtx, th, activeNav(screen), navClicks[:])
+					return navBar(gtx, th, activeNav(screen), navAnim, navClicks[:])
 				}),
 				layout.Flexed(1, func(gtx C) D {
 					switch screen {
@@ -255,7 +247,7 @@ func activeNav(screen int) int {
 	}
 }
 
-func navBar(gtx C, th *material.Theme, active int, clicks []widget.Clickable) D {
+func navBar(gtx C, th *material.Theme, active int, pos float32, clicks []widget.Clickable) D {
 	labels := []string{"Обход", "Сайты", "Логи", "Настройки"}
 	items := make([]layout.FlexChild, len(labels))
 	for i := range labels {
@@ -279,8 +271,34 @@ func navBar(gtx C, th *material.Theme, active int, clicks []widget.Clickable) D 
 		layout.Rigid(func(gtx C) D {
 			return layout.Flex{Axis: layout.Horizontal}.Layout(gtx, items...)
 		}),
-		layout.Rigid(hline),
+		layout.Rigid(func(gtx C) D {
+			return navUnderline(gtx, pos, len(labels))
+		}),
 	)
+}
+
+func navUnderline(gtx C, pos float32, tabs int) D {
+	w := gtx.Constraints.Max.X
+	h := gtx.Dp(2)
+	tabW := w / tabs
+
+	base := clip.Rect{Max: image.Pt(w, h)}.Push(gtx.Ops)
+	paint.ColorOp{Color: colSep}.Add(gtx.Ops)
+	paint.PaintOp{}.Add(gtx.Ops)
+	base.Pop()
+
+	pad := gtx.Dp(18)
+	seg := tabW - 2*pad
+	x := int(pos*float32(tabW)) + pad
+
+	off := op.Offset(image.Pt(x, 0)).Push(gtx.Ops)
+	bar := clip.Rect{Max: image.Pt(seg, h)}.Push(gtx.Ops)
+	paint.ColorOp{Color: colTeal}.Add(gtx.Ops)
+	paint.PaintOp{}.Add(gtx.Ops)
+	bar.Pop()
+	off.Pop()
+
+	return D{Size: image.Pt(w, h)}
 }
 
 func layoutMain(gtx C, th *material.Theme, icon paint.ImageOp, chosen preset.Preset, on bool, anim float32, driverErr, startErr error, znak, toMethod *widget.Clickable) D {
@@ -467,37 +485,71 @@ func layoutLogs(gtx C, th *material.Theme, body string, list *widget.List, copyB
 }
 
 func layoutSettings(gtx C, th *material.Theme, fake, auto *widget.Bool) D {
-	row := func(label string, b *widget.Bool) layout.FlexChild {
+	card := func(label, sub string, b *widget.Bool) layout.FlexChild {
 		return layout.Rigid(func(gtx C) D {
-			return layout.Inset{Top: unit.Dp(8), Bottom: unit.Dp(8)}.Layout(gtx, func(gtx C) D {
-				return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
-					layout.Flexed(1, func(gtx C) D {
-						lbl := material.Body1(th, label)
-						lbl.Color = colCream
+			return layout.Inset{Bottom: unit.Dp(10)}.Layout(gtx, func(gtx C) D {
+				return layout.Stack{}.Layout(gtx,
+					layout.Expanded(func(gtx C) D {
+						rrect(gtx, colPanel, gtx.Dp(12))
 
-						return lbl.Layout(gtx)
+						return D{Size: gtx.Constraints.Min}
 					}),
-					layout.Rigid(material.Switch(th, b, label).Layout),
+					layout.Stacked(func(gtx C) D {
+						gtx.Constraints.Min.X = gtx.Constraints.Max.X
+
+						return layout.UniformInset(unit.Dp(14)).Layout(gtx, func(gtx C) D {
+							return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
+								layout.Flexed(1, func(gtx C) D {
+									return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
+										layout.Rigid(func(gtx C) D {
+											l := material.Body1(th, label)
+											l.Color = colCream
+
+											return l.Layout(gtx)
+										}),
+										layout.Rigid(func(gtx C) D {
+											if sub == "" {
+												return D{}
+											}
+											s := material.Caption(th, sub)
+											s.Color = colDim
+
+											return layout.Inset{Top: unit.Dp(3)}.Layout(gtx, s.Layout)
+										}),
+									)
+								}),
+								layout.Rigid(layout.Spacer{Width: unit.Dp(10)}.Layout),
+								layout.Rigid(material.Switch(th, b, label).Layout),
+							)
+						})
+					}),
 				)
 			})
 		})
 	}
 
-	return layout.UniformInset(unit.Dp(16)).Layout(gtx, func(gtx C) D {
+	return layout.UniformInset(unit.Dp(14)).Layout(gtx, func(gtx C) D {
 		return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
-			row("Фейковать QUIC (быстрее, но не везде)", fake),
-			row("Запускать при старте Windows", auto),
+			card("Фейковать QUIC", "быстрее, но ломает Discord на части DPI", fake),
+			card("Запускать с Windows", "включать обход при старте", auto),
 		)
 	})
 }
 
-func hline(gtx C) D {
-	sz := image.Pt(gtx.Constraints.Max.X, gtx.Dp(1))
-	defer clip.Rect{Max: sz}.Push(gtx.Ops).Pop()
-	paint.ColorOp{Color: colSep}.Add(gtx.Ops)
-	paint.PaintOp{}.Add(gtx.Ops)
+func approach(cur, tgt, step float32) float32 {
+	if cur < tgt {
+		cur += step
+		if cur > tgt {
+			cur = tgt
+		}
+	} else if cur > tgt {
+		cur -= step
+		if cur < tgt {
+			cur = tgt
+		}
+	}
 
-	return D{Size: sz}
+	return cur
 }
 
 func halo(gtx C, t float32) D {
