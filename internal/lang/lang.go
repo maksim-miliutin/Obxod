@@ -38,6 +38,10 @@ const (
 	AutoPickNote
 	NoneWorked
 	FastQUIC
+	Check
+	CheckWorking
+	CheckClear
+	CheckBlocked
 	last
 )
 
@@ -61,7 +65,7 @@ var ru = Lang{
 	TabBypass:     "Обход",
 	TabSites:      "Сайты",
 	TabLogs:       "Логи",
-	TabAbout:      "О программе",
+	TabAbout:      "Настройки",
 	TrayShow:      "Показать",
 	TrayQuit:      "Выход",
 	AboutWhat:     "Obxod — обход DPI-блокировок.",
@@ -78,7 +82,11 @@ var ru = Lang{
 	Searching:     "Пробую: %s",
 	AutoPickNote:  "Проверяет только, открывается ли сайт.\nГолос и стримы проверьте сами.",
 	NoneWorked:    "Ни один способ не подошёл.",
-	FastQUIC:      "Фейковать QUIC (быстрее)",
+	FastQUIC:      "Фейковать QUIC (быстрее, но не везде)",
+	Check:         "Проверить",
+	CheckWorking:  "Проверяю…",
+	CheckClear:    "✓ Сайт открывается",
+	CheckBlocked:  "✗ Сайт не открывается",
 }
 
 var en = Lang{
@@ -99,7 +107,7 @@ var en = Lang{
 	TabBypass:     "Bypass",
 	TabSites:      "Sites",
 	TabLogs:       "Logs",
-	TabAbout:      "About",
+	TabAbout:      "Settings",
 	TrayShow:      "Show",
 	TrayQuit:      "Quit",
 	AboutWhat:     "Obxod — a DPI bypass.",
@@ -116,7 +124,11 @@ var en = Lang{
 	Searching:     "Trying: %s",
 	AutoPickNote:  "Only checks that the site opens.\nCheck voice and streams yourself.",
 	NoneWorked:    "No method worked.",
-	FastQUIC:      "Fake QUIC (faster)",
+	FastQUIC:      "Fake QUIC (faster, breaks some)",
+	Check:         "Check",
+	CheckWorking:  "Checking…",
+	CheckClear:    "✓ Site opens",
+	CheckBlocked:  "✗ Site blocked",
 }
 
 func Of(code string) Lang {

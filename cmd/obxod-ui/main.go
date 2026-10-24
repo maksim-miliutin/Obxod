@@ -155,7 +155,7 @@ func main() {
 	}
 
 	useFake := func() bool {
-		return a.Preferences().BoolWithFallback("fakequic", true)
+		return a.Preferences().BoolWithFallback("fakequic", false)
 	}
 
 	var session *runner.Session
@@ -436,7 +436,6 @@ func main() {
 		widget.NewLabel(l.T(lang.AutoPickNote)),
 		progress,
 		caveat,
-		startup,
 		speed,
 	)
 
@@ -480,7 +479,7 @@ func main() {
 		a.Preferences().SetBool("fakequic", on)
 		restart()
 	})
-	fastQUIC.Checked = a.Preferences().BoolWithFallback("fakequic", true)
+	fastQUIC.Checked = a.Preferences().BoolWithFallback("fakequic", false)
 
 	about := container.NewVBox(
 		widget.NewLabel(l.T(lang.AboutWhat)),
@@ -489,6 +488,7 @@ func main() {
 		widget.NewLabel(l.T(lang.AboutMethods)),
 		widget.NewSeparator(),
 		fastQUIC,
+		startup,
 		widget.NewSeparator(),
 		widget.NewLabel(l.T(lang.AboutUnsigned)),
 		widget.NewSeparator(),
