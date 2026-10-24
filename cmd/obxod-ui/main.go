@@ -1,167 +1,60 @@
 package main
 
-//go:generate rsrc -manifest obxod-ui.manifest -ico icon.ico -arch amd64 -o rsrc_windows_amd64.syso
-
 import (
-	"errors"
-	"fmt"
+	"bytes"
+	"image"
 	"image/color"
-	"net"
+	"image/png"
+	"log"
 	"os"
 	"path/filepath"
-	"strings"
-	"sync/atomic"
-	"time"
 
-	"fyne.io/fyne/v2"
-	"fyne.io/fyne/v2/app"
-	"fyne.io/fyne/v2/canvas"
-	"fyne.io/fyne/v2/container"
-	"fyne.io/fyne/v2/dialog"
-	"fyne.io/fyne/v2/driver/desktop"
-	"fyne.io/fyne/v2/widget"
+	"gioui.org/app"
+	"gioui.org/font/gofont"
+	"gioui.org/layout"
+	"gioui.org/op"
+	"gioui.org/op/paint"
+	"gioui.org/text"
+	"gioui.org/unit"
+	"gioui.org/widget"
+	"gioui.org/widget/material"
 
-	"obxod/internal/autopick"
-	"obxod/internal/lang"
 	"obxod/internal/logbook"
-	"obxod/internal/meter"
 	"obxod/internal/preset"
-	"obxod/internal/probe"
 	"obxod/internal/runner"
 	"obxod/internal/sites"
 )
 
-var (
-	working = color.NRGBA{R: 0x2f, G: 0x9e, B: 0x44, A: 0xff}
-	idle    = color.NRGBA{R: 0x88, G: 0x88, B: 0x88, A: 0xff}
+type (
+	C = layout.Context
+	D = layout.Dimensions
 )
-
-var errNoMethod = errors.New("obxod-ui: method not found")
 
 const fakeQUICName = "www.google.com"
 
-func starredKey(list []string, key string) bool {
-	for _, k := range list {
-		if k == key {
-			return true
-		}
-	}
-
-	return false
-}
-
-func flip(list []string, key string) []string {
-	next := make([]string, 0, len(list)+1)
-	for _, k := range list {
-		if k != key {
-			next = append(next, k)
-		}
-	}
-
-	if !starredKey(list, key) {
-		next = append(next, key)
-	}
-
-	return next
-}
-
-// tappableIcon turns the app mark into the on/off button: the whole icon takes the tap.
-type tappableIcon struct {
-	widget.BaseWidget
-	res      fyne.Resource
-	onTap    func()
-	disabled bool
-}
-
-func newTappableIcon(res fyne.Resource, onTap func()) *tappableIcon {
-	t := &tappableIcon{res: res, onTap: onTap}
-	t.ExtendBaseWidget(t)
-
-	return t
-}
-
-func (t *tappableIcon) Tapped(_ *fyne.PointEvent) {
-	if !t.disabled && t.onTap != nil {
-		t.onTap()
-	}
-}
-
-func (t *tappableIcon) Disable() { t.disabled = true }
-
-func (t *tappableIcon) Enable() { t.disabled = false }
-
-func (t *tappableIcon) CreateRenderer() fyne.WidgetRenderer {
-	img := canvas.NewImageFromResource(t.res)
-	img.FillMode = canvas.ImageFillContain
-
-	return widget.NewSimpleRenderer(img)
-}
-
-var selectionTint = color.NRGBA{R: 0x2f, G: 0x7d, B: 0x64, A: 0x33}
-
-type methodRow struct {
-	widget.BaseWidget
-	bg    *canvas.Rectangle
-	name  string
-	desc  string
-	onTap func()
-}
-
-func newMethodRow(name, desc string, selected bool) *methodRow {
-	fill := color.NRGBA{}
-	if selected {
-		fill = selectionTint
-	}
-
-	r := &methodRow{bg: canvas.NewRectangle(fill), name: name, desc: desc}
-	r.bg.CornerRadius = 8
-	r.ExtendBaseWidget(r)
-
-	return r
-}
-
-func (r *methodRow) Tapped(_ *fyne.PointEvent) {
-	if r.onTap != nil {
-		r.onTap()
-	}
-}
-
-func (r *methodRow) CreateRenderer() fyne.WidgetRenderer {
-	name := widget.NewLabel(r.name)
-	name.TextStyle = fyne.TextStyle{Bold: true}
-	desc := widget.NewLabel(r.desc)
-	desc.Wrapping = fyne.TextWrapWord
-
-	body := container.NewVBox(name, desc)
-
-	return widget.NewSimpleRenderer(container.NewStack(r.bg, container.NewPadded(body)))
-}
-
 func main() {
-	a := app.NewWithID("io.obxod.ui")
-	a.Settings().SetTheme(obxodTheme{})
-	window := a.NewWindow("Obxod")
+	go func() {
+		w := new(app.Window)
+		w.Option(app.Title("Obxod"), app.Size(unit.Dp(420), unit.Dp(640)))
+		if err := run(w); err != nil {
+			log.Fatal(err)
+		}
+		os.Exit(0)
+	}()
+	app.Main()
+}
+
+func run(w *app.Window) error {
+	th := material.NewTheme()
+	th.Shaper = text.NewShaper(text.WithCollection(gofont.Collection()))
+
+	img, err := png.Decode(bytes.NewReader(iconPNG))
+	if err != nil {
+		return err
+	}
+	icon := paint.NewImageOp(img)
 
 	driverErr := unpackDriver()
-
-	icon := fyne.NewStaticResource("icon.png", iconPNG)
-	a.SetIcon(icon)
-	window.SetIcon(icon)
-
-	code := a.Preferences().String("lang")
-	l := lang.Of(code)
-
-	if desk, ok := a.(desktop.App); ok {
-		desk.SetSystemTrayIcon(icon)
-		desk.SetSystemTrayMenu(fyne.NewMenu("Obxod",
-			fyne.NewMenuItem(l.T(lang.TrayShow), window.Show),
-			fyne.NewMenuItem(l.T(lang.TrayQuit), a.Quit),
-		))
-	}
-
-	// The cross closes to the tray instead of quitting, so the bypass keeps running.
-	window.SetCloseIntercept(window.Hide)
-
 	own, _ := sites.Load(sitesFile())
 	book := logbook.New(200)
 	keep := func(line string) {
@@ -170,400 +63,106 @@ func main() {
 		}
 	}
 
-	dot := canvas.NewText("●", idle)
-	word := widget.NewLabel(l.T(lang.StatusOff))
-	count := widget.NewLabel("")
-	speed := widget.NewLabel(fmt.Sprintf(l.T(lang.SpeedFmt), "—"))
-	logView := widget.NewLabel("")
-	logHead := widget.NewLabel("")
-	progress := widget.NewLabel("")
-	always := widget.NewLabel(strings.Join(preset.Hosts(), "  ·  "))
-	always.Wrapping = fyne.TextWrapWord
-	ownRows := container.NewVBox()
-
 	chosen := preset.All()[0]
-	if saved, ok := preset.Named(a.Preferences().String("method")); ok {
-		chosen = saved
-	}
-
-	favourite := []string{}
-	if saved := a.Preferences().String("favourites"); saved != "" {
-		favourite = strings.Split(saved, ",")
-	}
-
-	useFake := func() bool {
-		return a.Preferences().BoolWithFallback("fakequic", false)
-	}
 
 	var session *runner.Session
-	var rate meter.Rate
-	searching := false
-	var stopFlag atomic.Bool
-
-	turnOff := func() {
-		session.Stop()
-		session = nil
-
-		dot.Color = idle
-		dot.Refresh()
-		word.SetText(l.T(lang.StatusOff))
-	}
-
-	turnOn := func() {
-		started, err := start(chosen, own.List(), keep, useFake())
-		if err != nil {
-			dialog.ShowError(err, window)
-
-			return
-		}
-
-		session = started
-		rate = meter.Rate{}
-		go session.Run()
-
-		dot.Color = working
-		dot.Refresh()
-		word.SetText(l.T(lang.StatusOn))
-	}
+	var startErr error
 
 	toggle := func() {
 		if session != nil {
-			turnOff()
-
-			return
-		}
-
-		turnOn()
-	}
-
-	znak := newTappableIcon(icon, toggle)
-
-	restart := func() {
-		if session != nil {
-			turnOff()
-			turnOn()
-		}
-	}
-
-	save := func() {
-		if err := own.Save(sitesFile()); err != nil {
-			dialog.ShowError(err, window)
-		}
-	}
-
-	var show func()
-	show = func() {
-		count.SetText(fmt.Sprintf(l.T(lang.CountFmt), len(preset.HostsWith(own.List()))))
-
-		ownRows.RemoveAll()
-
-		for _, name := range own.List() {
-			row := container.NewHBox(
-				widget.NewButton("×", func() {
-					own.Remove(name)
-					save()
-					show()
-					restart()
-				}),
-				widget.NewLabel(name),
-			)
-			ownRows.Add(row)
-		}
-
-		ownRows.Refresh()
-	}
-	show()
-
-	fav := widget.NewButton("", nil)
-
-	refreshFav := func() {
-		if starredKey(favourite, chosen.Key) {
-			fav.SetText(l.T(lang.DropFav))
-
-			return
-		}
-
-		fav.SetText(l.T(lang.AddFav))
-	}
-
-	methods := container.NewVBox()
-
-	var rebuildMethods func()
-	rebuildMethods = func() {
-		methods.RemoveAll()
-
-		for _, label := range preset.NamesByFavourite(code, favourite) {
-			found, ok := preset.ByLabel(label, code)
-			if !ok {
-				continue
-			}
-
-			row := newMethodRow(found.Name(code), found.Desc(code), found.Key == chosen.Key)
-			row.onTap = func() {
-				if searching || found.Key == chosen.Key {
-					return
-				}
-
-				chosen = found
-				a.Preferences().SetString("method", found.Key)
-				restart()
-				refreshFav()
-				rebuildMethods()
-			}
-
-			methods.Add(row)
-		}
-
-		methods.Refresh()
-	}
-
-	fav.OnTapped = func() {
-		favourite = flip(favourite, chosen.Key)
-		a.Preferences().SetString("favourites", strings.Join(favourite, ","))
-		refreshFav()
-		rebuildMethods()
-	}
-
-	rebuildMethods()
-	refreshFav()
-
-	pick := widget.NewButton(l.T(lang.AutoPick), nil)
-	stopBtn := widget.NewButton(l.T(lang.Stop), nil)
-	stopBtn.Disable()
-	stopBtn.OnTapped = func() {
-		stopFlag.Store(true)
-		stopBtn.Disable()
-	}
-
-	apply := func(name string) error {
-		found, ok := preset.ByName(name, code)
-		if !ok {
-			return errNoMethod
-		}
-
-		if session != nil {
 			session.Stop()
 			session = nil
+
+			return
 		}
 
-		started, err := start(found, own.List(), keep, useFake())
+		started, err := start(chosen, own.List(), keep, false)
 		if err != nil {
-			return err
+			startErr = err
+
+			return
 		}
 
+		startErr = nil
 		session = started
-		chosen = found
 		go session.Run()
-
-		fyne.Do(func() {
-			progress.SetText(fmt.Sprintf(l.T(lang.Searching), found.Name(code)))
-		})
-
-		// Let the fresh tunnel settle before the probe, or it reads a half-open state.
-		time.Sleep(2 * time.Second)
-
-		return nil
 	}
 
-	works := func() bool {
-		verdict, _ := probe.Host(&net.Dialer{Timeout: 5 * time.Second}, "discord.com", 5*time.Second)
+	var ops op.Ops
+	var znak widget.Clickable
 
-		return verdict == probe.Clear
-	}
+	for {
+		switch e := w.Event().(type) {
+		case app.DestroyEvent:
+			if session != nil {
+				session.Stop()
+			}
 
-	pick.OnTapped = func() {
-		if searching {
-			return
-		}
+			return e.Err
+		case app.FrameEvent:
+			gtx := app.NewContext(&ops, e)
 
-		searching = true
-		stopFlag.Store(false)
-		znak.Disable()
-		pick.Disable()
-		stopBtn.Enable()
-		progress.SetText("")
+			if znak.Clicked(gtx) {
+				toggle()
+			}
 
-		go func() {
-			_, ok := autopick.Try(preset.Names(code), apply, works, func() bool { return stopFlag.Load() })
+			fill(gtx, colBg)
 
-			fyne.Do(func() {
-				searching = false
-				znak.Enable()
-				pick.Enable()
-				stopBtn.Disable()
+			layout.Center.Layout(gtx, func(gtx C) D {
+				return layout.Flex{Axis: layout.Vertical, Alignment: layout.Middle}.Layout(gtx,
+					layout.Rigid(func(gtx C) D {
+						return znak.Layout(gtx, func(gtx C) D {
+							side := gtx.Dp(132)
+							gtx.Constraints = layout.Exact(image.Pt(side, side))
+							return widget.Image{Src: icon, Fit: widget.Contain}.Layout(gtx)
+						})
+					}),
+					layout.Rigid(layout.Spacer{Height: unit.Dp(18)}.Layout),
+					layout.Rigid(func(gtx C) D {
+						title := material.H6(th, "Obxod")
+						title.Color = colCream
 
-				if !ok {
-					if stopFlag.Load() {
-						progress.SetText("")
-					} else {
-						progress.SetText(l.T(lang.NoneWorked))
-					}
+						return title.Layout(gtx)
+					}),
+					layout.Rigid(layout.Spacer{Height: unit.Dp(6)}.Layout),
+					layout.Rigid(func(gtx C) D {
+						status := material.Body1(th, "Выключено")
+						status.Color = colDim
+						if session != nil {
+							status = material.Body1(th, "Работает")
+							status.Color = colTeal
+						}
 
-					return
-				}
+						return status.Layout(gtx)
+					}),
+					layout.Rigid(func(gtx C) D {
+						note := ""
+						if driverErr != nil {
+							note = "драйвер не загрузился: " + driverErr.Error()
+						}
+						if startErr != nil {
+							note = startErr.Error()
+						}
+						if note == "" {
+							return D{}
+						}
 
-				rebuildMethods()
-				a.Preferences().SetString("method", chosen.Key)
-				progress.SetText("")
-				refreshFav()
+						lbl := material.Caption(th, note)
+						lbl.Color = colDim
+
+						return layout.Inset{Top: unit.Dp(12)}.Layout(gtx, lbl.Layout)
+					}),
+				)
 			})
-		}()
+
+			e.Frame(gtx.Ops)
+		}
 	}
+}
 
-	caveat := widget.NewLabel(l.T(lang.Caveat))
-
-	startup := widget.NewCheck(l.T(lang.Autostart), func(on bool) {
-		if err := setAutostart(on); err != nil {
-			dialog.ShowError(err, window)
-		}
-	})
-	startup.Checked = autostartOn()
-
-	entry := widget.NewEntry()
-	entry.SetPlaceHolder("instagram.com")
-
-	add := widget.NewButton(l.T(lang.AddSite), func() {
-		if strings.TrimSpace(entry.Text) == "" {
-			return
-		}
-
-		own.Add(entry.Text)
-		save()
-		entry.SetText("")
-		show()
-		restart()
-	})
-
-	go func() {
-		for range time.Tick(time.Second) {
-			fyne.Do(func() {
-				logView.SetText(book.Text())
-
-				if searching {
-					return
-				}
-
-				status := l.T(lang.StatusOff)
-				if session != nil {
-					status = l.T(lang.StatusOn)
-				}
-				logHead.SetText(l.T(lang.MethodLabel) + " " + chosen.Name(code) + " · " + status)
-
-				if session == nil {
-					speed.SetText(fmt.Sprintf(l.T(lang.SpeedFmt), "—"))
-
-					return
-				}
-
-				speed.SetText(fmt.Sprintf(l.T(lang.SpeedFmt), meter.Human(rate.Sample(session.Downloaded(), time.Now()))))
-			})
-		}
-	}()
-
-	language := widget.NewSelect([]string{"Русский", "English"}, func(name string) {
-		picked := "ru"
-		if name == "English" {
-			picked = "en"
-		}
-
-		a.Preferences().SetString("lang", picked)
-	})
-	if code == "en" {
-		language.SetSelected("English")
-	} else {
-		language.SetSelected("Русский")
-	}
-
-	top := container.NewVBox(
-		container.NewCenter(container.NewGridWrap(fyne.NewSize(132, 132), znak)),
-		container.NewCenter(container.NewHBox(dot, word)),
-		widget.NewSeparator(),
-		widget.NewLabel(l.T(lang.MethodLabel)),
-	)
-
-	bottom := container.NewVBox(
-		container.NewGridWithColumns(2, pick, fav),
-		stopBtn,
-		widget.NewLabel(l.T(lang.AutoPickNote)),
-		progress,
-		caveat,
-		speed,
-	)
-
-	obhod := container.NewBorder(top, bottom, nil, nil, container.NewVScroll(methods))
-
-	yourSites := container.NewBorder(
-		container.NewVBox(
-			container.NewBorder(nil, nil, nil, add, entry),
-			count,
-			widget.NewLabel(l.T(lang.YourSites)),
-		),
-		nil, nil, nil,
-		container.NewVScroll(container.NewVBox(
-			ownRows,
-			widget.NewSeparator(),
-			widget.NewLabel(l.T(lang.AlwaysSites)),
-			always,
-		)),
-	)
-
-	logsTab := container.NewBorder(
-		container.NewVBox(
-			logHead,
-			container.NewHBox(
-				widget.NewButton(l.T(lang.Copy), func() {
-					if logView.Text == "" {
-						return
-					}
-
-					window.Clipboard().SetContent(logView.Text)
-				}),
-				widget.NewButton(l.T(lang.Clear), func() {
-					book.Clear()
-					logView.SetText("")
-				}),
-			),
-		),
-		nil, nil, nil,
-		container.NewScroll(logView),
-	)
-
-	fastQUIC := widget.NewCheck(l.T(lang.FastQUIC), func(on bool) {
-		a.Preferences().SetBool("fakequic", on)
-		restart()
-	})
-	fastQUIC.Checked = a.Preferences().BoolWithFallback("fakequic", false)
-
-	about := container.NewVBox(
-		widget.NewLabel(l.T(lang.AboutWhat)),
-		widget.NewLabel(l.T(lang.AboutOpens)),
-		widget.NewSeparator(),
-		widget.NewLabel(l.T(lang.AboutMethods)),
-		widget.NewSeparator(),
-		fastQUIC,
-		startup,
-		widget.NewSeparator(),
-		widget.NewLabel(l.T(lang.AboutUnsigned)),
-		widget.NewSeparator(),
-		widget.NewLabel(l.T(lang.LanguageLabel)),
-		language,
-		widget.NewLabel(l.T(lang.RestartNote)),
-	)
-
-	tabs := container.NewAppTabs(
-		container.NewTabItem(l.T(lang.TabBypass), obhod),
-		container.NewTabItem(l.T(lang.TabSites), yourSites),
-		container.NewTabItem(l.T(lang.TabLogs), logsTab),
-		container.NewTabItem(l.T(lang.TabAbout), about),
-	)
-	window.SetContent(tabs)
-	window.Resize(fyne.NewSize(440, 620))
-
-	if driverErr != nil {
-		dialog.ShowError(driverErr, window)
-	}
-
-	window.ShowAndRun()
+func fill(gtx C, c color.NRGBA) {
+	paint.ColorOp{Color: c}.Add(gtx.Ops)
+	paint.PaintOp{}.Add(gtx.Ops)
 }
 
 func sitesFile() string {
