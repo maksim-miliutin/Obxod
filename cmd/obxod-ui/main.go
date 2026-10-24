@@ -145,6 +145,8 @@ func run(w *app.Window) error {
 	}()
 
 	var ops op.Ops
+	var anim float32
+	var lastT time.Time
 
 	for {
 		switch e := w.Event().(type) {
@@ -190,6 +192,29 @@ func run(w *app.Window) error {
 				_ = setAutostart(autoOn)
 			}
 
+			target := float32(0)
+			if session != nil {
+				target = 1
+			}
+			if !lastT.IsZero() {
+				step := float32(gtx.Now.Sub(lastT).Seconds()) * 6
+				if anim < target {
+					anim += step
+					if anim > target {
+						anim = target
+					}
+				} else if anim > target {
+					anim -= step
+					if anim < target {
+						anim = target
+					}
+				}
+			}
+			lastT = gtx.Now
+			if anim != target {
+				gtx.Execute(op.InvalidateCmd{})
+			}
+
 			fill(gtx, colBg)
 
 			layout.Flex{Axis: layout.Vertical}.Layout(gtx,
@@ -207,7 +232,7 @@ func run(w *app.Window) error {
 					case scrSettings:
 						return layoutSettings(gtx, th, &fakeBool, &autoBool)
 					default:
-						return layoutMain(gtx, th, icon, chosen, session != nil, driverErr, startErr, &znak, &toMethod)
+						return layoutMain(gtx, th, icon, chosen, session != nil, anim, driverErr, startErr, &znak, &toMethod)
 					}
 				}),
 			)
@@ -258,15 +283,22 @@ func navBar(gtx C, th *material.Theme, active int, clicks []widget.Clickable) D 
 	)
 }
 
-func layoutMain(gtx C, th *material.Theme, icon paint.ImageOp, chosen preset.Preset, on bool, driverErr, startErr error, znak, toMethod *widget.Clickable) D {
+func layoutMain(gtx C, th *material.Theme, icon paint.ImageOp, chosen preset.Preset, on bool, anim float32, driverErr, startErr error, znak, toMethod *widget.Clickable) D {
 	return layout.Center.Layout(gtx, func(gtx C) D {
 		return layout.Flex{Axis: layout.Vertical, Alignment: layout.Middle}.Layout(gtx,
 			layout.Rigid(func(gtx C) D {
 				return znak.Layout(gtx, func(gtx C) D {
-					side := gtx.Dp(132)
-					gtx.Constraints = layout.Exact(image.Pt(side, side))
+					return layout.Stack{Alignment: layout.Center}.Layout(gtx,
+						layout.Stacked(func(gtx C) D {
+							return halo(gtx, anim)
+						}),
+						layout.Stacked(func(gtx C) D {
+							side := gtx.Dp(132)
+							gtx.Constraints = layout.Exact(image.Pt(side, side))
 
-					return widget.Image{Src: icon, Fit: widget.Contain}.Layout(gtx)
+							return widget.Image{Src: icon, Fit: widget.Contain}.Layout(gtx)
+						}),
+					)
 				})
 			}),
 			layout.Rigid(layout.Spacer{Height: unit.Dp(18)}.Layout),
@@ -317,8 +349,12 @@ func layoutMain(gtx C, th *material.Theme, icon paint.ImageOp, chosen preset.Pre
 }
 
 func layoutMethod(gtx C, th *material.Theme, all []preset.Preset, chosen preset.Preset, list *widget.List, rows []widget.Clickable) D {
-	return material.List(th, list).Layout(gtx, len(all), func(gtx C, i int) D {
-		return methodRow(gtx, th, all[i], all[i].Key == chosen.Key, &rows[i])
+	return layout.UniformInset(unit.Dp(12)).Layout(gtx, func(gtx C) D {
+		return material.List(th, list).Layout(gtx, len(all), func(gtx C, i int) D {
+			return layout.Inset{Bottom: unit.Dp(8)}.Layout(gtx, func(gtx C) D {
+				return methodRow(gtx, th, all[i], all[i].Key == chosen.Key, &rows[i])
+			})
+		})
 	})
 }
 
@@ -326,9 +362,11 @@ func methodRow(gtx C, th *material.Theme, p preset.Preset, selected bool, click 
 	return click.Layout(gtx, func(gtx C) D {
 		return layout.Stack{}.Layout(gtx,
 			layout.Expanded(func(gtx C) D {
+				bg := colPanel
 				if selected {
-					rrect(gtx, colTint, gtx.Dp(10))
+					bg = colTint
 				}
+				rrect(gtx, bg, gtx.Dp(12))
 
 				return D{Size: gtx.Constraints.Min}
 			}),
@@ -419,9 +457,9 @@ func layoutLogs(gtx C, th *material.Theme, body string, list *widget.List, copyB
 			layout.Flexed(1, func(gtx C) D {
 				return material.List(th, list).Layout(gtx, len(lines), func(gtx C, i int) D {
 					lbl := material.Body2(th, lines[i])
-					lbl.Color = colDim
+					lbl.Color = logColor(lines[i])
 
-					return lbl.Layout(gtx)
+					return layout.Inset{Top: unit.Dp(2), Bottom: unit.Dp(2)}.Layout(gtx, lbl.Layout)
 				})
 			}),
 		)
@@ -460,6 +498,29 @@ func hline(gtx C) D {
 	paint.PaintOp{}.Add(gtx.Ops)
 
 	return D{Size: sz}
+}
+
+func halo(gtx C, t float32) D {
+	d := gtx.Dp(132) + int(t*float32(gtx.Dp(48)))
+	sz := image.Pt(d, d)
+	c := color.NRGBA{R: 0x2f, G: 0x7d, B: 0x64, A: uint8(t * 0x4a)}
+
+	defer clip.Ellipse{Max: sz}.Push(gtx.Ops).Pop()
+	paint.ColorOp{Color: c}.Add(gtx.Ops)
+	paint.PaintOp{}.Add(gtx.Ops)
+
+	return D{Size: sz}
+}
+
+func logColor(line string) color.NRGBA {
+	switch {
+	case strings.Contains(line, "ответил") || strings.Contains(line, "отправл") || strings.Contains(line, "✓"):
+		return colTeal
+	case strings.Contains(line, ".") && !strings.HasPrefix(strings.TrimSpace(line), "→"):
+		return colCream
+	default:
+		return colDim
+	}
 }
 
 func tick(gtx C, selected bool) D {
