@@ -31,7 +31,6 @@ const (
 	RestartNote
 	AutoPick
 	Stop
-	Now
 	AddFav
 	DropFav
 	Searching
@@ -76,7 +75,6 @@ var ru = Lang{
 	RestartNote:   "Смена языка вступит в силу после перезапуска.",
 	AutoPick:      "Подобрать",
 	Stop:          "Стоп",
-	Now:           "Сейчас: %s",
 	AddFav:        "В избранное",
 	DropFav:       "Убрать",
 	Searching:     "Пробую: %s",
@@ -118,7 +116,6 @@ var en = Lang{
 	RestartNote:   "The language changes after a restart.",
 	AutoPick:      "Auto-pick",
 	Stop:          "Stop",
-	Now:           "Now: %s",
 	AddFav:        "Pin to top",
 	DropFav:       "Unpin",
 	Searching:     "Trying: %s",

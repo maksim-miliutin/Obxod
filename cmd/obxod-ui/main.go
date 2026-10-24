@@ -97,6 +97,46 @@ func (t *tappableIcon) CreateRenderer() fyne.WidgetRenderer {
 	return widget.NewSimpleRenderer(img)
 }
 
+var selectionTint = color.NRGBA{R: 0x2f, G: 0x7d, B: 0x64, A: 0x33}
+
+type methodRow struct {
+	widget.BaseWidget
+	bg    *canvas.Rectangle
+	name  string
+	desc  string
+	onTap func()
+}
+
+func newMethodRow(name, desc string, selected bool) *methodRow {
+	fill := color.NRGBA{}
+	if selected {
+		fill = selectionTint
+	}
+
+	r := &methodRow{bg: canvas.NewRectangle(fill), name: name, desc: desc}
+	r.bg.CornerRadius = 8
+	r.ExtendBaseWidget(r)
+
+	return r
+}
+
+func (r *methodRow) Tapped(_ *fyne.PointEvent) {
+	if r.onTap != nil {
+		r.onTap()
+	}
+}
+
+func (r *methodRow) CreateRenderer() fyne.WidgetRenderer {
+	name := widget.NewLabel(r.name)
+	name.TextStyle = fyne.TextStyle{Bold: true}
+	desc := widget.NewLabel(r.desc)
+	desc.Wrapping = fyne.TextWrapWord
+
+	body := container.NewVBox(name, desc)
+
+	return widget.NewSimpleRenderer(container.NewStack(r.bg, container.NewPadded(body)))
+}
+
 func main() {
 	a := app.NewWithID("io.obxod.ui")
 	a.Settings().SetTheme(obxodTheme{})
@@ -137,7 +177,6 @@ func main() {
 	logView := widget.NewLabel("")
 	logHead := widget.NewLabel("")
 	progress := widget.NewLabel("")
-	now := widget.NewLabel("")
 	always := widget.NewLabel(strings.Join(preset.Hosts(), "\n"))
 	ownRows := container.NewVBox()
 
@@ -145,9 +184,6 @@ func main() {
 	if saved, ok := preset.Named(a.Preferences().String("method")); ok {
 		chosen = saved
 	}
-
-	desc := widget.NewLabel(chosen.Desc(code))
-	desc.Wrapping = fyne.TextWrapWord
 
 	favourite := []string{}
 	if saved := a.Preferences().String("favourites"); saved != "" {
@@ -237,7 +273,6 @@ func main() {
 	}
 	show()
 
-	choose := widget.NewSelect(preset.NamesByFavourite(code, favourite), nil)
 	fav := widget.NewButton("", nil)
 
 	refreshFav := func() {
@@ -250,27 +285,45 @@ func main() {
 		fav.SetText(l.T(lang.AddFav))
 	}
 
-	choose.OnChanged = func(label string) {
-		found, ok := preset.ByLabel(label, code)
-		if !ok || found.Key == chosen.Key {
-			return
+	methods := container.NewVBox()
+
+	var rebuildMethods func()
+	rebuildMethods = func() {
+		methods.RemoveAll()
+
+		for _, label := range preset.NamesByFavourite(code, favourite) {
+			found, ok := preset.ByLabel(label, code)
+			if !ok {
+				continue
+			}
+
+			row := newMethodRow(found.Name(code), found.Desc(code), found.Key == chosen.Key)
+			row.onTap = func() {
+				if searching || found.Key == chosen.Key {
+					return
+				}
+
+				chosen = found
+				a.Preferences().SetString("method", found.Key)
+				restart()
+				refreshFav()
+				rebuildMethods()
+			}
+
+			methods.Add(row)
 		}
 
-		chosen = found
-		a.Preferences().SetString("method", found.Key)
-		restart()
-		refreshFav()
+		methods.Refresh()
 	}
 
 	fav.OnTapped = func() {
 		favourite = flip(favourite, chosen.Key)
 		a.Preferences().SetString("favourites", strings.Join(favourite, ","))
-		choose.Options = preset.NamesByFavourite(code, favourite)
-		choose.SetSelected(preset.Label(chosen, code, favourite))
 		refreshFav()
+		rebuildMethods()
 	}
 
-	choose.SetSelected(preset.Label(chosen, code, favourite))
+	rebuildMethods()
 	refreshFav()
 
 	pick := widget.NewButton(l.T(lang.AutoPick), nil)
@@ -325,7 +378,6 @@ func main() {
 		searching = true
 		stopFlag.Store(false)
 		znak.Disable()
-		choose.Disable()
 		pick.Disable()
 		stopBtn.Enable()
 		progress.SetText("")
@@ -336,7 +388,6 @@ func main() {
 			fyne.Do(func() {
 				searching = false
 				znak.Enable()
-				choose.Enable()
 				pick.Enable()
 				stopBtn.Disable()
 
@@ -350,7 +401,7 @@ func main() {
 					return
 				}
 
-				choose.SetSelected(preset.Label(chosen, code, favourite))
+				rebuildMethods()
 				a.Preferences().SetString("method", chosen.Key)
 				progress.SetText("")
 				refreshFav()
@@ -396,8 +447,6 @@ func main() {
 					status = l.T(lang.StatusOn)
 				}
 				logHead.SetText(l.T(lang.MethodLabel) + " " + chosen.Name(code) + " · " + status)
-				now.SetText(fmt.Sprintf(l.T(lang.Now), chosen.Name(code)))
-				desc.SetText(chosen.Desc(code))
 
 				if session == nil {
 					speed.SetText(fmt.Sprintf(l.T(lang.SpeedFmt), "—"))
@@ -424,20 +473,23 @@ func main() {
 		language.SetSelected("Русский")
 	}
 
-	obhod := container.NewVBox(
+	top := container.NewVBox(
 		container.NewCenter(container.NewGridWrap(fyne.NewSize(132, 132), znak)),
 		container.NewCenter(container.NewHBox(dot, word)),
-		now,
-		desc,
 		widget.NewSeparator(),
 		widget.NewLabel(l.T(lang.MethodLabel)),
-		container.NewBorder(nil, nil, nil, fav, choose),
-		container.NewBorder(nil, nil, nil, stopBtn, pick),
+	)
+
+	bottom := container.NewVBox(
+		container.NewGridWithColumns(2, pick, fav),
+		stopBtn,
 		widget.NewLabel(l.T(lang.AutoPickNote)),
 		progress,
 		caveat,
 		speed,
 	)
+
+	obhod := container.NewBorder(top, bottom, nil, nil, container.NewVScroll(methods))
 
 	yourSites := container.NewBorder(
 		container.NewVBox(
