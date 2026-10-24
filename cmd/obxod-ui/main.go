@@ -6,6 +6,7 @@ import (
 	"image"
 	"image/color"
 	"image/png"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
@@ -15,6 +16,7 @@ import (
 	"gioui.org/app"
 	"gioui.org/font"
 	"gioui.org/font/gofont"
+	"gioui.org/io/clipboard"
 	"gioui.org/layout"
 	"gioui.org/op"
 	"gioui.org/op/clip"
@@ -123,7 +125,7 @@ func run(w *app.Window) error {
 
 	screen := scrMain
 
-	var znak, toMethod, clearLog widget.Clickable
+	var znak, toMethod, clearLog, copyLog widget.Clickable
 	var methodRows = make([]widget.Clickable, len(all))
 	var navClicks [4]widget.Clickable
 	var methodList, sitesList, logList widget.List
@@ -165,6 +167,9 @@ func run(w *app.Window) error {
 			if clearLog.Clicked(gtx) {
 				book.Clear()
 			}
+			if copyLog.Clicked(gtx) {
+				gtx.Execute(clipboard.WriteCmd{Type: "application/text", Data: io.NopCloser(strings.NewReader(book.Text()))})
+			}
 			for i := range navClicks {
 				if navClicks[i].Clicked(gtx) {
 					screen = navTargets[i]
@@ -189,6 +194,9 @@ func run(w *app.Window) error {
 			fill(gtx, colBg)
 
 			layout.Flex{Axis: layout.Vertical}.Layout(gtx,
+				layout.Rigid(func(gtx C) D {
+					return navBar(gtx, th, activeNav(screen), navClicks[:])
+				}),
 				layout.Flexed(1, func(gtx C) D {
 					switch screen {
 					case scrMethod:
@@ -196,15 +204,12 @@ func run(w *app.Window) error {
 					case scrSites:
 						return layoutSites(gtx, th, own.List(), &sitesList)
 					case scrLogs:
-						return layoutLogs(gtx, th, book.Text(), &logList, &clearLog)
+						return layoutLogs(gtx, th, book.Text(), &logList, &copyLog, &clearLog)
 					case scrSettings:
 						return layoutSettings(gtx, th, &fakeBool, &autoBool)
 					default:
 						return layoutMain(gtx, th, icon, chosen, session != nil, driverErr, startErr, &znak, &toMethod)
 					}
-				}),
-				layout.Rigid(func(gtx C) D {
-					return navBar(gtx, th, activeNav(screen), navClicks[:])
 				}),
 			)
 
@@ -247,10 +252,10 @@ func navBar(gtx C, th *material.Theme, active int, clicks []widget.Clickable) D 
 	}
 
 	return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
-		layout.Rigid(hline),
 		layout.Rigid(func(gtx C) D {
 			return layout.Flex{Axis: layout.Horizontal}.Layout(gtx, items...)
 		}),
+		layout.Rigid(hline),
 	)
 }
 
@@ -332,20 +337,29 @@ func methodRow(gtx C, th *material.Theme, p preset.Preset, selected bool, click 
 				gtx.Constraints.Min.X = gtx.Constraints.Max.X
 
 				return layout.UniformInset(unit.Dp(13)).Layout(gtx, func(gtx C) D {
-					return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
+					return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
 						layout.Rigid(func(gtx C) D {
-							name := material.Body1(th, p.Name("ru"))
-							name.Color = colCream
-							name.Font.Weight = font.Bold
-
-							return name.Layout(gtx)
+							return layout.Inset{Right: unit.Dp(11)}.Layout(gtx, func(gtx C) D {
+								return tick(gtx, selected)
+							})
 						}),
-						layout.Rigid(layout.Spacer{Height: unit.Dp(2)}.Layout),
-						layout.Rigid(func(gtx C) D {
-							desc := material.Caption(th, p.Desc("ru"))
-							desc.Color = colDim
+						layout.Flexed(1, func(gtx C) D {
+							return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
+								layout.Rigid(func(gtx C) D {
+									name := material.Body1(th, p.Name("ru"))
+									name.Color = colCream
+									name.Font.Weight = font.Bold
 
-							return desc.Layout(gtx)
+									return name.Layout(gtx)
+								}),
+								layout.Rigid(layout.Spacer{Height: unit.Dp(2)}.Layout),
+								layout.Rigid(func(gtx C) D {
+									desc := material.Caption(th, p.Desc("ru"))
+									desc.Color = colDim
+
+									return desc.Layout(gtx)
+								}),
+							)
 						}),
 					)
 				})
@@ -378,17 +392,30 @@ func layoutSites(gtx C, th *material.Theme, ownList []string, list *widget.List)
 	})
 }
 
-func layoutLogs(gtx C, th *material.Theme, body string, list *widget.List, clear *widget.Clickable) D {
+func layoutLogs(gtx C, th *material.Theme, body string, list *widget.List, copyBtn, clear *widget.Clickable) D {
 	lines := strings.Split(body, "\n")
+
+	ghost := func(click *widget.Clickable, label string) material.ButtonStyle {
+		b := material.Button(th, click, label)
+		b.Background = colPanel
+		b.Color = colCream
+
+		return b
+	}
 
 	return layout.UniformInset(unit.Dp(16)).Layout(gtx, func(gtx C) D {
 		return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
 			layout.Rigid(func(gtx C) D {
-				btn := material.Button(th, clear, "Очистить")
-				btn.Background = colPanel
-				btn.Color = colCream
-
-				return layout.Inset{Bottom: unit.Dp(10)}.Layout(gtx, btn.Layout)
+				return layout.Inset{Bottom: unit.Dp(10)}.Layout(gtx, func(gtx C) D {
+					return layout.Flex{Axis: layout.Horizontal}.Layout(gtx,
+						layout.Flexed(1, func(gtx C) D {
+							return layout.Inset{Right: unit.Dp(6)}.Layout(gtx, ghost(copyBtn, "Скопировать").Layout)
+						}),
+						layout.Flexed(1, func(gtx C) D {
+							return layout.Inset{Left: unit.Dp(6)}.Layout(gtx, ghost(clear, "Очистить").Layout)
+						}),
+					)
+				})
 			}),
 			layout.Flexed(1, func(gtx C) D {
 				return material.List(th, list).Layout(gtx, len(lines), func(gtx C, i int) D {
@@ -431,6 +458,21 @@ func hline(gtx C) D {
 	sz := image.Pt(gtx.Constraints.Max.X, gtx.Dp(1))
 	defer clip.Rect{Max: sz}.Push(gtx.Ops).Pop()
 	paint.ColorOp{Color: colSep}.Add(gtx.Ops)
+	paint.PaintOp{}.Add(gtx.Ops)
+
+	return D{Size: sz}
+}
+
+func tick(gtx C, selected bool) D {
+	d := gtx.Dp(16)
+	sz := image.Pt(d, d)
+	c := colSep
+	if selected {
+		c = colTeal
+	}
+
+	defer clip.Ellipse{Max: sz}.Push(gtx.Ops).Pop()
+	paint.ColorOp{Color: c}.Add(gtx.Ops)
 	paint.PaintOp{}.Add(gtx.Ops)
 
 	return D{Size: sz}
