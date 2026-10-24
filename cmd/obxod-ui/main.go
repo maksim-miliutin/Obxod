@@ -25,6 +25,8 @@ import (
 	"gioui.org/widget"
 	"gioui.org/widget/material"
 
+	"golang.org/x/exp/shiny/materialdesign/icons"
+
 	"obxod/internal/logbook"
 	"obxod/internal/preset"
 	"obxod/internal/runner"
@@ -44,6 +46,12 @@ const (
 	scrSites
 	scrLogs
 	scrSettings
+)
+
+var (
+	iconStar, _       = widget.NewIcon(icons.ToggleStar)
+	iconStarBorder, _ = widget.NewIcon(icons.ToggleStarBorder)
+	iconChevron, _    = widget.NewIcon(icons.NavigationChevronRight)
 )
 
 func main() {
@@ -85,6 +93,10 @@ func run(w *app.Window) error {
 	chosen := all[0]
 	useFake := false
 
+	pr := loadPrefs()
+	favourites := pr.Favourites
+	uses := pr.Uses
+
 	var session *runner.Session
 	var startErr error
 
@@ -125,7 +137,8 @@ func run(w *app.Window) error {
 	screen := scrMain
 
 	var znak, toMethod, clearLog, copyLog widget.Clickable
-	var methodRows = make([]widget.Clickable, len(all))
+	selectRows := make([]widget.Clickable, len(all))
+	starRows := make([]widget.Clickable, len(all))
 	var navClicks [4]widget.Clickable
 	var methodList, sitesList, logList widget.List
 	methodList.Axis = layout.Vertical
@@ -176,11 +189,17 @@ func run(w *app.Window) error {
 					screen = navTargets[i]
 				}
 			}
-			for i := range methodRows {
-				if methodRows[i].Clicked(gtx) {
+			for i := range all {
+				if selectRows[i].Clicked(gtx) {
 					chosen = all[i]
+					uses[all[i].Key]++
+					prefs{Favourites: favourites, Uses: uses}.save()
 					restart()
 					screen = scrMain
+				}
+				if starRows[i].Clicked(gtx) {
+					favourites = toggleFav(favourites, all[i].Key)
+					prefs{Favourites: favourites, Uses: uses}.save()
 				}
 			}
 			if fakeBool.Value != useFake {
@@ -198,9 +217,9 @@ func run(w *app.Window) error {
 			}
 			navTarget := float32(activeNav(screen))
 			if !lastT.IsZero() {
-				step := float32(gtx.Now.Sub(lastT).Seconds())
-				anim = approach(anim, onTarget, step*6)
-				navAnim = approach(navAnim, navTarget, step*10)
+				dt := float32(gtx.Now.Sub(lastT).Seconds())
+				anim = approach(anim, onTarget, dt, 14)
+				navAnim = approach(navAnim, navTarget, dt, 16)
 			}
 			lastT = gtx.Now
 			if anim != onTarget || navAnim != navTarget {
@@ -216,7 +235,7 @@ func run(w *app.Window) error {
 				layout.Flexed(1, func(gtx C) D {
 					switch screen {
 					case scrMethod:
-						return layoutMethod(gtx, th, all, chosen, &methodList, methodRows)
+						return layoutMethod(gtx, th, all, chosen, favourites, uses, &methodList, selectRows, starRows)
 					case scrSites:
 						return layoutSites(gtx, th, own.List(), &sitesList)
 					case scrLogs:
@@ -338,11 +357,10 @@ func layoutMain(gtx C, th *material.Theme, icon paint.ImageOp, chosen preset.Pre
 				return status.Layout(gtx)
 			}),
 			layout.Rigid(func(gtx C) D {
-				return toMethod.Layout(gtx, func(gtx C) D {
-					lbl := material.Body2(th, "Способ:  "+chosen.Name("ru"))
-					lbl.Color = colCream
-
-					return layout.Inset{Top: unit.Dp(16)}.Layout(gtx, lbl.Layout)
+				return layout.Inset{Top: unit.Dp(22)}.Layout(gtx, func(gtx C) D {
+					return toMethod.Layout(gtx, func(gtx C) D {
+						return methodCard(gtx, th, chosen)
+					})
 				})
 			}),
 			layout.Rigid(func(gtx C) D {
@@ -366,61 +384,136 @@ func layoutMain(gtx C, th *material.Theme, icon paint.ImageOp, chosen preset.Pre
 	})
 }
 
-func layoutMethod(gtx C, th *material.Theme, all []preset.Preset, chosen preset.Preset, list *widget.List, rows []widget.Clickable) D {
+func layoutMethod(gtx C, th *material.Theme, all []preset.Preset, chosen preset.Preset, favourites []string, uses map[string]int, list *widget.List, selectRows, starRows []widget.Clickable) D {
+	order := methodOrder(all, favourites, uses)
+
 	return layout.UniformInset(unit.Dp(12)).Layout(gtx, func(gtx C) D {
-		return material.List(th, list).Layout(gtx, len(all), func(gtx C, i int) D {
+		return material.List(th, list).Layout(gtx, len(order), func(gtx C, j int) D {
+			i := order[j]
+
 			return layout.Inset{Bottom: unit.Dp(8)}.Layout(gtx, func(gtx C) D {
-				return methodRow(gtx, th, all[i], all[i].Key == chosen.Key, &rows[i])
+				return methodRow(gtx, th, all[i], all[i].Key == chosen.Key, starred(favourites, all[i].Key), &selectRows[i], &starRows[i])
 			})
 		})
 	})
 }
 
-func methodRow(gtx C, th *material.Theme, p preset.Preset, selected bool, click *widget.Clickable) D {
-	return click.Layout(gtx, func(gtx C) D {
-		return layout.Stack{}.Layout(gtx,
-			layout.Expanded(func(gtx C) D {
-				bg := colPanel
-				if selected {
-					bg = colTint
-				}
-				rrect(gtx, bg, gtx.Dp(12))
+func methodCard(gtx C, th *material.Theme, chosen preset.Preset) D {
+	w := gtx.Dp(300)
+	if w > gtx.Constraints.Max.X {
+		w = gtx.Constraints.Max.X
+	}
+	gtx.Constraints.Min.X = w
+	gtx.Constraints.Max.X = w
 
-				return D{Size: gtx.Constraints.Min}
-			}),
-			layout.Stacked(func(gtx C) D {
-				gtx.Constraints.Min.X = gtx.Constraints.Max.X
+	return layout.Stack{}.Layout(gtx,
+		layout.Expanded(func(gtx C) D {
+			rrect(gtx, colPanel, gtx.Dp(12))
 
-				return layout.UniformInset(unit.Dp(13)).Layout(gtx, func(gtx C) D {
-					return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
-						layout.Rigid(func(gtx C) D {
-							return layout.Inset{Right: unit.Dp(11)}.Layout(gtx, func(gtx C) D {
-								return tick(gtx, selected)
-							})
-						}),
-						layout.Flexed(1, func(gtx C) D {
-							return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
+			return D{Size: gtx.Constraints.Min}
+		}),
+		layout.Stacked(func(gtx C) D {
+			gtx.Constraints.Min.X = gtx.Constraints.Max.X
+
+			return layout.UniformInset(unit.Dp(14)).Layout(gtx, func(gtx C) D {
+				return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
+					layout.Flexed(1, func(gtx C) D {
+						return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
+							layout.Rigid(func(gtx C) D {
+								l := material.Caption(th, "СПОСОБ · нажмите, чтобы сменить")
+								l.Color = colDim
+
+								return l.Layout(gtx)
+							}),
+							layout.Rigid(layout.Spacer{Height: unit.Dp(3)}.Layout),
+							layout.Rigid(func(gtx C) D {
+								n := material.Body1(th, chosen.Name("ru"))
+								n.Color = colCream
+								n.Font.Weight = font.Bold
+
+								return n.Layout(gtx)
+							}),
+						)
+					}),
+					layout.Rigid(func(gtx C) D {
+						sz := gtx.Dp(24)
+						gtx.Constraints = layout.Exact(image.Pt(sz, sz))
+
+						return iconChevron.Layout(gtx, colDim)
+					}),
+				)
+			})
+		}),
+	)
+}
+
+func methodRow(gtx C, th *material.Theme, p preset.Preset, selected, fav bool, selectClick, starClick *widget.Clickable) D {
+	return layout.Stack{}.Layout(gtx,
+		layout.Expanded(func(gtx C) D {
+			bg := colPanel
+			if selected {
+				bg = colTint
+			}
+			rrect(gtx, bg, gtx.Dp(12))
+
+			return D{Size: gtx.Constraints.Min}
+		}),
+		layout.Stacked(func(gtx C) D {
+			gtx.Constraints.Min.X = gtx.Constraints.Max.X
+
+			return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
+				layout.Flexed(1, func(gtx C) D {
+					return selectClick.Layout(gtx, func(gtx C) D {
+						gtx.Constraints.Min.X = gtx.Constraints.Max.X
+
+						return layout.UniformInset(unit.Dp(13)).Layout(gtx, func(gtx C) D {
+							return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
 								layout.Rigid(func(gtx C) D {
-									name := material.Body1(th, p.Name("ru"))
-									name.Color = colCream
-									name.Font.Weight = font.Bold
-
-									return name.Layout(gtx)
+									return layout.Inset{Right: unit.Dp(11)}.Layout(gtx, func(gtx C) D {
+										return tick(gtx, selected)
+									})
 								}),
-								layout.Rigid(layout.Spacer{Height: unit.Dp(2)}.Layout),
-								layout.Rigid(func(gtx C) D {
-									desc := material.Caption(th, p.Desc("ru"))
-									desc.Color = colDim
+								layout.Flexed(1, func(gtx C) D {
+									return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
+										layout.Rigid(func(gtx C) D {
+											name := material.Body1(th, p.Name("ru"))
+											name.Color = colCream
+											name.Font.Weight = font.Bold
 
-									return desc.Layout(gtx)
+											return name.Layout(gtx)
+										}),
+										layout.Rigid(layout.Spacer{Height: unit.Dp(2)}.Layout),
+										layout.Rigid(func(gtx C) D {
+											desc := material.Caption(th, p.Desc("ru"))
+											desc.Color = colDim
+
+											return desc.Layout(gtx)
+										}),
+									)
 								}),
 							)
-						}),
-					)
-				})
-			}),
-		)
-	})
+						})
+					})
+				}),
+				layout.Rigid(func(gtx C) D {
+					return starClick.Layout(gtx, func(gtx C) D {
+						return layout.UniformInset(unit.Dp(12)).Layout(gtx, func(gtx C) D {
+							sz := gtx.Dp(22)
+							gtx.Constraints = layout.Exact(image.Pt(sz, sz))
+							ic := iconStarBorder
+							col := colDim
+							if fav {
+								ic = iconStar
+								col = colTeal
+							}
+
+							return ic.Layout(gtx, col)
+						})
+					})
+				}),
+			)
+		}),
+	)
 }
 
 func layoutSites(gtx C, th *material.Theme, ownList []string, list *widget.List) D {
@@ -536,20 +629,21 @@ func layoutSettings(gtx C, th *material.Theme, fake, auto *widget.Bool) D {
 	})
 }
 
-func approach(cur, tgt, step float32) float32 {
-	if cur < tgt {
-		cur += step
-		if cur > tgt {
-			cur = tgt
-		}
-	} else if cur > tgt {
-		cur -= step
-		if cur < tgt {
-			cur = tgt
-		}
+func approach(cur, tgt, dt, rate float32) float32 {
+	d := tgt - cur
+	if d < 0 {
+		d = -d
+	}
+	if d < 0.001 {
+		return tgt
 	}
 
-	return cur
+	f := dt * rate
+	if f > 1 {
+		f = 1
+	}
+
+	return cur + (tgt-cur)*f
 }
 
 func halo(gtx C, t float32) D {
