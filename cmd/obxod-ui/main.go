@@ -15,7 +15,6 @@ import (
 
 	"gioui.org/app"
 	"gioui.org/font"
-	"gioui.org/font/gofont"
 	"gioui.org/io/clipboard"
 	"gioui.org/layout"
 	"gioui.org/op"
@@ -61,7 +60,7 @@ func main() {
 
 func run(w *app.Window) error {
 	th := material.NewTheme()
-	th.Shaper = text.NewShaper(text.WithCollection(gofont.Collection()))
+	th.Shaper = text.NewShaper(text.WithCollection(manropeCollection()))
 	th.Palette.Bg = colBg
 	th.Palette.Fg = colCream
 	th.Palette.ContrastBg = colTeal
