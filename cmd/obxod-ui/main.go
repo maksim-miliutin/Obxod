@@ -177,7 +177,8 @@ func main() {
 	logView := widget.NewLabel("")
 	logHead := widget.NewLabel("")
 	progress := widget.NewLabel("")
-	always := widget.NewLabel(strings.Join(preset.Hosts(), "\n"))
+	always := widget.NewLabel(strings.Join(preset.Hosts(), "  ·  "))
+	always.Wrapping = fyne.TextWrapWord
 	ownRows := container.NewVBox()
 
 	chosen := preset.All()[0]
