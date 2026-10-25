@@ -406,6 +406,12 @@ func layoutMain(gtx C, th *material.Theme, icon paint.ImageOp, chosen preset.Pre
 		return layout.Flex{Axis: layout.Vertical, Alignment: layout.Middle}.Layout(gtx,
 			layout.Rigid(func(gtx C) D {
 				return znak.Layout(gtx, func(gtx C) D {
+					o := float32(1)
+					if znak.Pressed() {
+						o = 0.6
+					}
+					defer paint.PushOpacity(gtx.Ops, o).Pop()
+
 					return layout.Stack{Alignment: layout.Center}.Layout(gtx,
 						layout.Stacked(func(gtx C) D {
 							return halo(gtx, anim)
@@ -738,10 +744,19 @@ func layoutLogs(gtx C, th *material.Theme, body, code string, downloaded int, tr
 						return layout.Inset{Top: unit.Dp(4)}.Layout(gtx, func(gtx C) D {
 							return layout.Flex{Axis: layout.Horizontal}.Layout(gtx,
 								layout.Flexed(1, func(gtx C) D {
-									n := material.Body2(th, row.name)
-									n.Color = colCream
+									return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
+										layout.Rigid(func(gtx C) D {
+											return layout.Inset{Right: unit.Dp(8)}.Layout(gtx, func(gtx C) D {
+												return dot(gtx, serviceColor(row.name))
+											})
+										}),
+										layout.Rigid(func(gtx C) D {
+											n := material.Body2(th, row.name)
+											n.Color = colCream
 
-									return n.Layout(gtx)
+											return n.Layout(gtx)
+										}),
+									)
 								}),
 								layout.Rigid(func(gtx C) D {
 									v := material.Body2(th, humanBytes(row.bytes, code))
@@ -914,6 +929,34 @@ func halo(gtx C, t float32) D {
 type serviceRow struct {
 	name  string
 	bytes int
+}
+
+func dot(gtx C, c color.NRGBA) D {
+	d := gtx.Dp(9)
+	sz := image.Pt(d, d)
+
+	defer clip.Ellipse{Max: sz}.Push(gtx.Ops).Pop()
+	paint.ColorOp{Color: c}.Add(gtx.Ops)
+	paint.PaintOp{}.Add(gtx.Ops)
+
+	return D{Size: sz}
+}
+
+func serviceColor(name string) color.NRGBA {
+	switch name {
+	case "Discord":
+		return color.NRGBA{R: 0x58, G: 0x65, B: 0xf2, A: 0xff}
+	case "YouTube":
+		return color.NRGBA{R: 0xff, G: 0x3b, B: 0x30, A: 0xff}
+	case "Instagram":
+		return color.NRGBA{R: 0xe1, G: 0x30, B: 0x6c, A: 0xff}
+	case "Telegram":
+		return color.NRGBA{R: 0x3a, G: 0xa0, B: 0xdc, A: 0xff}
+	case "X":
+		return colCream
+	default:
+		return colDim
+	}
 }
 
 func serviceOf(host string) string {
