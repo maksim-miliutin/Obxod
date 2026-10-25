@@ -47,6 +47,7 @@ const (
 	AutostartSub
 	DriverBad
 	TrafficFmt
+	LogsEmpty
 	last
 )
 
@@ -97,6 +98,7 @@ var ru = Lang{
 	AutostartSub:  "включать обход при старте",
 	DriverBad:     "драйвер не загрузился",
 	TrafficFmt:    "Трафик: %s",
+	LogsEmpty:     "Пока тихо. Включите обход и откройте сайт.",
 }
 
 var en = Lang{
@@ -144,6 +146,7 @@ var en = Lang{
 	AutostartSub:  "turn on the bypass at startup",
 	DriverBad:     "driver failed to load",
 	TrafficFmt:    "Traffic: %s",
+	LogsEmpty:     "Quiet for now. Turn on the bypass and open a site.",
 }
 
 func Of(code string) Lang {

@@ -31,6 +31,7 @@ import (
 
 	"obxod/internal/lang"
 	"obxod/internal/logbook"
+	"obxod/internal/meter"
 	"obxod/internal/preset"
 	"obxod/internal/runner"
 	"obxod/internal/sites"
@@ -95,6 +96,9 @@ func run(w *app.Window) error {
 	all := preset.All()
 	chosen := all[0]
 	useFake := false
+	var rate meter.Rate
+	speed := ""
+	var lastSpeed time.Time
 
 	pr := loadPrefs()
 	favourites := pr.Favourites
@@ -121,6 +125,7 @@ func run(w *app.Window) error {
 
 		startErr = nil
 		session = started
+		rate = meter.Rate{}
 		go session.Run()
 	}
 
@@ -279,6 +284,15 @@ func run(w *app.Window) error {
 
 			live.Store(session != nil)
 
+			if session != nil {
+				if gtx.Now.Sub(lastSpeed) >= time.Second {
+					speed = humanRate(rate.Sample(session.Downloaded(), gtx.Now), code)
+					lastSpeed = gtx.Now
+				}
+			} else {
+				speed = ""
+			}
+
 			fill(gtx, colBg)
 
 			layout.Flex{Axis: layout.Vertical}.Layout(gtx,
@@ -307,7 +321,7 @@ func run(w *app.Window) error {
 					case scrSettings:
 						return layoutSettings(gtx, th, code, &fakeBool, &autoBool, &langClick)
 					default:
-						return layoutMain(gtx, th, icon, chosen, session != nil, anim, code, dl, driverErr, startErr, &znak, &toMethod)
+						return layoutMain(gtx, th, icon, chosen, session != nil, anim, code, speed, driverErr, startErr, &znak, &toMethod)
 					}
 				}),
 			)
@@ -385,7 +399,7 @@ func navUnderline(gtx C, pos float32, tabs int) D {
 	return D{Size: image.Pt(w, h)}
 }
 
-func layoutMain(gtx C, th *material.Theme, icon paint.ImageOp, chosen preset.Preset, on bool, anim float32, code string, downloaded int, driverErr, startErr error, znak, toMethod *widget.Clickable) D {
+func layoutMain(gtx C, th *material.Theme, icon paint.ImageOp, chosen preset.Preset, on bool, anim float32, code, speed string, driverErr, startErr error, znak, toMethod *widget.Clickable) D {
 	l := lang.Of(code)
 
 	return layout.Center.Layout(gtx, func(gtx C) D {
@@ -424,11 +438,11 @@ func layoutMain(gtx C, th *material.Theme, icon paint.ImageOp, chosen preset.Pre
 				return status.Layout(gtx)
 			}),
 			layout.Rigid(func(gtx C) D {
-				if !on {
+				if !on || speed == "" {
 					return D{}
 				}
 
-				s := material.Caption(th, humanBytes(downloaded, code))
+				s := material.Caption(th, speed)
 				s.Color = colDim
 
 				return layout.Inset{Top: unit.Dp(4)}.Layout(gtx, s.Layout)
@@ -757,6 +771,14 @@ func layoutLogs(gtx C, th *material.Theme, body, code string, downloaded int, tr
 				})
 			}),
 			layout.Flexed(1, func(gtx C) D {
+				if strings.TrimSpace(body) == "" {
+					p := material.Body2(th, l.T(lang.LogsEmpty))
+					p.Color = colDim
+					p.Alignment = text.Middle
+
+					return layout.Center.Layout(gtx, p.Layout)
+				}
+
 				return material.List(th, list).Layout(gtx, len(lines), func(gtx C, i int) D {
 					lbl := material.Body2(th, lines[i])
 					lbl.Color = logColor(lines[i])
@@ -930,6 +952,15 @@ func byService(traffic map[string]int) []serviceRow {
 	})
 
 	return rows
+}
+
+func humanRate(perSecond float64, code string) string {
+	suffix := "/с"
+	if code == "en" {
+		suffix = "/s"
+	}
+
+	return humanBytes(int(perSecond), code) + suffix
 }
 
 func humanBytes(n int, code string) string {
