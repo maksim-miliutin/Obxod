@@ -435,3 +435,7 @@ func (e *Engine) tally() string {
 func (e *Engine) Downloaded() int {
 	return e.health.Total()
 }
+
+func (e *Engine) Traffic() map[string]int {
+	return e.health.Traffic()
+}

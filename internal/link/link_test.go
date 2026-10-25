@@ -21,6 +21,32 @@ func TestDataSaysOnlyTheFirstTime(t *testing.T) {
 	}
 }
 
+// What this guards: per-host traffic has to survive a connection closing, and add
+// up across the several ports one site opens.
+func TestTrafficSumsBytesPerHostAndKeepsThemAfterClose(t *testing.T) {
+	h := New()
+	now := time.Now()
+
+	h.Hello("discord.gg", 1001)
+	h.Hello("youtube.com", 1002)
+	h.Hello("discord.gg", 1003)
+
+	h.Data(1001, 100, now)
+	h.Data(1002, 50, now)
+	h.Data(1003, 20, now)
+	h.Closed(1001)
+
+	traffic := h.Traffic()
+
+	if traffic["discord.gg"] != 120 {
+		t.Errorf("discord.gg came back %d, want 120 summed across ports and kept after close", traffic["discord.gg"])
+	}
+
+	if traffic["youtube.com"] != 50 {
+		t.Errorf("youtube.com came back %d, want 50", traffic["youtube.com"])
+	}
+}
+
 // The flaw this guards: reporting once per site hid whether the next connection
 // to the same site ever answered.
 func TestEveryConnectionIsFollowedApart(t *testing.T) {

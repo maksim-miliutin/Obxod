@@ -122,3 +122,7 @@ func (s *Session) Stop() {
 func (s *Session) Downloaded() int {
 	return s.engine.Downloaded()
 }
+
+func (s *Session) Traffic() map[string]int {
+	return s.engine.Traffic()
+}

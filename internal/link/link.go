@@ -6,9 +6,10 @@ import (
 )
 
 type Health struct {
-	mu    sync.Mutex
-	links map[uint16]*state
-	total int
+	mu     sync.Mutex
+	links  map[uint16]*state
+	total  int
+	byHost map[string]int
 }
 
 type state struct {
@@ -27,7 +28,7 @@ type Report struct {
 }
 
 func New() *Health {
-	return &Health{links: make(map[uint16]*state)}
+	return &Health{links: make(map[uint16]*state), byHost: make(map[string]int)}
 }
 
 func (h *Health) Hello(host string, port uint16) {
@@ -50,6 +51,7 @@ func (h *Health) Data(port uint16, bytes int, now time.Time) (string, bool) {
 	s.bytes += bytes
 	s.lastData = now
 	h.total += bytes
+	h.byHost[s.host] += bytes
 
 	return s.host, s.packets == 1
 }
@@ -111,4 +113,16 @@ func (h *Health) Total() int {
 	defer h.mu.Unlock()
 
 	return h.total
+}
+
+func (h *Health) Traffic() map[string]int {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	out := make(map[string]int, len(h.byHost))
+	for host, bytes := range h.byHost {
+		out[host] = bytes
+	}
+
+	return out
 }
