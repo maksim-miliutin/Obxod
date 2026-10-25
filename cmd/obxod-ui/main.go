@@ -165,6 +165,7 @@ func run(w *app.Window) error {
 	methodList.Axis = layout.Vertical
 	sitesList.Axis = layout.Vertical
 	logList.Axis = layout.Vertical
+	logList.ScrollToEnd = true
 	settingsList.Axis = layout.Vertical
 
 	var fakeBool, autoBool widget.Bool
