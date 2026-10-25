@@ -157,6 +157,7 @@ func run(w *app.Window) error {
 	var delSites [64]widget.Clickable
 	var siteEditor widget.Editor
 	siteEditor.SingleLine = true
+	siteEditor.Submit = true
 	selectRows := make([]widget.Clickable, len(all))
 	starRows := make([]widget.Clickable, len(all))
 	var navClicks [4]widget.Clickable
@@ -236,13 +237,26 @@ func run(w *app.Window) error {
 				}
 				persist()
 			}
-			if addSite.Clicked(gtx) {
+			addCurrent := func() {
 				name := strings.TrimSpace(siteEditor.Text())
-				if name != "" {
-					own.Add(name)
-					_ = own.Save(sitesFile())
-					siteEditor.SetText("")
-					restart()
+				if name == "" {
+					return
+				}
+				own.Add(name)
+				_ = own.Save(sitesFile())
+				siteEditor.SetText("")
+				restart()
+			}
+			if addSite.Clicked(gtx) {
+				addCurrent()
+			}
+			for {
+				ev, ok := siteEditor.Update(gtx)
+				if !ok {
+					break
+				}
+				if _, ok := ev.(widget.SubmitEvent); ok {
+					addCurrent()
 				}
 			}
 			ownNames := own.List()
