@@ -148,6 +148,10 @@ func run(w *app.Window) error {
 	screen := scrMain
 
 	var znak, toMethod, clearLog, copyLog, langClick widget.Clickable
+	var addSite widget.Clickable
+	var delSites [64]widget.Clickable
+	var siteEditor widget.Editor
+	siteEditor.SingleLine = true
 	selectRows := make([]widget.Clickable, len(all))
 	starRows := make([]widget.Clickable, len(all))
 	var navClicks [4]widget.Clickable
@@ -226,6 +230,23 @@ func run(w *app.Window) error {
 				}
 				persist()
 			}
+			if addSite.Clicked(gtx) {
+				name := strings.TrimSpace(siteEditor.Text())
+				if name != "" {
+					own.Add(name)
+					_ = own.Save(sitesFile())
+					siteEditor.SetText("")
+					restart()
+				}
+			}
+			ownNames := own.List()
+			for i := range ownNames {
+				if i < len(delSites) && delSites[i].Clicked(gtx) {
+					own.Remove(ownNames[i])
+					_ = own.Save(sitesFile())
+					restart()
+				}
+			}
 			if fakeBool.Value != useFake {
 				useFake = fakeBool.Value
 				restart()
@@ -280,7 +301,7 @@ func run(w *app.Window) error {
 					case scrMethod:
 						return layoutMethod(gtx, th, all, chosen, favourites, uses, code, &methodList, selectRows, starRows)
 					case scrSites:
-						return layoutSites(gtx, th, own.List(), code, &sitesList)
+						return layoutSites(gtx, th, own.List(), code, &siteEditor, &addSite, delSites[:], &sitesList)
 					case scrLogs:
 						return layoutLogs(gtx, th, book.Text(), code, dl, traffic, &logList, &copyLog, &clearLog)
 					case scrSettings:
@@ -573,28 +594,102 @@ func methodRow(gtx C, th *material.Theme, p preset.Preset, code string, selected
 	)
 }
 
-func layoutSites(gtx C, th *material.Theme, ownList []string, code string, list *widget.List) D {
+func layoutSites(gtx C, th *material.Theme, ownList []string, code string, editor *widget.Editor, addBtn *widget.Clickable, dels []widget.Clickable, list *widget.List) D {
 	l := lang.Of(code)
-	lines := []string{fmt.Sprintf(l.T(lang.CountFmt), len(preset.HostsWith(ownList)))}
-	lines = append(lines, "", l.T(lang.YourSites))
-	if len(ownList) == 0 {
-		lines = append(lines, "—")
-	} else {
-		lines = append(lines, ownList...)
+
+	content := func(gtx C) D {
+		children := []layout.FlexChild{
+			layout.Rigid(func(gtx C) D {
+				t := material.Body2(th, fmt.Sprintf(l.T(lang.CountFmt), len(preset.HostsWith(ownList))))
+				t.Color = colDim
+
+				return layout.Inset{Bottom: unit.Dp(10)}.Layout(gtx, t.Layout)
+			}),
+			layout.Rigid(func(gtx C) D {
+				t := material.Body2(th, l.T(lang.YourSites))
+				t.Color = colDim
+
+				return t.Layout(gtx)
+			}),
+		}
+
+		for i, name := range ownList {
+			i, name := i, name
+			children = append(children, layout.Rigid(func(gtx C) D {
+				return layout.Inset{Top: unit.Dp(6)}.Layout(gtx, func(gtx C) D {
+					return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
+						layout.Rigid(func(gtx C) D {
+							if i >= len(dels) {
+								return D{}
+							}
+
+							x := material.Button(th, &dels[i], "×")
+							x.Background = colPanel
+							x.Color = colCream
+
+							return layout.Inset{Right: unit.Dp(10)}.Layout(gtx, x.Layout)
+						}),
+						layout.Flexed(1, func(gtx C) D {
+							n := material.Body1(th, name)
+							n.Color = colCream
+
+							return n.Layout(gtx)
+						}),
+					)
+				})
+			}))
+		}
+
+		children = append(children,
+			layout.Rigid(func(gtx C) D {
+				t := material.Body2(th, l.T(lang.AlwaysSites))
+				t.Color = colDim
+
+				return layout.Inset{Top: unit.Dp(16), Bottom: unit.Dp(6)}.Layout(gtx, t.Layout)
+			}),
+			layout.Rigid(func(gtx C) D {
+				t := material.Body2(th, strings.Join(preset.Hosts(), "  ·  "))
+				t.Color = colDim
+
+				return t.Layout(gtx)
+			}),
+		)
+
+		return layout.Flex{Axis: layout.Vertical}.Layout(gtx, children...)
 	}
-	lines = append(lines, "", l.T(lang.AlwaysSites))
-	lines = append(lines, preset.Hosts()...)
 
 	return layout.UniformInset(unit.Dp(16)).Layout(gtx, func(gtx C) D {
-		return material.List(th, list).Layout(gtx, len(lines), func(gtx C, i int) D {
-			lbl := material.Body2(th, lines[i])
-			lbl.Color = colCream
-			if strings.HasSuffix(lines[i], ":") || lines[i] == "—" {
-				lbl.Color = colDim
-			}
+		return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
+			layout.Rigid(func(gtx C) D {
+				return layout.Inset{Bottom: unit.Dp(12)}.Layout(gtx, func(gtx C) D {
+					return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
+						layout.Flexed(1, func(gtx C) D {
+							ed := material.Editor(th, editor, "instagram.com")
+							ed.Color = colCream
+							ed.HintColor = colDim
 
-			return layout.Inset{Top: unit.Dp(3), Bottom: unit.Dp(3)}.Layout(gtx, lbl.Layout)
-		})
+							return layout.Inset{Right: unit.Dp(8)}.Layout(gtx, func(gtx C) D {
+								return widget.Border{Color: colSep, Width: unit.Dp(1), CornerRadius: unit.Dp(10)}.Layout(gtx, func(gtx C) D {
+									return layout.UniformInset(unit.Dp(11)).Layout(gtx, ed.Layout)
+								})
+							})
+						}),
+						layout.Rigid(func(gtx C) D {
+							b := material.Button(th, addBtn, l.T(lang.AddSite))
+							b.Background = colTeal
+							b.Color = colBg
+
+							return b.Layout(gtx)
+						}),
+					)
+				})
+			}),
+			layout.Flexed(1, func(gtx C) D {
+				return material.List(th, list).Layout(gtx, 1, func(gtx C, _ int) D {
+					return content(gtx)
+				})
+			}),
+		)
 	})
 }
 
