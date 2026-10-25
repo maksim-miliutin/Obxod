@@ -46,6 +46,7 @@ const (
 	FastQUICSub
 	AutostartSub
 	DriverBad
+	TrafficFmt
 	last
 )
 
@@ -95,6 +96,7 @@ var ru = Lang{
 	FastQUICSub:   "быстрее, но ломает Discord на части DPI",
 	AutostartSub:  "включать обход при старте",
 	DriverBad:     "драйвер не загрузился",
+	TrafficFmt:    "Трафик: %s",
 }
 
 var en = Lang{
@@ -141,6 +143,7 @@ var en = Lang{
 	FastQUICSub:   "faster, but breaks Discord on some DPI",
 	AutostartSub:  "turn on the bypass at startup",
 	DriverBad:     "driver failed to load",
+	TrafficFmt:    "Traffic: %s",
 }
 
 func Of(code string) Lang {

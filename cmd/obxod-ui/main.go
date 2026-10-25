@@ -168,7 +168,9 @@ func run(w *app.Window) error {
 
 	var ops op.Ops
 	var anim, navAnim float32
+	var scrAnim float32 = 1
 	var lastT time.Time
+	lastScreen := screen
 
 	for {
 		switch e := w.Event().(type) {
@@ -228,6 +230,11 @@ func run(w *app.Window) error {
 				_ = setAutostart(autoOn)
 			}
 
+			if screen != lastScreen {
+				scrAnim = 0
+				lastScreen = screen
+			}
+
 			onTarget := float32(0)
 			if session != nil {
 				onTarget = 1
@@ -235,11 +242,12 @@ func run(w *app.Window) error {
 			navTarget := float32(activeNav(screen))
 			if !lastT.IsZero() {
 				dt := float32(gtx.Now.Sub(lastT).Seconds())
-				anim = approach(anim, onTarget, dt, 10)
-				navAnim = approach(navAnim, navTarget, dt, 13)
+				anim = approach(anim, onTarget, dt, 9)
+				navAnim = approach(navAnim, navTarget, dt, 12)
+				scrAnim = approach(scrAnim, 1, dt, 9)
 			}
 			lastT = gtx.Now
-			if anim != onTarget || navAnim != navTarget {
+			if anim != onTarget || navAnim != navTarget || scrAnim != 1 {
 				gtx.Execute(op.InvalidateCmd{})
 			}
 
@@ -250,13 +258,22 @@ func run(w *app.Window) error {
 					return navBar(gtx, th, activeNav(screen), navAnim, code, navClicks[:])
 				}),
 				layout.Flexed(1, func(gtx C) D {
+					dy := int((1 - scrAnim) * float32(gtx.Dp(12)))
+					defer op.Offset(image.Pt(0, dy)).Push(gtx.Ops).Pop()
+					defer paint.PushOpacity(gtx.Ops, scrAnim).Pop()
+
+					dl := 0
+					if session != nil {
+						dl = session.Downloaded()
+					}
+
 					switch screen {
 					case scrMethod:
 						return layoutMethod(gtx, th, all, chosen, favourites, uses, code, &methodList, selectRows, starRows)
 					case scrSites:
 						return layoutSites(gtx, th, own.List(), code, &sitesList)
 					case scrLogs:
-						return layoutLogs(gtx, th, book.Text(), code, &logList, &copyLog, &clearLog)
+						return layoutLogs(gtx, th, book.Text(), code, dl, &logList, &copyLog, &clearLog)
 					case scrSettings:
 						return layoutSettings(gtx, th, code, &fakeBool, &autoBool, &langClick)
 					default:
@@ -562,7 +579,7 @@ func layoutSites(gtx C, th *material.Theme, ownList []string, code string, list 
 	})
 }
 
-func layoutLogs(gtx C, th *material.Theme, body, code string, list *widget.List, copyBtn, clear *widget.Clickable) D {
+func layoutLogs(gtx C, th *material.Theme, body, code string, downloaded int, list *widget.List, copyBtn, clear *widget.Clickable) D {
 	l := lang.Of(code)
 	lines := strings.Split(body, "\n")
 
@@ -576,6 +593,13 @@ func layoutLogs(gtx C, th *material.Theme, body, code string, list *widget.List,
 
 	return layout.UniformInset(unit.Dp(16)).Layout(gtx, func(gtx C) D {
 		return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
+			layout.Rigid(func(gtx C) D {
+				t := material.Body1(th, fmt.Sprintf(l.T(lang.TrafficFmt), humanBytes(downloaded, code)))
+				t.Color = colTeal
+				t.Font.Weight = font.Bold
+
+				return layout.Inset{Bottom: unit.Dp(10)}.Layout(gtx, t.Layout)
+			}),
 			layout.Rigid(func(gtx C) D {
 				return layout.Inset{Bottom: unit.Dp(10)}.Layout(gtx, func(gtx C) D {
 					return layout.Flex{Axis: layout.Horizontal}.Layout(gtx,
@@ -710,15 +734,34 @@ func approach(cur, tgt, dt, rate float32) float32 {
 }
 
 func halo(gtx C, t float32) D {
-	d := gtx.Dp(132) + int(t*float32(gtx.Dp(48)))
+	d := gtx.Dp(130) + int(t*float32(gtx.Dp(72)))
 	sz := image.Pt(d, d)
-	c := color.NRGBA{R: 0x2f, G: 0x7d, B: 0x64, A: uint8(t * 0x4a)}
+	c := color.NRGBA{R: 0x2f, G: 0x7d, B: 0x64, A: uint8(t * 0x3a)}
 
 	defer clip.Ellipse{Max: sz}.Push(gtx.Ops).Pop()
 	paint.ColorOp{Color: c}.Add(gtx.Ops)
 	paint.PaintOp{}.Add(gtx.Ops)
 
 	return D{Size: sz}
+}
+
+func humanBytes(n int, code string) string {
+	kb, mb, gb := "КБ", "МБ", "ГБ"
+	if code == "en" {
+		kb, mb, gb = "KB", "MB", "GB"
+	}
+
+	f := float64(n)
+	switch {
+	case f >= 1<<30:
+		return fmt.Sprintf("%.1f %s", f/(1<<30), gb)
+	case f >= 1<<20:
+		return fmt.Sprintf("%.1f %s", f/(1<<20), mb)
+	case f >= 1<<10:
+		return fmt.Sprintf("%.0f %s", f/(1<<10), kb)
+	default:
+		return fmt.Sprintf("%d B", n)
+	}
 }
 
 func logColor(line string) color.NRGBA {
