@@ -18,6 +18,7 @@ import (
 	"gioui.org/app"
 	"gioui.org/font"
 	"gioui.org/io/clipboard"
+	"gioui.org/io/key"
 	"gioui.org/layout"
 	"gioui.org/op"
 	"gioui.org/op/clip"
@@ -282,6 +283,9 @@ func run(w *app.Window) error {
 
 			if screen != lastScreen {
 				scrAnim = 0
+				if screen == scrSites {
+					gtx.Execute(key.FocusCmd{Tag: &siteEditor})
+				}
 				lastScreen = screen
 			}
 
