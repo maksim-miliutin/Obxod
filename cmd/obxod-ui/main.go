@@ -462,14 +462,24 @@ func layoutMain(gtx C, th *material.Theme, icon paint.ImageOp, chosen preset.Pre
 			}),
 			layout.Rigid(layout.Spacer{Height: unit.Dp(6)}.Layout),
 			layout.Rigid(func(gtx C) D {
-				status := material.Body1(th, l.T(lang.StatusOff))
-				status.Color = colDim
+				text, c := l.T(lang.StatusOff), colDim
 				if on {
-					status = material.Body1(th, l.T(lang.StatusOn))
-					status.Color = colTeal
+					text, c = l.T(lang.StatusOn), colTeal
 				}
 
-				return status.Layout(gtx)
+				return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
+					layout.Rigid(func(gtx C) D {
+						return layout.Inset{Right: unit.Dp(7)}.Layout(gtx, func(gtx C) D {
+							return dot(gtx, c)
+						})
+					}),
+					layout.Rigid(func(gtx C) D {
+						status := material.Body1(th, text)
+						status.Color = c
+
+						return status.Layout(gtx)
+					}),
+				)
 			}),
 			layout.Rigid(func(gtx C) D {
 				if !on || speed == "" {
