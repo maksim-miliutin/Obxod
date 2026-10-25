@@ -17,6 +17,7 @@ const (
 	AlwaysSites
 	Copy
 	Clear
+	Copied
 	TabBypass
 	TabSites
 	TabLogs
@@ -68,6 +69,7 @@ var ru = Lang{
 	AlwaysSites:   "Всегда обходятся:",
 	Copy:          "Скопировать",
 	Clear:         "Очистить",
+	Copied:        "Скопировано",
 	TabBypass:     "Обход",
 	TabSites:      "Сайты",
 	TabLogs:       "Логи",
@@ -116,6 +118,7 @@ var en = Lang{
 	AlwaysSites:   "Always bypassed:",
 	Copy:          "Copy",
 	Clear:         "Clear",
+	Copied:        "Copied",
 	TabBypass:     "Bypass",
 	TabSites:      "Sites",
 	TabLogs:       "Logs",

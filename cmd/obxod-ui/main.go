@@ -153,6 +153,8 @@ func run(w *app.Window) error {
 	screen := scrMain
 
 	var znak, toMethod, clearLog, copyLog, langClick widget.Clickable
+	var copiedAt time.Time
+	const copiedShown = 1500 * time.Millisecond
 	var addSite widget.Clickable
 	var delSites [64]widget.Clickable
 	var siteEditor widget.Editor
@@ -211,6 +213,7 @@ func run(w *app.Window) error {
 			}
 			if copyLog.Clicked(gtx) {
 				gtx.Execute(clipboard.WriteCmd{Type: "application/text", Data: io.NopCloser(strings.NewReader(book.Text()))})
+				copiedAt = gtx.Now
 			}
 			for i := range navClicks {
 				if navClicks[i].Clicked(gtx) {
@@ -309,6 +312,11 @@ func run(w *app.Window) error {
 				speed = ""
 			}
 
+			copied := !copiedAt.IsZero() && gtx.Now.Sub(copiedAt) < copiedShown
+			if copied {
+				gtx.Execute(op.InvalidateCmd{At: copiedAt.Add(copiedShown)})
+			}
+
 			fill(gtx, colBg)
 
 			layout.Flex{Axis: layout.Vertical}.Layout(gtx,
@@ -333,7 +341,7 @@ func run(w *app.Window) error {
 					case scrSites:
 						return layoutSites(gtx, th, own.List(), code, &siteEditor, &addSite, delSites[:], &sitesList)
 					case scrLogs:
-						return layoutLogs(gtx, th, book.Text(), code, dl, traffic, &logList, &copyLog, &clearLog)
+						return layoutLogs(gtx, th, book.Text(), code, dl, traffic, &logList, &copyLog, &clearLog, copied)
 					case scrSettings:
 						return layoutSettings(gtx, th, code, &fakeBool, &autoBool, &langClick, &settingsList)
 					default:
@@ -729,7 +737,7 @@ func layoutSites(gtx C, th *material.Theme, ownList []string, code string, edito
 	})
 }
 
-func layoutLogs(gtx C, th *material.Theme, body, code string, downloaded int, traffic map[string]int, list *widget.List, copyBtn, clear *widget.Clickable) D {
+func layoutLogs(gtx C, th *material.Theme, body, code string, downloaded int, traffic map[string]int, list *widget.List, copyBtn, clear *widget.Clickable, copied bool) D {
 	l := lang.Of(code)
 	lines := strings.Split(body, "\n")
 
@@ -793,7 +801,14 @@ func layoutLogs(gtx C, th *material.Theme, body, code string, downloaded int, tr
 				return layout.Inset{Bottom: unit.Dp(10)}.Layout(gtx, func(gtx C) D {
 					return layout.Flex{Axis: layout.Horizontal}.Layout(gtx,
 						layout.Flexed(1, func(gtx C) D {
-							return layout.Inset{Right: unit.Dp(6)}.Layout(gtx, ghost(copyBtn, l.T(lang.Copy)).Layout)
+							copyB := ghost(copyBtn, l.T(lang.Copy))
+							if copied {
+								copyB = ghost(copyBtn, l.T(lang.Copied))
+								copyB.Background = colTint
+								copyB.Color = colTeal
+							}
+
+							return layout.Inset{Right: unit.Dp(6)}.Layout(gtx, copyB.Layout)
 						}),
 						layout.Flexed(1, func(gtx C) D {
 							return layout.Inset{Left: unit.Dp(6)}.Layout(gtx, ghost(clear, l.T(lang.Clear)).Layout)
