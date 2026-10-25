@@ -61,7 +61,7 @@ var (
 func main() {
 	go func() {
 		w := new(app.Window)
-		w.Option(app.Title("Obxod"), app.Size(unit.Dp(420), unit.Dp(660)))
+		w.Option(app.Title("Obxod"), app.Size(unit.Dp(420), unit.Dp(660)), app.MinSize(unit.Dp(360), unit.Dp(540)))
 		if err := run(w); err != nil {
 			log.Fatal(err)
 		}
