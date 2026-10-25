@@ -888,11 +888,34 @@ func layoutSettings(gtx C, th *material.Theme, code string, fake, auto *widget.B
 		})
 	})
 
+	about := func(text string, c color.NRGBA, top int) layout.FlexChild {
+		return layout.Rigid(func(gtx C) D {
+			t := material.Caption(th, text)
+			t.Color = c
+
+			return layout.Inset{Top: unit.Dp(top)}.Layout(gtx, t.Layout)
+		})
+	}
+
+	separator := layout.Rigid(func(gtx C) D {
+		return layout.Inset{Top: unit.Dp(8), Bottom: unit.Dp(14)}.Layout(gtx, func(gtx C) D {
+			sz := image.Pt(gtx.Constraints.Max.X, gtx.Dp(1))
+			defer clip.Rect{Max: sz}.Push(gtx.Ops).Pop()
+			fill(gtx, colSep)
+
+			return D{Size: sz}
+		})
+	})
+
 	return layout.UniformInset(unit.Dp(14)).Layout(gtx, func(gtx C) D {
 		return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
 			card(l.T(lang.FastQUICShort), l.T(lang.FastQUICSub), fake),
 			card(l.T(lang.Autostart), l.T(lang.AutostartSub), auto),
 			langRow,
+			separator,
+			about(l.T(lang.AboutWhat), colCream, 0),
+			about(l.T(lang.AboutOpens), colDim, 6),
+			about(l.T(lang.AboutUnsigned), colDim, 6),
 		)
 	})
 }
