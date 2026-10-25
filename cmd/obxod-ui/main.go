@@ -160,10 +160,11 @@ func run(w *app.Window) error {
 	selectRows := make([]widget.Clickable, len(all))
 	starRows := make([]widget.Clickable, len(all))
 	var navClicks [4]widget.Clickable
-	var methodList, sitesList, logList widget.List
+	var methodList, sitesList, logList, settingsList widget.List
 	methodList.Axis = layout.Vertical
 	sitesList.Axis = layout.Vertical
 	logList.Axis = layout.Vertical
+	settingsList.Axis = layout.Vertical
 
 	var fakeBool, autoBool widget.Bool
 	autoOn := autostartOn()
@@ -319,7 +320,7 @@ func run(w *app.Window) error {
 					case scrLogs:
 						return layoutLogs(gtx, th, book.Text(), code, dl, traffic, &logList, &copyLog, &clearLog)
 					case scrSettings:
-						return layoutSettings(gtx, th, code, &fakeBool, &autoBool, &langClick)
+						return layoutSettings(gtx, th, code, &fakeBool, &autoBool, &langClick, &settingsList)
 					default:
 						return layoutMain(gtx, th, icon, chosen, session != nil, anim, code, speed, driverErr, startErr, &znak, &toMethod)
 					}
@@ -805,7 +806,7 @@ func layoutLogs(gtx C, th *material.Theme, body, code string, downloaded int, tr
 	})
 }
 
-func layoutSettings(gtx C, th *material.Theme, code string, fake, auto *widget.Bool, langClick *widget.Clickable) D {
+func layoutSettings(gtx C, th *material.Theme, code string, fake, auto *widget.Bool, langClick *widget.Clickable, list *widget.List) D {
 	l := lang.Of(code)
 
 	card := func(label, sub string, b *widget.Bool) layout.FlexChild {
@@ -907,16 +908,18 @@ func layoutSettings(gtx C, th *material.Theme, code string, fake, auto *widget.B
 		})
 	})
 
-	return layout.UniformInset(unit.Dp(14)).Layout(gtx, func(gtx C) D {
-		return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
-			card(l.T(lang.FastQUICShort), l.T(lang.FastQUICSub), fake),
-			card(l.T(lang.Autostart), l.T(lang.AutostartSub), auto),
-			langRow,
-			separator,
-			about(l.T(lang.AboutWhat), colCream, 0),
-			about(l.T(lang.AboutOpens), colDim, 6),
-			about(l.T(lang.AboutUnsigned), colDim, 6),
-		)
+	return material.List(th, list).Layout(gtx, 1, func(gtx C, _ int) D {
+		return layout.UniformInset(unit.Dp(14)).Layout(gtx, func(gtx C) D {
+			return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
+				card(l.T(lang.FastQUICShort), l.T(lang.FastQUICSub), fake),
+				card(l.T(lang.Autostart), l.T(lang.AutostartSub), auto),
+				langRow,
+				separator,
+				about(l.T(lang.AboutWhat), colCream, 0),
+				about(l.T(lang.AboutOpens), colDim, 6),
+				about(l.T(lang.AboutUnsigned), colDim, 6),
+			)
+		})
 	})
 }
 
