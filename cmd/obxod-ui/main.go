@@ -10,6 +10,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -263,8 +264,10 @@ func run(w *app.Window) error {
 					defer paint.PushOpacity(gtx.Ops, scrAnim).Pop()
 
 					dl := 0
+					traffic := map[string]int{}
 					if session != nil {
 						dl = session.Downloaded()
+						traffic = session.Traffic()
 					}
 
 					switch screen {
@@ -273,7 +276,7 @@ func run(w *app.Window) error {
 					case scrSites:
 						return layoutSites(gtx, th, own.List(), code, &sitesList)
 					case scrLogs:
-						return layoutLogs(gtx, th, book.Text(), code, dl, &logList, &copyLog, &clearLog)
+						return layoutLogs(gtx, th, book.Text(), code, dl, traffic, &logList, &copyLog, &clearLog)
 					case scrSettings:
 						return layoutSettings(gtx, th, code, &fakeBool, &autoBool, &langClick)
 					default:
@@ -579,7 +582,7 @@ func layoutSites(gtx C, th *material.Theme, ownList []string, code string, list 
 	})
 }
 
-func layoutLogs(gtx C, th *material.Theme, body, code string, downloaded int, list *widget.List, copyBtn, clear *widget.Clickable) D {
+func layoutLogs(gtx C, th *material.Theme, body, code string, downloaded int, traffic map[string]int, list *widget.List, copyBtn, clear *widget.Clickable) D {
 	l := lang.Of(code)
 	lines := strings.Split(body, "\n")
 
@@ -594,11 +597,41 @@ func layoutLogs(gtx C, th *material.Theme, body, code string, downloaded int, li
 	return layout.UniformInset(unit.Dp(16)).Layout(gtx, func(gtx C) D {
 		return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
 			layout.Rigid(func(gtx C) D {
-				t := material.Body1(th, fmt.Sprintf(l.T(lang.TrafficFmt), humanBytes(downloaded, code)))
-				t.Color = colTeal
-				t.Font.Weight = font.Bold
+				children := []layout.FlexChild{
+					layout.Rigid(func(gtx C) D {
+						t := material.Body1(th, fmt.Sprintf(l.T(lang.TrafficFmt), humanBytes(downloaded, code)))
+						t.Color = colTeal
+						t.Font.Weight = font.Bold
 
-				return layout.Inset{Bottom: unit.Dp(10)}.Layout(gtx, t.Layout)
+						return t.Layout(gtx)
+					}),
+				}
+
+				for _, row := range byService(traffic) {
+					row := row
+					children = append(children, layout.Rigid(func(gtx C) D {
+						return layout.Inset{Top: unit.Dp(4)}.Layout(gtx, func(gtx C) D {
+							return layout.Flex{Axis: layout.Horizontal}.Layout(gtx,
+								layout.Flexed(1, func(gtx C) D {
+									n := material.Body2(th, row.name)
+									n.Color = colCream
+
+									return n.Layout(gtx)
+								}),
+								layout.Rigid(func(gtx C) D {
+									v := material.Body2(th, humanBytes(row.bytes, code))
+									v.Color = colDim
+
+									return v.Layout(gtx)
+								}),
+							)
+						})
+					}))
+				}
+
+				return layout.Inset{Bottom: unit.Dp(10)}.Layout(gtx, func(gtx C) D {
+					return layout.Flex{Axis: layout.Vertical}.Layout(gtx, children...)
+				})
 			}),
 			layout.Rigid(func(gtx C) D {
 				return layout.Inset{Bottom: unit.Dp(10)}.Layout(gtx, func(gtx C) D {
@@ -743,6 +776,49 @@ func halo(gtx C, t float32) D {
 	paint.PaintOp{}.Add(gtx.Ops)
 
 	return D{Size: sz}
+}
+
+type serviceRow struct {
+	name  string
+	bytes int
+}
+
+func serviceOf(host string) string {
+	switch {
+	case strings.Contains(host, "discord"):
+		return "Discord"
+	case strings.Contains(host, "youtube") || strings.Contains(host, "googlevideo") || strings.Contains(host, "ytimg"):
+		return "YouTube"
+	case strings.Contains(host, "twitter") || strings.Contains(host, "twimg") || strings.Contains(host, "x.com") || strings.Contains(host, "t.co"):
+		return "X"
+	case strings.Contains(host, "instagram") || strings.Contains(host, "cdninstagram") || strings.Contains(host, "fbcdn"):
+		return "Instagram"
+	case strings.Contains(host, "telegram"):
+		return "Telegram"
+	default:
+		return ""
+	}
+}
+
+func byService(traffic map[string]int) []serviceRow {
+	agg := map[string]int{}
+	for host, bytes := range traffic {
+		name := serviceOf(host)
+		if name == "" {
+			continue
+		}
+		agg[name] += bytes
+	}
+
+	rows := make([]serviceRow, 0, len(agg))
+	for name, bytes := range agg {
+		rows = append(rows, serviceRow{name: name, bytes: bytes})
+	}
+	sort.Slice(rows, func(i, j int) bool {
+		return rows[i].bytes > rows[j].bytes
+	})
+
+	return rows
 }
 
 func humanBytes(n int, code string) string {
