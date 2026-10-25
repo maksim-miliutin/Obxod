@@ -494,6 +494,12 @@ func layoutMain(gtx C, th *material.Theme, icon paint.ImageOp, chosen preset.Pre
 			layout.Rigid(func(gtx C) D {
 				return layout.Inset{Top: unit.Dp(22)}.Layout(gtx, func(gtx C) D {
 					return toMethod.Layout(gtx, func(gtx C) D {
+						o := float32(1)
+						if toMethod.Pressed() {
+							o = 0.6
+						}
+						defer paint.PushOpacity(gtx.Ops, o).Pop()
+
 						return methodCard(gtx, th, chosen, code)
 					})
 				})
