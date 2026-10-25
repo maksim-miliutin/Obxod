@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"gioui.org/app"
@@ -161,9 +162,12 @@ func run(w *app.Window) error {
 
 	navTargets := []int{scrMain, scrSites, scrLogs, scrSettings}
 
+	var live atomic.Bool
 	go func() {
 		for range time.Tick(time.Second) {
-			w.Invalidate()
+			if live.Load() {
+				w.Invalidate()
+			}
 		}
 	}()
 
@@ -245,12 +249,14 @@ func run(w *app.Window) error {
 				dt := float32(gtx.Now.Sub(lastT).Seconds())
 				anim = approach(anim, onTarget, dt, 9)
 				navAnim = approach(navAnim, navTarget, dt, 12)
-				scrAnim = approach(scrAnim, 1, dt, 9)
+				scrAnim = approach(scrAnim, 1, dt, 7)
 			}
 			lastT = gtx.Now
 			if anim != onTarget || navAnim != navTarget || scrAnim != 1 {
 				gtx.Execute(op.InvalidateCmd{})
 			}
+
+			live.Store(session != nil)
 
 			fill(gtx, colBg)
 
@@ -280,7 +286,7 @@ func run(w *app.Window) error {
 					case scrSettings:
 						return layoutSettings(gtx, th, code, &fakeBool, &autoBool, &langClick)
 					default:
-						return layoutMain(gtx, th, icon, chosen, session != nil, anim, code, driverErr, startErr, &znak, &toMethod)
+						return layoutMain(gtx, th, icon, chosen, session != nil, anim, code, dl, driverErr, startErr, &znak, &toMethod)
 					}
 				}),
 			)
@@ -358,7 +364,7 @@ func navUnderline(gtx C, pos float32, tabs int) D {
 	return D{Size: image.Pt(w, h)}
 }
 
-func layoutMain(gtx C, th *material.Theme, icon paint.ImageOp, chosen preset.Preset, on bool, anim float32, code string, driverErr, startErr error, znak, toMethod *widget.Clickable) D {
+func layoutMain(gtx C, th *material.Theme, icon paint.ImageOp, chosen preset.Preset, on bool, anim float32, code string, downloaded int, driverErr, startErr error, znak, toMethod *widget.Clickable) D {
 	l := lang.Of(code)
 
 	return layout.Center.Layout(gtx, func(gtx C) D {
@@ -395,6 +401,16 @@ func layoutMain(gtx C, th *material.Theme, icon paint.ImageOp, chosen preset.Pre
 				}
 
 				return status.Layout(gtx)
+			}),
+			layout.Rigid(func(gtx C) D {
+				if !on {
+					return D{}
+				}
+
+				s := material.Caption(th, humanBytes(downloaded, code))
+				s.Color = colDim
+
+				return layout.Inset{Top: unit.Dp(4)}.Layout(gtx, s.Layout)
 			}),
 			layout.Rigid(func(gtx C) D {
 				return layout.Inset{Top: unit.Dp(22)}.Layout(gtx, func(gtx C) D {
