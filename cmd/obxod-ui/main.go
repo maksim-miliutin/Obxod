@@ -27,6 +27,7 @@ import (
 
 	"golang.org/x/exp/shiny/materialdesign/icons"
 
+	"obxod/internal/lang"
 	"obxod/internal/logbook"
 	"obxod/internal/preset"
 	"obxod/internal/runner"
@@ -96,6 +97,14 @@ func run(w *app.Window) error {
 	pr := loadPrefs()
 	favourites := pr.Favourites
 	uses := pr.Uses
+	code := pr.Lang
+	if code == "" {
+		code = "ru"
+	}
+
+	persist := func() {
+		prefs{Favourites: favourites, Uses: uses, Lang: code}.save()
+	}
 
 	var session *runner.Session
 	var startErr error
@@ -136,7 +145,7 @@ func run(w *app.Window) error {
 
 	screen := scrMain
 
-	var znak, toMethod, clearLog, copyLog widget.Clickable
+	var znak, toMethod, clearLog, copyLog, langClick widget.Clickable
 	selectRows := make([]widget.Clickable, len(all))
 	starRows := make([]widget.Clickable, len(all))
 	var navClicks [4]widget.Clickable
@@ -193,14 +202,22 @@ func run(w *app.Window) error {
 				if selectRows[i].Clicked(gtx) {
 					chosen = all[i]
 					uses[all[i].Key]++
-					prefs{Favourites: favourites, Uses: uses}.save()
+					persist()
 					restart()
 					screen = scrMain
 				}
 				if starRows[i].Clicked(gtx) {
 					favourites = toggleFav(favourites, all[i].Key)
-					prefs{Favourites: favourites, Uses: uses}.save()
+					persist()
 				}
+			}
+			if langClick.Clicked(gtx) {
+				if code == "en" {
+					code = "ru"
+				} else {
+					code = "en"
+				}
+				persist()
 			}
 			if fakeBool.Value != useFake {
 				useFake = fakeBool.Value
@@ -218,8 +235,8 @@ func run(w *app.Window) error {
 			navTarget := float32(activeNav(screen))
 			if !lastT.IsZero() {
 				dt := float32(gtx.Now.Sub(lastT).Seconds())
-				anim = approach(anim, onTarget, dt, 14)
-				navAnim = approach(navAnim, navTarget, dt, 16)
+				anim = approach(anim, onTarget, dt, 10)
+				navAnim = approach(navAnim, navTarget, dt, 13)
 			}
 			lastT = gtx.Now
 			if anim != onTarget || navAnim != navTarget {
@@ -230,20 +247,20 @@ func run(w *app.Window) error {
 
 			layout.Flex{Axis: layout.Vertical}.Layout(gtx,
 				layout.Rigid(func(gtx C) D {
-					return navBar(gtx, th, activeNav(screen), navAnim, navClicks[:])
+					return navBar(gtx, th, activeNav(screen), navAnim, code, navClicks[:])
 				}),
 				layout.Flexed(1, func(gtx C) D {
 					switch screen {
 					case scrMethod:
-						return layoutMethod(gtx, th, all, chosen, favourites, uses, &methodList, selectRows, starRows)
+						return layoutMethod(gtx, th, all, chosen, favourites, uses, code, &methodList, selectRows, starRows)
 					case scrSites:
-						return layoutSites(gtx, th, own.List(), &sitesList)
+						return layoutSites(gtx, th, own.List(), code, &sitesList)
 					case scrLogs:
-						return layoutLogs(gtx, th, book.Text(), &logList, &copyLog, &clearLog)
+						return layoutLogs(gtx, th, book.Text(), code, &logList, &copyLog, &clearLog)
 					case scrSettings:
-						return layoutSettings(gtx, th, &fakeBool, &autoBool)
+						return layoutSettings(gtx, th, code, &fakeBool, &autoBool, &langClick)
 					default:
-						return layoutMain(gtx, th, icon, chosen, session != nil, anim, driverErr, startErr, &znak, &toMethod)
+						return layoutMain(gtx, th, icon, chosen, session != nil, anim, code, driverErr, startErr, &znak, &toMethod)
 					}
 				}),
 			)
@@ -266,8 +283,9 @@ func activeNav(screen int) int {
 	}
 }
 
-func navBar(gtx C, th *material.Theme, active int, pos float32, clicks []widget.Clickable) D {
-	labels := []string{"Обход", "Сайты", "Логи", "Настройки"}
+func navBar(gtx C, th *material.Theme, active int, pos float32, code string, clicks []widget.Clickable) D {
+	l := lang.Of(code)
+	labels := []string{l.T(lang.TabBypass), l.T(lang.TabSites), l.T(lang.TabLogs), l.T(lang.TabAbout)}
 	items := make([]layout.FlexChild, len(labels))
 	for i := range labels {
 		i := i
@@ -320,7 +338,9 @@ func navUnderline(gtx C, pos float32, tabs int) D {
 	return D{Size: image.Pt(w, h)}
 }
 
-func layoutMain(gtx C, th *material.Theme, icon paint.ImageOp, chosen preset.Preset, on bool, anim float32, driverErr, startErr error, znak, toMethod *widget.Clickable) D {
+func layoutMain(gtx C, th *material.Theme, icon paint.ImageOp, chosen preset.Preset, on bool, anim float32, code string, driverErr, startErr error, znak, toMethod *widget.Clickable) D {
+	l := lang.Of(code)
+
 	return layout.Center.Layout(gtx, func(gtx C) D {
 		return layout.Flex{Axis: layout.Vertical, Alignment: layout.Middle}.Layout(gtx,
 			layout.Rigid(func(gtx C) D {
@@ -347,10 +367,10 @@ func layoutMain(gtx C, th *material.Theme, icon paint.ImageOp, chosen preset.Pre
 			}),
 			layout.Rigid(layout.Spacer{Height: unit.Dp(6)}.Layout),
 			layout.Rigid(func(gtx C) D {
-				status := material.Body1(th, "Выключено")
+				status := material.Body1(th, l.T(lang.StatusOff))
 				status.Color = colDim
 				if on {
-					status = material.Body1(th, "Работает")
+					status = material.Body1(th, l.T(lang.StatusOn))
 					status.Color = colTeal
 				}
 
@@ -359,14 +379,14 @@ func layoutMain(gtx C, th *material.Theme, icon paint.ImageOp, chosen preset.Pre
 			layout.Rigid(func(gtx C) D {
 				return layout.Inset{Top: unit.Dp(22)}.Layout(gtx, func(gtx C) D {
 					return toMethod.Layout(gtx, func(gtx C) D {
-						return methodCard(gtx, th, chosen)
+						return methodCard(gtx, th, chosen, code)
 					})
 				})
 			}),
 			layout.Rigid(func(gtx C) D {
 				note := ""
 				if driverErr != nil {
-					note = "драйвер не загрузился: " + driverErr.Error()
+					note = l.T(lang.DriverBad) + ": " + driverErr.Error()
 				}
 				if startErr != nil {
 					note = startErr.Error()
@@ -384,7 +404,7 @@ func layoutMain(gtx C, th *material.Theme, icon paint.ImageOp, chosen preset.Pre
 	})
 }
 
-func layoutMethod(gtx C, th *material.Theme, all []preset.Preset, chosen preset.Preset, favourites []string, uses map[string]int, list *widget.List, selectRows, starRows []widget.Clickable) D {
+func layoutMethod(gtx C, th *material.Theme, all []preset.Preset, chosen preset.Preset, favourites []string, uses map[string]int, code string, list *widget.List, selectRows, starRows []widget.Clickable) D {
 	order := methodOrder(all, favourites, uses)
 
 	return layout.UniformInset(unit.Dp(12)).Layout(gtx, func(gtx C) D {
@@ -392,13 +412,14 @@ func layoutMethod(gtx C, th *material.Theme, all []preset.Preset, chosen preset.
 			i := order[j]
 
 			return layout.Inset{Bottom: unit.Dp(8)}.Layout(gtx, func(gtx C) D {
-				return methodRow(gtx, th, all[i], all[i].Key == chosen.Key, starred(favourites, all[i].Key), &selectRows[i], &starRows[i])
+				return methodRow(gtx, th, all[i], code, all[i].Key == chosen.Key, starred(favourites, all[i].Key), &selectRows[i], &starRows[i])
 			})
 		})
 	})
 }
 
-func methodCard(gtx C, th *material.Theme, chosen preset.Preset) D {
+func methodCard(gtx C, th *material.Theme, chosen preset.Preset, code string) D {
+	l := lang.Of(code)
 	w := gtx.Dp(300)
 	if w > gtx.Constraints.Max.X {
 		w = gtx.Constraints.Max.X
@@ -420,14 +441,14 @@ func methodCard(gtx C, th *material.Theme, chosen preset.Preset) D {
 					layout.Flexed(1, func(gtx C) D {
 						return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
 							layout.Rigid(func(gtx C) D {
-								l := material.Caption(th, "СПОСОБ · нажмите, чтобы сменить")
-								l.Color = colDim
+								hint := material.Caption(th, l.T(lang.MethodHint))
+								hint.Color = colDim
 
-								return l.Layout(gtx)
+								return hint.Layout(gtx)
 							}),
 							layout.Rigid(layout.Spacer{Height: unit.Dp(3)}.Layout),
 							layout.Rigid(func(gtx C) D {
-								n := material.Body1(th, chosen.Name("ru"))
+								n := material.Body1(th, chosen.Name(code))
 								n.Color = colCream
 								n.Font.Weight = font.Bold
 
@@ -447,7 +468,7 @@ func methodCard(gtx C, th *material.Theme, chosen preset.Preset) D {
 	)
 }
 
-func methodRow(gtx C, th *material.Theme, p preset.Preset, selected, fav bool, selectClick, starClick *widget.Clickable) D {
+func methodRow(gtx C, th *material.Theme, p preset.Preset, code string, selected, fav bool, selectClick, starClick *widget.Clickable) D {
 	return layout.Stack{}.Layout(gtx,
 		layout.Expanded(func(gtx C) D {
 			bg := colPanel
@@ -476,7 +497,7 @@ func methodRow(gtx C, th *material.Theme, p preset.Preset, selected, fav bool, s
 								layout.Flexed(1, func(gtx C) D {
 									return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
 										layout.Rigid(func(gtx C) D {
-											name := material.Body1(th, p.Name("ru"))
+											name := material.Body1(th, p.Name(code))
 											name.Color = colCream
 											name.Font.Weight = font.Bold
 
@@ -484,7 +505,7 @@ func methodRow(gtx C, th *material.Theme, p preset.Preset, selected, fav bool, s
 										}),
 										layout.Rigid(layout.Spacer{Height: unit.Dp(2)}.Layout),
 										layout.Rigid(func(gtx C) D {
-											desc := material.Caption(th, p.Desc("ru"))
+											desc := material.Caption(th, p.Desc(code))
 											desc.Color = colDim
 
 											return desc.Layout(gtx)
@@ -516,15 +537,16 @@ func methodRow(gtx C, th *material.Theme, p preset.Preset, selected, fav bool, s
 	)
 }
 
-func layoutSites(gtx C, th *material.Theme, ownList []string, list *widget.List) D {
-	lines := []string{fmt.Sprintf("Обходится сайтов: %d", len(preset.HostsWith(ownList)))}
-	lines = append(lines, "", "Ваши сайты:")
+func layoutSites(gtx C, th *material.Theme, ownList []string, code string, list *widget.List) D {
+	l := lang.Of(code)
+	lines := []string{fmt.Sprintf(l.T(lang.CountFmt), len(preset.HostsWith(ownList)))}
+	lines = append(lines, "", l.T(lang.YourSites))
 	if len(ownList) == 0 {
 		lines = append(lines, "—")
 	} else {
 		lines = append(lines, ownList...)
 	}
-	lines = append(lines, "", "Всегда обходятся:")
+	lines = append(lines, "", l.T(lang.AlwaysSites))
 	lines = append(lines, preset.Hosts()...)
 
 	return layout.UniformInset(unit.Dp(16)).Layout(gtx, func(gtx C) D {
@@ -540,7 +562,8 @@ func layoutSites(gtx C, th *material.Theme, ownList []string, list *widget.List)
 	})
 }
 
-func layoutLogs(gtx C, th *material.Theme, body string, list *widget.List, copyBtn, clear *widget.Clickable) D {
+func layoutLogs(gtx C, th *material.Theme, body, code string, list *widget.List, copyBtn, clear *widget.Clickable) D {
+	l := lang.Of(code)
 	lines := strings.Split(body, "\n")
 
 	ghost := func(click *widget.Clickable, label string) material.ButtonStyle {
@@ -557,10 +580,10 @@ func layoutLogs(gtx C, th *material.Theme, body string, list *widget.List, copyB
 				return layout.Inset{Bottom: unit.Dp(10)}.Layout(gtx, func(gtx C) D {
 					return layout.Flex{Axis: layout.Horizontal}.Layout(gtx,
 						layout.Flexed(1, func(gtx C) D {
-							return layout.Inset{Right: unit.Dp(6)}.Layout(gtx, ghost(copyBtn, "Скопировать").Layout)
+							return layout.Inset{Right: unit.Dp(6)}.Layout(gtx, ghost(copyBtn, l.T(lang.Copy)).Layout)
 						}),
 						layout.Flexed(1, func(gtx C) D {
-							return layout.Inset{Left: unit.Dp(6)}.Layout(gtx, ghost(clear, "Очистить").Layout)
+							return layout.Inset{Left: unit.Dp(6)}.Layout(gtx, ghost(clear, l.T(lang.Clear)).Layout)
 						}),
 					)
 				})
@@ -577,7 +600,9 @@ func layoutLogs(gtx C, th *material.Theme, body string, list *widget.List, copyB
 	})
 }
 
-func layoutSettings(gtx C, th *material.Theme, fake, auto *widget.Bool) D {
+func layoutSettings(gtx C, th *material.Theme, code string, fake, auto *widget.Bool, langClick *widget.Clickable) D {
+	l := lang.Of(code)
+
 	card := func(label, sub string, b *widget.Bool) layout.FlexChild {
 		return layout.Rigid(func(gtx C) D {
 			return layout.Inset{Bottom: unit.Dp(10)}.Layout(gtx, func(gtx C) D {
@@ -595,10 +620,10 @@ func layoutSettings(gtx C, th *material.Theme, fake, auto *widget.Bool) D {
 								layout.Flexed(1, func(gtx C) D {
 									return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
 										layout.Rigid(func(gtx C) D {
-											l := material.Body1(th, label)
-											l.Color = colCream
+											title := material.Body1(th, label)
+											title.Color = colCream
 
-											return l.Layout(gtx)
+											return title.Layout(gtx)
 										}),
 										layout.Rigid(func(gtx C) D {
 											if sub == "" {
@@ -621,10 +646,48 @@ func layoutSettings(gtx C, th *material.Theme, fake, auto *widget.Bool) D {
 		})
 	}
 
+	langName := "Русский"
+	if code == "en" {
+		langName = "English"
+	}
+
+	langRow := layout.Rigid(func(gtx C) D {
+		return langClick.Layout(gtx, func(gtx C) D {
+			return layout.Stack{}.Layout(gtx,
+				layout.Expanded(func(gtx C) D {
+					rrect(gtx, colPanel, gtx.Dp(12))
+
+					return D{Size: gtx.Constraints.Min}
+				}),
+				layout.Stacked(func(gtx C) D {
+					gtx.Constraints.Min.X = gtx.Constraints.Max.X
+
+					return layout.UniformInset(unit.Dp(14)).Layout(gtx, func(gtx C) D {
+						return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
+							layout.Flexed(1, func(gtx C) D {
+								t := material.Body1(th, l.T(lang.LanguageLabel))
+								t.Color = colCream
+
+								return t.Layout(gtx)
+							}),
+							layout.Rigid(func(gtx C) D {
+								v := material.Body1(th, langName)
+								v.Color = colTeal
+
+								return v.Layout(gtx)
+							}),
+						)
+					})
+				}),
+			)
+		})
+	})
+
 	return layout.UniformInset(unit.Dp(14)).Layout(gtx, func(gtx C) D {
 		return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
-			card("Фейковать QUIC", "быстрее, но ломает Discord на части DPI", fake),
-			card("Запускать с Windows", "включать обход при старте", auto),
+			card(l.T(lang.FastQUICShort), l.T(lang.FastQUICSub), fake),
+			card(l.T(lang.Autostart), l.T(lang.AutostartSub), auto),
+			langRow,
 		)
 	})
 }

@@ -41,6 +41,11 @@ const (
 	CheckWorking
 	CheckClear
 	CheckBlocked
+	MethodHint
+	FastQUICShort
+	FastQUICSub
+	AutostartSub
+	DriverBad
 	last
 )
 
@@ -85,6 +90,11 @@ var ru = Lang{
 	CheckWorking:  "Проверяю…",
 	CheckClear:    "✓ Сайт открывается",
 	CheckBlocked:  "✗ Сайт не открывается",
+	MethodHint:    "Способ · нажмите, чтобы сменить",
+	FastQUICShort: "Фейковать QUIC",
+	FastQUICSub:   "быстрее, но ломает Discord на части DPI",
+	AutostartSub:  "включать обход при старте",
+	DriverBad:     "драйвер не загрузился",
 }
 
 var en = Lang{
@@ -126,6 +136,11 @@ var en = Lang{
 	CheckWorking:  "Checking…",
 	CheckClear:    "✓ Site opens",
 	CheckBlocked:  "✗ Site blocked",
+	MethodHint:    "Method · tap to change",
+	FastQUICShort: "Fake QUIC",
+	FastQUICSub:   "faster, but breaks Discord on some DPI",
+	AutostartSub:  "turn on the bypass at startup",
+	DriverBad:     "driver failed to load",
 }
 
 func Of(code string) Lang {

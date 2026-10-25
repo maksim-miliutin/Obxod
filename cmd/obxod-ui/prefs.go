@@ -12,6 +12,7 @@ import (
 type prefs struct {
 	Favourites []string       `json:"favourites"`
 	Uses       map[string]int `json:"uses"`
+	Lang       string         `json:"lang"`
 }
 
 func prefsFile() string {
