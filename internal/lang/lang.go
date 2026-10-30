@@ -42,6 +42,8 @@ const (
 	CheckWorking
 	CheckClear
 	CheckBlocked
+	CheckByName
+	CheckByIP
 	MethodHint
 	FastQUICShort
 	FastQUICSub
@@ -94,6 +96,8 @@ var ru = Lang{
 	CheckWorking:  "Проверяю…",
 	CheckClear:    "✓ Сайт открывается",
 	CheckBlocked:  "✗ Сайт не открывается",
+	CheckByName:   "Режут по имени — выберите способ",
+	CheckByIP:     "Блок по IP: Obxod не поможет, нужен прокси Telegram или VPN",
 	MethodHint:    "Способ · нажмите, чтобы сменить",
 	FastQUICShort: "Фейковать QUIC",
 	FastQUICSub:   "быстрее, но ломает Discord на части DPI",
@@ -143,6 +147,8 @@ var en = Lang{
 	CheckWorking:  "Checking…",
 	CheckClear:    "✓ Site opens",
 	CheckBlocked:  "✗ Site blocked",
+	CheckByName:   "Blocked by name — pick a method",
+	CheckByIP:     "Blocked by IP: Obxod can't help, use Telegram's proxy or a VPN",
 	MethodHint:    "Method · tap to change",
 	FastQUICShort: "Fake QUIC",
 	FastQUICSub:   "faster, but breaks Discord on some DPI",

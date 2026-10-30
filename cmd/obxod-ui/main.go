@@ -8,6 +8,7 @@ import (
 	"image/png"
 	"io"
 	"log"
+	"net"
 	"os"
 	"path/filepath"
 	"sort"
@@ -34,6 +35,7 @@ import (
 	"obxod/internal/logbook"
 	"obxod/internal/meter"
 	"obxod/internal/preset"
+	"obxod/internal/probe"
 	"obxod/internal/runner"
 	"obxod/internal/sites"
 )
@@ -156,6 +158,11 @@ func run(w *app.Window) error {
 	var znak, toMethod, clearLog, copyLog, langClick widget.Clickable
 	var copiedAt time.Time
 	const copiedShown = 1500 * time.Millisecond
+
+	var checkBtn widget.Clickable
+	checkResult := make(chan probe.Verdict, 1)
+	var checkText string
+	var checking bool
 	var addSite widget.Clickable
 	var delSites [64]widget.Clickable
 	var siteEditor widget.Editor
@@ -264,6 +271,24 @@ func run(w *app.Window) error {
 					addCurrent()
 				}
 			}
+			select {
+			case v := <-checkResult:
+				checking = false
+				checkText = checkLine(code, v)
+			default:
+			}
+			if checkBtn.Clicked(gtx) {
+				host := strings.TrimSpace(siteEditor.Text())
+				if host != "" && !checking {
+					checking = true
+					checkText = lang.Of(code).T(lang.CheckWorking)
+					go func(name string) {
+						v, _ := probe.Host(&net.Dialer{Timeout: 6 * time.Second}, name, 6*time.Second)
+						checkResult <- v
+						w.Invalidate()
+					}(host)
+				}
+			}
 			ownNames := own.List()
 			for i := range ownNames {
 				if i < len(delSites) && delSites[i].Clicked(gtx) {
@@ -343,7 +368,7 @@ func run(w *app.Window) error {
 					case scrMethod:
 						return layoutMethod(gtx, th, all, chosen, favourites, uses, code, &methodList, selectRows, starRows)
 					case scrSites:
-						return layoutSites(gtx, th, own.List(), code, &siteEditor, &addSite, delSites[:], &sitesList)
+						return layoutSites(gtx, th, own.List(), code, &siteEditor, &addSite, &checkBtn, delSites[:], &sitesList, checkText)
 					case scrLogs:
 						return layoutLogs(gtx, th, book.Text(), code, dl, traffic, &logList, &copyLog, &clearLog, copied)
 					case scrSettings:
@@ -658,7 +683,7 @@ func methodRow(gtx C, th *material.Theme, p preset.Preset, code string, selected
 	)
 }
 
-func layoutSites(gtx C, th *material.Theme, ownList []string, code string, editor *widget.Editor, addBtn *widget.Clickable, dels []widget.Clickable, list *widget.List) D {
+func layoutSites(gtx C, th *material.Theme, ownList []string, code string, editor *widget.Editor, addBtn, checkBtn *widget.Clickable, dels []widget.Clickable, list *widget.List, checkText string) D {
 	l := lang.Of(code)
 
 	content := func(gtx C) D {
@@ -745,8 +770,24 @@ func layoutSites(gtx C, th *material.Theme, ownList []string, code string, edito
 
 							return b.Layout(gtx)
 						}),
+						layout.Rigid(func(gtx C) D {
+							c := material.Button(th, checkBtn, l.T(lang.Check))
+							c.Background = colPanel
+							c.Color = colCream
+
+							return layout.Inset{Left: unit.Dp(8)}.Layout(gtx, c.Layout)
+						}),
 					)
 				})
+			}),
+			layout.Rigid(func(gtx C) D {
+				if checkText == "" {
+					return D{}
+				}
+				t := material.Caption(th, checkText)
+				t.Color = colDim
+
+				return layout.Inset{Bottom: unit.Dp(12)}.Layout(gtx, t.Layout)
 			}),
 			layout.Flexed(1, func(gtx C) D {
 				return material.List(th, list).Layout(gtx, 1, func(gtx C, _ int) D {
@@ -755,6 +796,19 @@ func layoutSites(gtx C, th *material.Theme, ownList []string, code string, edito
 			}),
 		)
 	})
+}
+
+func checkLine(code string, v probe.Verdict) string {
+	l := lang.Of(code)
+
+	switch v {
+	case probe.Clear:
+		return l.T(lang.CheckClear)
+	case probe.NoConnect:
+		return l.T(lang.CheckByIP)
+	default:
+		return l.T(lang.CheckByName)
+	}
 }
 
 func layoutLogs(gtx C, th *material.Theme, body, code string, downloaded int, traffic map[string]int, list *widget.List, copyBtn, clear *widget.Clickable, copied bool) D {
