@@ -386,7 +386,7 @@ func (e *Engine) once(host, what string, args ...any) {
 	e.toldMu.Unlock()
 
 	if first {
-		e.say("  " + host + ": " + fmt.Sprintf(what, args...))
+		e.say("  %s: %s", host, fmt.Sprintf(what, args...))
 	}
 }
 
