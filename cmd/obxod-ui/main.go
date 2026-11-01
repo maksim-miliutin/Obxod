@@ -98,7 +98,10 @@ func run(w *app.Window) error {
 
 	all := preset.All()
 	chosen := all[0]
-	useFake := false
+	if strong, ok := preset.Named("overlay_fake"); ok {
+		chosen = strong
+	}
+	useFake := true
 	var rate meter.Rate
 	speed := ""
 	var lastSpeed time.Time
@@ -179,6 +182,7 @@ func run(w *app.Window) error {
 	settingsList.Axis = layout.Vertical
 
 	var fakeBool, autoBool widget.Bool
+	fakeBool.Value = true
 	autoOn := autostartOn()
 	autoBool.Value = autoOn
 
