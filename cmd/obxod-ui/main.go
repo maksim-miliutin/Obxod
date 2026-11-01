@@ -199,6 +199,8 @@ func run(w *app.Window) error {
 	var lastT time.Time
 	lastScreen := screen
 
+	launch()
+
 	for {
 		switch e := w.Event().(type) {
 		case app.DestroyEvent:
@@ -1209,12 +1211,13 @@ func start(p preset.Preset, extra []string, report func(string), fakeQUIC bool) 
 	}
 
 	cfg := runner.Config{
-		Rules:  set,
-		Ports:  runner.DefaultPorts(),
-		Voice:  runner.DefaultVoice(),
-		Voiced: voiceDatagram,
-		Wet:    true,
-		Report: report,
+		Rules:   set,
+		Ports:   runner.DefaultPorts(),
+		Voice:   runner.DefaultVoice(),
+		Voiced:  voiceDatagram,
+		Pattern: fakeHello,
+		Wet:     true,
+		Report:  report,
 	}
 
 	// Faking the Initial keeps the real handshake alive, so http/3 goes on working;
