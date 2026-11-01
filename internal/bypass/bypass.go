@@ -39,12 +39,13 @@ type Settings struct {
 	Recorded []byte
 	Voiced   []byte // a recorded voice datagram, sent ahead by the fakeudp way
 
-	Silence  time.Duration
-	DropQUIC bool
-	FakeQUIC string // fake a quic initial for this name ahead of each real one, instead of dropping quic; empty leaves quic alone
-	SynData  bool   // carry a payload in every opening tcp syn to the watched ports and drop the empty original
-	Wet      bool
-	Seen     bool // name the hosts no rule covers, so the missing ones can be added
+	Silence      time.Duration
+	DropQUIC     bool
+	FakeQUIC     string // fake a quic initial for this name ahead of each real one, instead of dropping quic; empty leaves quic alone
+	FakeQUICData []byte // a recorded initial to fake instead of one built from the name: a real capture fools an inspector a synthetic one does not
+	SynData      bool   // carry a payload in every opening tcp syn to the watched ports and drop the empty original
+	Wet          bool
+	Seen         bool // name the hosts no rule covers, so the missing ones can be added
 
 	Report func(text string)
 }
@@ -60,6 +61,7 @@ type Engine struct {
 	silence  time.Duration
 	dropQUIC bool
 	fakeQUIC string
+	fakeData []byte
 	synData  bool
 	wet      bool
 
@@ -93,6 +95,7 @@ func New(s Settings) *Engine {
 		silence:  s.Silence,
 		dropQUIC: s.DropQUIC,
 		fakeQUIC: s.FakeQUIC,
+		fakeData: s.FakeQUICData,
 		synData:  s.SynData,
 		wet:      s.Wet,
 		report:   s.Report,

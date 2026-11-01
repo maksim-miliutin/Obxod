@@ -17,11 +17,16 @@ const quicCopies = 2
 // the real one. The decoy carries a wrong checksum so it dies before the server;
 // the inspector reads the harmless name first and lets the real handshake by.
 func (e *Engine) fakeInitial(h sender, packet []byte, addr *divert.Addr) error {
-	decoy, err := quic.Decoy(e.fakeQUIC)
-	if err != nil {
-		e.once(faking, "cannot build a fake initial: %v", err)
+	decoy := e.fakeData
+	if len(decoy) == 0 {
+		built, err := quic.Decoy(e.fakeQUIC)
+		if err != nil {
+			e.once(faking, "cannot build a fake initial: %v", err)
 
-		return nil
+			return nil
+		}
+
+		decoy = built
 	}
 
 	made, err := seal.SpoiledDatagram(packet, decoy)

@@ -124,3 +124,34 @@ func TestFakeQUICLeavesLaterPacketsAlone(t *testing.T) {
 		t.Fatalf("sent %d packets, want the lone non-initial datagram to pass", len(wire.sent))
 	}
 }
+
+// A recorded initial, when given, goes out as the decoy verbatim rather than one
+// built from the name: a real capture is what fools an inspector.
+func TestFakeQUICUsesRecordedInitialWhenGiven(t *testing.T) {
+	recorded, err := quic.Decoy("sferum.ru")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	e := New(Settings{FakeQUIC: "www.google.com", FakeQUICData: recorded, Wet: true})
+	r := &recorder{}
+
+	if err := e.fakeInitial(r, quicInitialPacket(t), &divert.Addr{}); err != nil {
+		t.Fatalf("fakeInitial: %v", err)
+	}
+
+	if len(r.sent) != quicCopies {
+		t.Fatalf("sent %d decoys, want %d", len(r.sent), quicCopies)
+	}
+
+	for i, one := range r.sent {
+		outer, err := ip.Parse(one)
+		if err != nil {
+			t.Fatalf("decoy %d does not parse: %v", i, err)
+		}
+
+		if !bytes.Equal(outer.Payload[8:], recorded) {
+			t.Errorf("decoy %d is not the recorded initial; a built one was sent instead", i)
+		}
+	}
+}

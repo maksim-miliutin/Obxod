@@ -7,3 +7,6 @@ import _ "embed"
 //
 //go:embed tls_clienthello_www_google_com.bin
 var fakeHello []byte
+
+//go:embed quic_initial_www_google_com.bin
+var fakeQUICInitial []byte

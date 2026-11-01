@@ -1225,6 +1225,7 @@ func start(p preset.Preset, extra []string, report func(string), fakeQUIC bool) 
 	// dropping is the fallback for a dpi the fake does not fool.
 	if fakeQUIC {
 		cfg.FakeQUIC = fakeQUICName
+		cfg.FakeQUICData = fakeQUICInitial
 	} else {
 		cfg.DropQUIC = true
 	}

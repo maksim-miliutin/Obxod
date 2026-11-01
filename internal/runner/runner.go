@@ -15,20 +15,21 @@ import (
 )
 
 type Config struct {
-	Rules    rules.Set
-	Hunt     *sweep.Sweep
-	Ports    []uint16
-	Voice    []filter.PortRange
-	Pattern  []byte
-	Recorded []byte
-	Voiced   []byte
-	Silence  time.Duration
-	DropQUIC bool
-	FakeQUIC string
-	SynData  bool
-	Wet      bool
-	Seen     bool
-	Report   func(string)
+	Rules        rules.Set
+	Hunt         *sweep.Sweep
+	Ports        []uint16
+	Voice        []filter.PortRange
+	Pattern      []byte
+	Recorded     []byte
+	Voiced       []byte
+	Silence      time.Duration
+	DropQUIC     bool
+	FakeQUIC     string
+	FakeQUICData []byte
+	SynData      bool
+	Wet          bool
+	Seen         bool
+	Report       func(string)
 }
 
 type Session struct {
@@ -75,18 +76,19 @@ func Open(cfg Config) (*Session, error) {
 	}
 
 	engine := bypass.New(bypass.Settings{
-		Rules:    cfg.Rules,
-		Hunt:     cfg.Hunt,
-		Pattern:  cfg.Pattern,
-		Recorded: cfg.Recorded,
-		Voiced:   cfg.Voiced,
-		Silence:  cfg.Silence,
-		DropQUIC: cfg.DropQUIC,
-		FakeQUIC: cfg.FakeQUIC,
-		SynData:  cfg.SynData,
-		Wet:      cfg.Wet,
-		Seen:     cfg.Seen,
-		Report:   cfg.Report,
+		Rules:        cfg.Rules,
+		Hunt:         cfg.Hunt,
+		Pattern:      cfg.Pattern,
+		Recorded:     cfg.Recorded,
+		Voiced:       cfg.Voiced,
+		Silence:      cfg.Silence,
+		DropQUIC:     cfg.DropQUIC,
+		FakeQUIC:     cfg.FakeQUIC,
+		FakeQUICData: cfg.FakeQUICData,
+		SynData:      cfg.SynData,
+		Wet:          cfg.Wet,
+		Seen:         cfg.Seen,
+		Report:       cfg.Report,
 	})
 
 	return &Session{
