@@ -1211,13 +1211,14 @@ func start(p preset.Preset, extra []string, report func(string), fakeQUIC bool) 
 	}
 
 	cfg := runner.Config{
-		Rules:   set,
-		Ports:   runner.DefaultPorts(),
-		Voice:   runner.DefaultVoice(),
-		Voiced:  voiceDatagram,
-		Pattern: fakeHello,
-		Wet:     true,
-		Report:  report,
+		Rules:    set,
+		Ports:    runner.DefaultPorts(),
+		Voice:    runner.DefaultVoice(),
+		Voiced:   voiceDatagram,
+		Pattern:  fakeHello,
+		Recorded: fakeHello,
+		Wet:      true,
+		Report:   report,
 	}
 
 	// Faking the Initial keeps the real handshake alive, so http/3 goes on working;
