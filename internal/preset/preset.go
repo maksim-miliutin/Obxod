@@ -25,6 +25,15 @@ func All() []Preset {
 		{Key: "ya_decoy", ru: "Обманка ya.ru", en: "ya.ru decoy", way: "fake,ts,cut:name,disorder",
 			descRu: "Готовый ya.ru-хелло обманкой вперёд, затем разрезанный настоящий. Боевой, под свежий DPI, как Zapret ALT3. Рекомендуемый.",
 			descEn: "A ready ya.ru hello as a decoy, then the real one cut. The workhorse for a modern DPI, like Zapret's ALT3. Recommended."},
+		{Key: "ya_ttl", ru: "Короткий TTL", en: "Short TTL", way: "fake,ts,cut:name,ttl:4",
+			descRu: "Та же обманка ya.ru, но копия живёт лишь четыре хопа: доходит до DPI, но не до сервера. Если «Обманка» барахлит.",
+			descEn: "The same ya.ru decoy, but the copy lives only four hops: it reaches the DPI, not the server. If the plain decoy acts up."},
+		{Key: "signature", ru: "Подпись", en: "Signature", way: "hostfake:mail.ru,ts,md5sig",
+			descRu: "Подмена имени и копия с TCP-подписью, которую сервер отвергает, а DPI глотает. Другая техника.",
+			descEn: "Name swap plus a copy carrying a TCP signature the server rejects and the DPI swallows. A different technique."},
+		{Key: "shift", ru: "Сдвиг", en: "Shift", way: "hostfake:mail.ru,ts,badseq:-10000",
+			descRu: "Подмена имени и копия со сбитым номером последовательности. Ещё один обман, если подпись не берёт.",
+			descEn: "Name swap plus a copy with a shifted sequence number. Another fooling trick, if the signature does not take."},
 	}
 }
 
