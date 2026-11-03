@@ -98,7 +98,7 @@ func run(w *app.Window) error {
 
 	all := preset.All()
 	chosen := all[0]
-	if strong, ok := preset.Named("overlay_fake"); ok {
+	if strong, ok := preset.Named("hostfake_ya"); ok {
 		chosen = strong
 	}
 	useFake := true
@@ -202,8 +202,6 @@ func run(w *app.Window) error {
 	var scrAnim float32 = 1
 	var lastT time.Time
 	lastScreen := screen
-
-	launch()
 
 	for {
 		switch e := w.Event().(type) {
