@@ -10,8 +10,9 @@ import (
 
 const faking = "quic"
 
-// One decoy is enough for an inspector, but udp drops, so a couple go out.
-const quicCopies = 2
+// One decoy fools an inspector, but udp drops and the dpi here is aggressive, so
+// many go out, the way the reference tool sends eleven.
+const quicCopies = 11
 
 // fakeInitial throws a fake Initial for another name at the same server ahead of
 // the real one. The decoy carries a wrong checksum so it dies before the server;
