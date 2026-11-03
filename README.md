@@ -14,8 +14,7 @@ One project, two forms: `obxod-ui` (a window) and `obxod` (a console tool).
 - A method picker with a few tested presets; different providers need different
   ones, and the chosen one is remembered.
 - Your own sites: add or remove domains beyond the built-in list.
-- A speed line, a logs tab (with Copy), a tray icon (the cross hides to tray),
-  and an optional start with Windows.
+- A speed line, a logs tab (with Copy), and an optional start with Windows.
 
 ## How to use
 
@@ -29,10 +28,14 @@ choose More info, then Run anyway.
 
 ## Methods
 
-The presets are combinations of the engine's proven techniques, each aimed at a
-different kind of block: Обычный (plain), С повторами (repeats), Подпись
-(signature), Разрез (cut), Агрессивный (aggressive). If one does not work, try
-another — no single method works everywhere.
+Six methods form a ladder from light to heavy, each adding one trick on top of the
+last: **Лёгкий** (Light, a plain name swap), **Разрез** (Cut, plus a split through
+the name), **Разнобой** (Disorder, plus the halves reversed), **Обманка ya.ru**
+(ya.ru decoy — a whole decoy hello sent ahead of the real one, the recommended
+default, tuned for a modern DPI), **Внахлёст** (Overlay, the decoy laid over the
+stream as well) and **Вразнобой** (Scatter, pure fragmentation with no name swap).
+Start at the default; if a site stays blocked, climb to a heavier one — no single
+method works everywhere.
 
 ## What it cannot do
 
