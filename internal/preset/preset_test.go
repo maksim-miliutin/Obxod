@@ -3,8 +3,6 @@ package preset
 import (
 	"strings"
 	"testing"
-
-	"obxod/internal/rules"
 )
 
 func TestEveryPresetParses(t *testing.T) {
@@ -19,33 +17,6 @@ func TestEveryPresetParses(t *testing.T) {
 		if len(set) == 0 {
 			t.Errorf("%s: no rules", p.Key)
 		}
-	}
-}
-
-// The pure-desync presets must actually carry their way, or a typo in the way string
-// would leave a method in the list that quietly does nothing.
-func TestDesyncPresetsCarryTheirWay(t *testing.T) {
-	carries := map[string]func(rules.Rule) bool{
-		"scatter": func(r rules.Rule) bool { return r.MultiDisorder != 0 },
-	}
-
-	for key, ok := range carries {
-		t.Run(key, func(t *testing.T) {
-			p, found := Named(key)
-			if !found {
-				t.Fatalf("preset %q is missing", key)
-			}
-
-			set, err := p.Rules()
-			if err != nil {
-				t.Fatalf("Rules: %v", err)
-			}
-
-			r, _ := set.For("discord.com")
-			if !ok(r) {
-				t.Errorf("preset %q does not carry its way: %+v", key, r)
-			}
-		})
 	}
 }
 
@@ -199,9 +170,9 @@ func TestNamesByFavouriteWithNoneKeepsOrder(t *testing.T) {
 }
 
 func TestNamesByFavouriteFloatsStarredToTop(t *testing.T) {
-	fav := []string{"scatter"}
+	fav := []string{"ya_decoy"}
 	sorted := NamesByFavourite("en", fav)
-	want, _ := Named("scatter")
+	want, _ := Named("ya_decoy")
 
 	if sorted[0] != Label(want, "en", fav) {
 		t.Errorf("a starred method is not first: %q", sorted[0])
@@ -213,23 +184,23 @@ func TestNamesByFavouriteFloatsStarredToTop(t *testing.T) {
 }
 
 func TestLabelMarksOnlyFavourites(t *testing.T) {
-	p, _ := Named("scatter")
+	p, _ := Named("ya_decoy")
 
 	if Label(p, "en", nil) != p.Name("en") {
 		t.Error("unstarred label carries a mark")
 	}
 
-	if Label(p, "en", []string{"scatter"}) == p.Name("en") {
+	if Label(p, "en", []string{"ya_decoy"}) == p.Name("en") {
 		t.Error("starred label is missing its mark")
 	}
 }
 
 func TestByLabelFindsAMarkedName(t *testing.T) {
-	p, _ := Named("scatter")
-	label := Label(p, "en", []string{"scatter"})
+	p, _ := Named("ya_decoy")
+	label := Label(p, "en", []string{"ya_decoy"})
 
 	back, ok := ByLabel(label, "en")
-	if !ok || back.Key != "scatter" {
+	if !ok || back.Key != "ya_decoy" {
 		t.Errorf("a marked label did not map back: %q -> %v %v", label, back.Key, ok)
 	}
 }

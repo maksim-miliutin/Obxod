@@ -28,14 +28,11 @@ choose More info, then Run anyway.
 
 ## Methods
 
-Six methods form a ladder from light to heavy, each adding one trick on top of the
-last: **Лёгкий** (Light, a plain name swap), **Разрез** (Cut, plus a split through
-the name), **Разнобой** (Disorder, plus the halves reversed), **Обманка ya.ru**
-(ya.ru decoy — a whole decoy hello sent ahead of the real one, the recommended
-default, tuned for a modern DPI), **Внахлёст** (Overlay, the decoy laid over the
-stream as well) and **Вразнобой** (Scatter, pure fragmentation with no name swap).
-Start at the default; if a site stays blocked, climb to a heavier one — no single
-method works everywhere.
+Two methods, both confirmed against a live aggressive DPI. **Лёгкий** (Light) just
+swaps the site name in place and ages the copy — quick, and enough when the DPI is
+simple. **Обманка ya.ru** (ya.ru decoy, the default) sends a ready ya.ru hello as a
+decoy and cuts the real one behind it — the workhorse for a modern DPI, like
+Zapret's ALT3. It runs on the default; switch to Лёгкий when you want less overhead.
 
 ## What it cannot do
 

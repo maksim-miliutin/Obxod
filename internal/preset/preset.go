@@ -20,23 +20,11 @@ type Preset struct {
 func All() []Preset {
 	return []Preset{
 		{Key: "plain", ru: "Лёгкий", en: "Light", way: "hostfake:mail.ru,ts",
-			descRu: "Подмена имени на месте и состаренная копия. Самый лёгкий и быстрый, под простой DPI. Начни с него.",
-			descEn: "In-place name swap and a stale copy. The lightest and fastest, for a simple DPI. Start here."},
-		{Key: "cut", ru: "Разрез", en: "Cut", way: "hostfake:ya.ru,ts,cut:name",
-			descRu: "Подмена на ya.ru и разрез посреди имени на два пакета. Для DPI, что не склеивает сегменты.",
-			descEn: "Swap to ya.ru and a cut through the middle of the name. For a DPI that does not reassemble segments."},
-		{Key: "disorder", ru: "Разнобой", en: "Disorder", way: "hostfake:ya.ru,ts,cut:name,disorder",
-			descRu: "То же, но половинки уходят задом наперёд. Для DPI, что склеивает строго по порядку.",
-			descEn: "The same, but the halves go out back to front. For a DPI that reassembles strictly in order."},
+			descRu: "Просто подменяет имя сайта на месте и состаривает копию. Быстрый, и несложному DPI его хватает.",
+			descEn: "Just swaps the site name in place and ages the copy. Fast, and enough when the DPI is simple."},
 		{Key: "ya_decoy", ru: "Обманка ya.ru", en: "ya.ru decoy", way: "fake,ts,cut:name,disorder",
 			descRu: "Готовый ya.ru-хелло обманкой вперёд, затем разрезанный настоящий. Боевой, под свежий DPI, как Zapret ALT3. Рекомендуемый.",
-			descEn: "A ready ya.ru hello as a decoy, then the real one cut. The workhorse for the current DPI, like Zapret's ALT3. Recommended."},
-		{Key: "overlay_fake", ru: "Внахлёст", en: "Overlay", way: "fake,ts,overlap:1,repeats:8",
-			descRu: "Обманка настоящим хелло и он же внахлёст, восемь копий. Самый сильный, если «Обманка ya.ru» не берёт.",
-			descEn: "A real hello as a decoy and the same laid over, eight copies. The strongest, if the ya.ru decoy is not enough."},
-		{Key: "scatter", ru: "Вразнобой", en: "Scatter", way: "multidisorder:4",
-			descRu: "Режет хелло на четыре куска вразнобой, без подмены имени. Другой заход, если DPI ловит саму подмену.",
-			descEn: "Cuts the hello into four out-of-order pieces, no name swap. A different angle, if the DPI flags the swap itself."},
+			descEn: "A ready ya.ru hello as a decoy, then the real one cut. The workhorse for a modern DPI, like Zapret's ALT3. Recommended."},
 	}
 }
 
