@@ -58,15 +58,18 @@ func (e *Engine) forward(h sender, packet []byte, addr *divert.Addr) (bool, erro
 		e.hunt.Saw(repeat)
 	}
 
-	// Swapping the name carries the spoiling itself, on the segment that holds the
-	// name. A whole forged copy on top of that is a second hello the server has to
-	// throw away, and it is not what the reference sends.
+	// A real fake or decoy hello goes ahead of a name swap, the way hostfakesplit
+	// pairs them. A bare hostfake rule's fooling is its own, not a separate copy.
+	if r.HostFake != "" && (r.Recorded || r.Decoy != "") {
+		if err := e.fake(j); err != nil {
+			return false, err
+		}
+	}
+
 	if r.HostFake != "" {
 		return e.hostfake(j)
 	}
 
-	// The decoy goes first and the real hello follows, cut or whole: an inspector
-	// that reads the decoy and then finds no name in either half has nothing to match.
 	if r.Forges() {
 		if err := e.fake(j); err != nil {
 			return false, err
@@ -96,11 +99,8 @@ func (e *Engine) forward(h sender, packet []byte, addr *divert.Addr) (bool, erro
 	return false, nil
 }
 
-// ipfragment splits the hello at the ip layer, below tcp, so an inspector that reads
-// one packet finds no tcp header in the second fragment and no whole hello in either.
-// The segment is sealed first: windows offload often leaves the outgoing tcp checksum
-// uncomputed, and fragmenting would carry that straight to a server that then drops
-// the reassembled segment.
+// Sealed first on purpose: windows offload may leave the outgoing tcp checksum
+// uncomputed, and fragmenting would carry that to a server that drops the result.
 func (e *Engine) ipfragment(j job) (bool, error) {
 	whole := append([]byte(nil), j.packet...)
 
@@ -132,9 +132,8 @@ func (e *Engine) ipfragment(j job) (bool, error) {
 	return true, j.to.Send(second, j.addr)
 }
 
-// multisplit cuts the hello at a list of positions and sends the pieces in stream
-// order, or back to front with disorder. Unlike scatter's equal pieces, the cuts
-// land where asked: through the record start and the name, where an inspector looks.
+// The cuts land where asked — the record start, the name — unlike scatter's equal
+// pieces; with disorder they go on the wire back to front.
 func (e *Engine) multisplit(j job) (bool, error) {
 	points, err := positionsFor(j.found, j.rule.MultiSplit)
 	if err != nil {
@@ -173,9 +172,7 @@ func (e *Engine) multisplit(j job) (bool, error) {
 	return true, nil
 }
 
-// positionsFor turns a multisplit spec into byte offsets: a named point asks the
-// hello where it sits, a number is the offset itself. The spec was checked when the
-// rule was read, so a number parses here.
+// A named point asks the hello where it sits; a number is the offset as given.
 func positionsFor(found hello.Outgoing, spec string) ([]int, error) {
 	var points []int
 

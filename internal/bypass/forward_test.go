@@ -439,6 +439,40 @@ func TestRecordedHelloGoesAheadInsteadOfACopy(t *testing.T) {
 	}
 }
 
+// fake and hostfake in one rule: the recorded decoy goes out first, then the real
+// hello with its name swapped. The reference pairs a fake hello with a host split.
+func TestRecordedFakeRunsBeforeHostSwap(t *testing.T) {
+	const host = "updates.discord.com"
+
+	recorded := clientHello("www.sferum.ru")
+	r := &recorder{}
+
+	e := New(Settings{Rules: setOf(t, host+"=fake,hostfake:ya.ru"), Recorded: recorded, Wet: true})
+
+	if _, err := e.forward(r, packet443(clientHello(host)), &divert.Addr{}); err != nil {
+		t.Fatalf("forward: %v", err)
+	}
+
+	if len(r.sent) < 2 {
+		t.Fatalf("sent %d packets, want the decoy and the swap", len(r.sent))
+	}
+
+	if !bytes.Contains(r.sent[0], []byte("www.sferum.ru")) {
+		t.Error("the recorded decoy did not go out first")
+	}
+
+	swapped := false
+	for _, p := range r.sent {
+		if bytes.Contains(p, []byte("ya.ru")) {
+			swapped = true
+		}
+	}
+
+	if !swapped {
+		t.Error("the real hello's name was not swapped to ya.ru")
+	}
+}
+
 func TestRecordedFakeWithoutAFileIsRefused(t *testing.T) {
 	const host = "updates.discord.com"
 
