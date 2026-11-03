@@ -2,10 +2,10 @@ package main
 
 import _ "embed"
 
-// Laid over the stream by the overlay way: a real allowed hello the dpi waves
-// through. A ru-whitelisted site (sferum) passes more surely here than google.
+// Sent as a decoy and laid over the stream: a real allowed hello the dpi waves
+// through. ya.ru, a ru-whitelisted site, is what the current dpi lets by.
 //
-//go:embed tls_clienthello_www_sferum_ru.bin
+//go:embed tls_clienthello_ya_ru.bin
 var fakeHello []byte
 
 //go:embed quic_initial_www_google_com.bin
