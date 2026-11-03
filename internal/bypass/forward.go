@@ -25,6 +25,21 @@ type sender interface {
 	Send(packet []byte, addr *divert.Addr) error
 }
 
+// leaveAlone reports a hello whose owning program the user listed, so its traffic
+// goes out untouched instead of being bypassed.
+func (e *Engine) leaveAlone(port uint16) (string, bool) {
+	if len(e.ignore) == 0 || e.owners == nil {
+		return "", false
+	}
+
+	name, ok := e.owners.Of(port)
+	if !ok {
+		return "", false
+	}
+
+	return name, e.ignore[strings.ToLower(name)]
+}
+
 // forward returns true when it already put the packet on the wire itself, which
 // happens for a cut: the original must not follow its own halves.
 func (e *Engine) forward(h sender, packet []byte, addr *divert.Addr) (bool, error) {
@@ -44,6 +59,12 @@ func (e *Engine) forward(h sender, packet []byte, addr *divert.Addr) (bool, erro
 		e.caughtByAll(found.Host)
 	}
 
+	if name, leave := e.leaveAlone(found.SrcPort); leave {
+		e.once(found.Host, "left alone: %s owns this port", name)
+
+		return false, nil
+	}
+
 	j := job{to: h, packet: packet, addr: addr, found: found, rule: r}
 
 	repeat := e.tries.Saw(found.Host, found.SrcPort, found.Seq, time.Now()) == attempt.Again
@@ -58,18 +79,15 @@ func (e *Engine) forward(h sender, packet []byte, addr *divert.Addr) (bool, erro
 		e.hunt.Saw(repeat)
 	}
 
-	// A real fake or decoy hello goes ahead of a name swap, the way hostfakesplit
-	// pairs them. A bare hostfake rule's fooling is its own, not a separate copy.
-	if r.HostFake != "" && (r.Recorded || r.Decoy != "") {
-		if err := e.fake(j); err != nil {
-			return false, err
-		}
-	}
-
+	// Swapping the name carries the spoiling itself, on the segment that holds the
+	// name. A whole forged copy on top of that is a second hello the server has to
+	// throw away, and it is not what the reference sends.
 	if r.HostFake != "" {
 		return e.hostfake(j)
 	}
 
+	// The decoy goes first and the real hello follows, cut or whole: an inspector
+	// that reads the decoy and then finds no name in either half has nothing to match.
 	if r.Forges() {
 		if err := e.fake(j); err != nil {
 			return false, err

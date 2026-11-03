@@ -10,6 +10,7 @@ import (
 	"obxod/internal/bypass"
 	"obxod/internal/divert"
 	"obxod/internal/filter"
+	"obxod/internal/owners"
 	"obxod/internal/rules"
 	"obxod/internal/sweep"
 )
@@ -29,6 +30,7 @@ type Config struct {
 	SynData      bool
 	Wet          bool
 	Seen         bool
+	Ignore       []string
 	Report       func(string)
 }
 
@@ -88,6 +90,8 @@ func Open(cfg Config) (*Session, error) {
 		SynData:      cfg.SynData,
 		Wet:          cfg.Wet,
 		Seen:         cfg.Seen,
+		Ignore:       cfg.Ignore,
+		Owners:       owners.New(),
 		Report:       cfg.Report,
 	})
 

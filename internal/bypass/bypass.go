@@ -32,6 +32,10 @@ type Eyes interface {
 	Recv(buf []byte) (int, divert.Addr, error)
 }
 
+type Owners interface {
+	Of(port uint16) (string, bool)
+}
+
 type Settings struct {
 	Rules    rules.Set
 	Hunt     *sweep.Sweep
@@ -47,6 +51,9 @@ type Settings struct {
 	Wet          bool
 	Seen         bool // name the hosts no rule covers, so the missing ones can be added
 
+	Ignore []string // exe names whose traffic is left untouched, e.g. the radmin vpn
+	Owners Owners   // finds the program owning a local port; nil turns the check off
+
 	Report func(text string)
 }
 
@@ -57,6 +64,9 @@ type Engine struct {
 	pattern  []byte
 	voiced   []byte
 	recorded []byte
+
+	ignore map[string]bool
+	owners Owners
 
 	silence  time.Duration
 	dropQUIC bool
@@ -98,9 +108,18 @@ func New(s Settings) *Engine {
 		fakeData: s.FakeQUICData,
 		synData:  s.SynData,
 		wet:      s.Wet,
+		owners:   s.Owners,
 		report:   s.Report,
 		tries:    attempt.New(forget),
 		health:   link.New(),
+	}
+
+	for _, name := range s.Ignore {
+		if e.ignore == nil {
+			e.ignore = map[string]bool{}
+		}
+
+		e.ignore[strings.ToLower(name)] = true
 	}
 
 	if s.Seen {

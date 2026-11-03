@@ -439,40 +439,6 @@ func TestRecordedHelloGoesAheadInsteadOfACopy(t *testing.T) {
 	}
 }
 
-// fake and hostfake in one rule: the recorded decoy goes out first, then the real
-// hello with its name swapped. The reference pairs a fake hello with a host split.
-func TestRecordedFakeRunsBeforeHostSwap(t *testing.T) {
-	const host = "updates.discord.com"
-
-	recorded := clientHello("www.sferum.ru")
-	r := &recorder{}
-
-	e := New(Settings{Rules: setOf(t, host+"=fake,hostfake:ya.ru"), Recorded: recorded, Wet: true})
-
-	if _, err := e.forward(r, packet443(clientHello(host)), &divert.Addr{}); err != nil {
-		t.Fatalf("forward: %v", err)
-	}
-
-	if len(r.sent) < 2 {
-		t.Fatalf("sent %d packets, want the decoy and the swap", len(r.sent))
-	}
-
-	if !bytes.Contains(r.sent[0], []byte("www.sferum.ru")) {
-		t.Error("the recorded decoy did not go out first")
-	}
-
-	swapped := false
-	for _, p := range r.sent {
-		if bytes.Contains(p, []byte("ya.ru")) {
-			swapped = true
-		}
-	}
-
-	if !swapped {
-		t.Error("the real hello's name was not swapped to ya.ru")
-	}
-}
-
 func TestRecordedFakeWithoutAFileIsRefused(t *testing.T) {
 	const host = "updates.discord.com"
 
@@ -484,6 +450,38 @@ func TestRecordedFakeWithoutAFileIsRefused(t *testing.T) {
 
 	if len(r.sent) != 0 {
 		t.Errorf("sent %d packets with no recording loaded", len(r.sent))
+	}
+}
+
+type stubOwner struct{ name string }
+
+func (o stubOwner) Of(uint16) (string, bool) { return o.name, true }
+
+// A program on the ignore list has its hellos pass through untouched even to a
+// watched host, so a vpn or game sharing these ports is never desynced.
+func TestIgnoredProgramIsLeftAlone(t *testing.T) {
+	const host = "discord.com"
+
+	packet := packet443(clientHello(host))
+
+	skipped := &recorder{}
+	ignoring := New(Settings{Rules: setOf(t, host+"=hostfake:mail.ru"), Wet: true, Ignore: []string{"radmin.exe"}, Owners: stubOwner{"Radmin.exe"}})
+	if _, err := ignoring.forward(skipped, packet, &divert.Addr{}); err != nil {
+		t.Fatalf("forward: %v", err)
+	}
+
+	if len(skipped.sent) != 0 {
+		t.Errorf("sent %d packets for a program on the ignore list", len(skipped.sent))
+	}
+
+	bypassed := &recorder{}
+	other := New(Settings{Rules: setOf(t, host+"=hostfake:mail.ru"), Wet: true, Ignore: []string{"radmin.exe"}, Owners: stubOwner{"chrome.exe"}})
+	if _, err := other.forward(bypassed, packet, &divert.Addr{}); err != nil {
+		t.Fatalf("forward: %v", err)
+	}
+
+	if len(bypassed.sent) == 0 {
+		t.Error("a program not on the ignore list was left unbypassed")
 	}
 }
 
