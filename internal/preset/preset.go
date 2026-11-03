@@ -28,7 +28,7 @@ func All() []Preset {
 		{Key: "disorder", ru: "Разнобой", en: "Disorder", way: "hostfake:ya.ru,ts,cut:name,disorder",
 			descRu: "То же, но половинки уходят задом наперёд. Для DPI, что склеивает строго по порядку.",
 			descEn: "The same, but the halves go out back to front. For a DPI that reassembles strictly in order."},
-		{Key: "hostfake_ya", ru: "Обманка ya.ru", en: "ya.ru decoy", way: "fake,ts,cut:name,disorder",
+		{Key: "ya_decoy", ru: "Обманка ya.ru", en: "ya.ru decoy", way: "fake,ts,cut:name,disorder",
 			descRu: "Готовый ya.ru-хелло обманкой вперёд, затем разрезанный настоящий. Боевой, под свежий DPI, как Zapret ALT3. Рекомендуемый.",
 			descEn: "A ready ya.ru hello as a decoy, then the real one cut. The workhorse for the current DPI, like Zapret's ALT3. Recommended."},
 		{Key: "overlay_fake", ru: "Внахлёст", en: "Overlay", way: "fake,ts,overlap:1,repeats:8",

@@ -1,19 +1,13 @@
 package main
 
 import (
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"sort"
 
+	"obxod/internal/prefs"
 	"obxod/internal/preset"
 )
-
-type prefs struct {
-	Favourites []string       `json:"favourites"`
-	Uses       map[string]int `json:"uses"`
-	Lang       string         `json:"lang"`
-}
 
 func prefsFile() string {
 	exe, err := os.Executable()
@@ -24,25 +18,18 @@ func prefsFile() string {
 	return filepath.Join(filepath.Dir(exe), "obxod-ui.json")
 }
 
-func loadPrefs() prefs {
-	p := prefs{Uses: map[string]int{}}
-
+func loadPrefs() prefs.Prefs {
 	data, err := os.ReadFile(prefsFile())
 	if err != nil {
-		return p
+		return prefs.Decode(nil)
 	}
 
-	_ = json.Unmarshal(data, &p)
-	if p.Uses == nil {
-		p.Uses = map[string]int{}
-	}
-
-	return p
+	return prefs.Decode(data)
 }
 
-func (p prefs) save() {
-	data, err := json.Marshal(p)
-	if err != nil {
+func savePrefs(p prefs.Prefs) {
+	data := p.Encode()
+	if data == nil {
 		return
 	}
 

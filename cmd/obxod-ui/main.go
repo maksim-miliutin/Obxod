@@ -34,6 +34,7 @@ import (
 	"obxod/internal/lang"
 	"obxod/internal/logbook"
 	"obxod/internal/meter"
+	"obxod/internal/prefs"
 	"obxod/internal/preset"
 	"obxod/internal/probe"
 	"obxod/internal/runner"
@@ -98,7 +99,7 @@ func run(w *app.Window) error {
 
 	all := preset.All()
 	chosen := all[0]
-	if strong, ok := preset.Named("hostfake_ya"); ok {
+	if strong, ok := preset.Named("ya_decoy"); ok {
 		chosen = strong
 	}
 	useFake := true
@@ -113,9 +114,13 @@ func run(w *app.Window) error {
 	if code == "" {
 		code = "ru"
 	}
+	if saved, ok := preset.Named(pr.Method); ok {
+		chosen = saved
+	}
+	useFake = pr.FakeQUIC()
 
 	persist := func() {
-		prefs{Favourites: favourites, Uses: uses, Lang: code}.save()
+		savePrefs(prefs.Prefs{Favourites: favourites, Uses: uses, Lang: code, Method: chosen.Key, QUICOff: !useFake})
 	}
 
 	var session *runner.Session
@@ -182,7 +187,7 @@ func run(w *app.Window) error {
 	settingsList.Axis = layout.Vertical
 
 	var fakeBool, autoBool widget.Bool
-	fakeBool.Value = true
+	fakeBool.Value = useFake
 	autoOn := autostartOn()
 	autoBool.Value = autoOn
 
@@ -303,6 +308,7 @@ func run(w *app.Window) error {
 			}
 			if fakeBool.Value != useFake {
 				useFake = fakeBool.Value
+				persist()
 				restart()
 			}
 			if autoBool.Value != autoOn {
