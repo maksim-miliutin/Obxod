@@ -623,6 +623,52 @@ func TestOverlapErrors(t *testing.T) {
 	}
 }
 
+func TestOverlapAtPositionsServerRebuildsTheRealHello(t *testing.T) {
+	const host = "gateway.discord.gg"
+
+	payload := hello(host)
+	pattern := hello("www.4pda.to")
+
+	pieces, err := OverlapAtPositions(packetWith(1000, payload), pattern, []int{2, 30})
+	if err != nil {
+		t.Fatalf("OverlapAtPositions: %v", err)
+	}
+
+	if len(pieces) != 3 {
+		t.Fatalf("got %d pieces, want 3", len(pieces))
+	}
+
+	got := rebuilt(t, 1000, pieces...)
+	if !bytes.Equal(got, payload) {
+		t.Errorf("the server would rebuild %d bytes, want the original %d", len(got), len(payload))
+	}
+}
+
+func TestOverlapAtPositionsLeadsWithThePattern(t *testing.T) {
+	const decoy = "www.4pda.to"
+
+	pattern := hello(decoy)
+
+	pieces, err := OverlapAtPositions(packetWith(1000, hello("gateway.discord.gg")), pattern, []int{2, 30})
+	if err != nil {
+		t.Fatalf("OverlapAtPositions: %v", err)
+	}
+
+	if !bytes.HasPrefix(payloadOf(t, pieces[0]), pattern) {
+		t.Error("the first piece does not lead with the recorded hello")
+	}
+
+	if got := seqOf(t, pieces[0]); got != 1000-uint32(len(pattern)) {
+		t.Errorf("first piece seq = %d, want %d", got, 1000-uint32(len(pattern)))
+	}
+}
+
+func TestOverlapAtPositionsNeedsAPattern(t *testing.T) {
+	if _, err := OverlapAtPositions(packetWith(1000, hello("x.com")), nil, []int{2}); !errors.Is(err, ErrNoPattern) {
+		t.Errorf("err = %v, want %v", err, ErrNoPattern)
+	}
+}
+
 func TestFiller(t *testing.T) {
 	pattern := []byte{1, 2, 3, 4}
 

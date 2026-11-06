@@ -89,6 +89,56 @@ func AtPositions(packet []byte, points []int) ([][]byte, error) {
 	return append(out, last), nil
 }
 
+// OverlapAtPositions splits like AtPositions but lays the pattern over the first
+// piece: that piece carries the recorded bytes ahead of the real ones at a sequence
+// the server has already passed, so it drops the pattern and keeps the real, while
+// an inspector reads the pattern. It is AtPositions with a seqovl on the opening cut.
+func OverlapAtPositions(packet []byte, pattern []byte, points []int) ([][]byte, error) {
+	if len(pattern) == 0 {
+		return nil, ErrNoPattern
+	}
+
+	_, segment, err := layers(packet)
+	if err != nil {
+		return nil, err
+	}
+
+	bounds, err := interior(points, len(segment.Payload))
+	if err != nil {
+		return nil, err
+	}
+
+	ahead := make([]byte, 0, len(pattern)+bounds[0])
+	ahead = append(ahead, pattern...)
+	ahead = append(ahead, segment.Payload[:bounds[0]]...)
+
+	first, err := seal.Remade(packet, ahead, segment.Seq-uint32(len(pattern)))
+	if err != nil {
+		return nil, err
+	}
+
+	out := make([][]byte, 0, len(bounds)+1)
+	out = append(out, first)
+	from := bounds[0]
+
+	for _, to := range bounds[1:] {
+		piece, err := seal.Remade(packet, segment.Payload[from:to], segment.Seq+uint32(from))
+		if err != nil {
+			return nil, err
+		}
+
+		out = append(out, piece)
+		from = to
+	}
+
+	last, err := seal.Remade(packet, segment.Payload[from:], segment.Seq+uint32(from))
+	if err != nil {
+		return nil, err
+	}
+
+	return append(out, last), nil
+}
+
 func interior(points []int, total int) ([]int, error) {
 	seen := make(map[int]bool, len(points))
 
