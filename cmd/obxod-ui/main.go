@@ -346,6 +346,13 @@ func run(w *app.Window) error {
 			if session != nil {
 				if gtx.Now.Sub(lastSpeed) >= time.Second {
 					speed = humanRate(rate.Sample(session.Downloaded(), gtx.Now), code)
+					if answered, reset := session.Score(); answered+reset > 0 {
+						if code == "en" {
+							speed += fmt.Sprintf("   answered %d, reset %d", answered, reset)
+						} else {
+							speed += fmt.Sprintf("   ответили %d, сброшено %d", answered, reset)
+						}
+					}
 					lastSpeed = gtx.Now
 				}
 			} else {

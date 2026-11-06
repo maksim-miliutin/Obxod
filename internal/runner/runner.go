@@ -132,3 +132,7 @@ func (s *Session) Downloaded() int {
 func (s *Session) Traffic() map[string]int {
 	return s.engine.Traffic()
 }
+
+func (s *Session) Score() (answered, reset int) {
+	return s.engine.Score()
+}

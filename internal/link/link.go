@@ -6,10 +6,12 @@ import (
 )
 
 type Health struct {
-	mu     sync.Mutex
-	links  map[uint16]*state
-	total  int
-	byHost map[string]int
+	mu       sync.Mutex
+	links    map[uint16]*state
+	total    int
+	byHost   map[string]int
+	answered int
+	reset    int
 }
 
 type state struct {
@@ -53,6 +55,10 @@ func (h *Health) Data(port uint16, bytes int, now time.Time) (string, bool) {
 	h.total += bytes
 	h.byHost[s.host] += bytes
 
+	if s.packets == 1 {
+		h.answered++
+	}
+
 	return s.host, s.packets == 1
 }
 
@@ -77,8 +83,18 @@ func (h *Health) Reset(port uint16) (string, bool) {
 	}
 
 	delete(h.links, port)
+	h.reset++
 
 	return s.host, true
+}
+
+// Score is how a method is doing: connections the server answered against those
+// the far side reset. A reset on a port we never tracked does not count here.
+func (h *Health) Score() (answered, reset int) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	return h.answered, h.reset
 }
 
 func (h *Health) WentQuiet(now time.Time, after time.Duration) []Report {

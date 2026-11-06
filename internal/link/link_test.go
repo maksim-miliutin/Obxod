@@ -73,6 +73,30 @@ func TestDataOnAnUnknownPort(t *testing.T) {
 	}
 }
 
+func TestScoreCountsAnsweredAndReset(t *testing.T) {
+	h := New()
+
+	h.Hello("discord.gg", 1000)
+	h.Data(1000, 50, time.Now())
+	h.Data(1000, 50, time.Now()) // more data on the same link is not a new answer
+
+	h.Hello("discord.gg", 2000)
+	h.Data(2000, 50, time.Now())
+	h.Reset(2000)
+
+	h.Reset(3000) // a port we never tracked must not count as a kill
+
+	answered, reset := h.Score()
+
+	if answered != 2 {
+		t.Errorf("answered = %d, want 2", answered)
+	}
+
+	if reset != 1 {
+		t.Errorf("reset = %d, want 1", reset)
+	}
+}
+
 func TestWentQuiet(t *testing.T) {
 	h := New()
 	now := time.Now()
