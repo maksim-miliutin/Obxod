@@ -28,11 +28,13 @@ choose More info, then Run anyway.
 
 ## Methods
 
-Two methods, both confirmed against a live aggressive DPI. **Лёгкий** (Light) just
-swaps the site name in place and ages the copy — quick, and enough when the DPI is
-simple. **Обманка ya.ru** (ya.ru decoy, the default) sends a ready ya.ru hello as a
-decoy and cuts the real one behind it — the workhorse for a modern DPI, like
-Zapret's ALT3. It runs on the default; switch to Лёгкий when you want less overhead.
+Nine methods, each confirmed against a live aggressive DPI, grouped in the picker by
+family — **OV** lays a google hello over the stream, **DC** sends a decoy hello ahead,
+**SW** swaps the site name in place. **OV1** (the default) cuts the real hello into
+three and lays a google hello over the first — the fastest against a modern DPI.
+**SW1** is the lightest: it just swaps the name in place and ages the copy. The rest
+are fallbacks for when the DPI shifts; each method's description in the window says
+what it does.
 
 ## What it cannot do
 

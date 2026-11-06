@@ -140,7 +140,7 @@ func TestSynDataCarriesTheRecordedHello(t *testing.T) {
 	}
 }
 
-// Without a recording the default is zapret's: sixteen zero bytes, enough for the
+// Without a recording the default is sixteen zero bytes, enough for the
 // dpi to see data where a bare syn has none.
 func TestSynDataDefaultsToSixteenZeros(t *testing.T) {
 	wire := runOver(t, Settings{SynData: true, Wet: true}, synPacket(1000))

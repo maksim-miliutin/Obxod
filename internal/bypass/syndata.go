@@ -9,7 +9,7 @@ import (
 
 const syndataLabel = "syndata"
 
-// zapret's default: sixteen zero bytes, enough for a dpi to see data where a bare
+// A common default: sixteen zero bytes, enough for a dpi to see data where a bare
 // syn carries none. A recorded hello (-fake) makes a more convincing one.
 var defaultSynData = make([]byte, 16)
 
