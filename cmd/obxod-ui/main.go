@@ -100,7 +100,7 @@ func run(w *app.Window) error {
 
 	all := preset.All()
 	chosen := all[0]
-	if strong, ok := preset.Named("google_overlay"); ok {
+	if strong, ok := preset.Named("google_full"); ok {
 		chosen = strong
 	}
 	useFake := true

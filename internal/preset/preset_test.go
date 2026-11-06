@@ -151,10 +151,10 @@ func TestEveryPresetHasADescription(t *testing.T) {
 	}
 }
 
-func TestNameDiffersByLanguage(t *testing.T) {
+func TestDescriptionDiffersByLanguage(t *testing.T) {
 	p := All()[0]
-	if p.Name("ru") == p.Name("en") {
-		t.Errorf("name is the same in both languages: %q", p.Name("ru"))
+	if p.Desc("ru") == p.Desc("en") {
+		t.Errorf("description is the same in both languages: %q", p.Desc("ru"))
 	}
 }
 
@@ -196,17 +196,19 @@ func TestLabelMarksOnlyFavourites(t *testing.T) {
 }
 
 func TestOverlayPresetsCarryTheirOwnHello(t *testing.T) {
-	google, ok := Named("google_overlay")
-	if !ok {
-		t.Fatal("the google overlay preset is missing")
-	}
+	for _, key := range []string{"google_full", "google_overlay"} {
+		google, ok := Named(key)
+		if !ok {
+			t.Fatalf("the %s preset is missing", key)
+		}
 
-	if google.Pattern() != "google" {
-		t.Errorf("google overlay pattern = %q, want google", google.Pattern())
-	}
+		if google.Pattern() != "google" {
+			t.Errorf("%s pattern = %q, want google", key, google.Pattern())
+		}
 
-	if google.Seqovl() != 679 {
-		t.Errorf("google overlay seqovl = %d, want 679", google.Seqovl())
+		if google.Seqovl() != 679 {
+			t.Errorf("%s seqovl = %d, want 679", key, google.Seqovl())
+		}
 	}
 
 	sferum, ok := Named("sferum_decoy")
