@@ -9,12 +9,15 @@ import (
 const blocked = "discord.com,discord.gg,discordapp.com,discordapp.net,discordcdn.com,discord.media,hcaptcha.com,challenges.cloudflare.com,youtube.com,googlevideo.com,ytimg.com,x.com,twitter.com,twimg.com,t.co,instagram.com,cdninstagram.com,fbcdn.net,facebook.com,fbsbx.com,telegram.org,web.telegram.org,webk.telegram.org,webz.telegram.org,linkedin.com,licdn.com,soundcloud.com,sndcdn.com,rutracker.org,spotify.com,scdn.co,spotifycdn.com"
 
 type Preset struct {
-	Key    string
-	ru     string
-	en     string
-	way    string
-	descRu string
-	descEn string
+	Key     string
+	ru      string
+	en      string
+	way     string
+	descRu  string
+	descEn  string
+	pattern string // overlay hello key; empty lays the default decoy over the stream
+	fake    string // decoy hello key; empty sends the default decoy
+	seqovl  int    // bytes the overlay is laid over; zero lays over the whole hello
 }
 
 func All() []Preset {
@@ -22,10 +25,19 @@ func All() []Preset {
 		{Key: "plain", ru: "Лёгкий", en: "Light", way: "hostfake:mail.ru,ts",
 			descRu: "Просто подменяет имя сайта на месте и состаривает копию. Быстрый, и несложному DPI его хватает.",
 			descEn: "Just swaps the site name in place and ages the copy. Fast, and enough when the DPI is simple."},
-		{Key: "ya_decoy", ru: "Обманка ya.ru", en: "ya.ru decoy", way: "fake,ts,cut:name,disorder",
-			descRu: "Готовый ya.ru-хелло обманкой вперёд, затем разрезанный настоящий. Боевой, под свежий DPI, как Zapret ALT3. Рекомендуемый.",
-			descEn: "A ready ya.ru hello as a decoy, then the real one cut. The workhorse for a modern DPI, like Zapret's ALT3. Recommended."},
-		{Key: "ya_ttl", ru: "Короткий TTL", en: "Short TTL", way: "fake,ts,cut:name,ttl:4",
+		{Key: "google_overlay", ru: "Наложение Google", en: "Google overlay", way: "overlap:1", pattern: "google", seqovl: 679,
+			descRu: "Накладывает google-приветствие на поток перед настоящим: DPI читает google, сервер берёт твоё. Это Zapret ALT7, на котором ты сейчас. Рекомендуемый.",
+			descEn: "Lays a google hello over the stream ahead of the real one: the DPI reads google, the server takes yours. This is Zapret's ALT7, your current method. Recommended."},
+		{Key: "ya_decoy", ru: "Обманка ya.ru", en: "ya.ru decoy", way: "fake,ts,cut:name,disorder,rnd",
+			descRu: "Свежая каждый раз ya.ru-обманка вперёд, затем разрезанный настоящий. Боевой, под свежий DPI, как Zapret ALT3.",
+			descEn: "A fresh ya.ru hello as a decoy each time, then the real one cut. The workhorse for a modern DPI, like Zapret's ALT3."},
+		{Key: "sferum_decoy", ru: "Обманка Sferum", en: "Sferum decoy", way: "fake,ts,overlap:1,repeats:8", fake: "sferum", pattern: "sferum",
+			descRu: "Вперёд летит sferum-обманка и накладывается на поток, восемь копий со старением. Запасной в духе Zapret ALT11/12.",
+			descEn: "A sferum decoy goes ahead and overlays the stream, eight aged copies. A fallback in the spirit of Zapret's ALT11/12."},
+		{Key: "ya_steady", ru: "Обманка ровная", en: "Steady decoy", way: "fake,ts,cut:name,rnd",
+			descRu: "Как «Обманка ya.ru», но половинки идут по порядку, не задом наперёд. Мягче к серверу, если голос рвётся в сессии.",
+			descEn: "Like the ya.ru decoy, but the halves go in order, not reversed. Gentler on the server, for when voice drops mid-session."},
+		{Key: "ya_ttl", ru: "Короткий TTL", en: "Short TTL", way: "fake,ts,cut:name,ttl:4,rnd",
 			descRu: "Та же обманка ya.ru, но копия живёт лишь четыре хопа: доходит до DPI, но не до сервера. Если «Обманка» барахлит.",
 			descEn: "The same ya.ru decoy, but the copy lives only four hops: it reaches the DPI, not the server. If the plain decoy acts up."},
 		{Key: "signature", ru: "Подпись", en: "Signature", way: "hostfake:mail.ru,ts,md5sig",
@@ -51,6 +63,18 @@ func (p Preset) Desc(code string) string {
 	}
 
 	return p.descRu
+}
+
+func (p Preset) Pattern() string {
+	return p.pattern
+}
+
+func (p Preset) Fake() string {
+	return p.fake
+}
+
+func (p Preset) Seqovl() int {
+	return p.seqovl
 }
 
 func Named(key string) (Preset, bool) {

@@ -195,6 +195,39 @@ func TestLabelMarksOnlyFavourites(t *testing.T) {
 	}
 }
 
+func TestOverlayPresetsCarryTheirOwnHello(t *testing.T) {
+	google, ok := Named("google_overlay")
+	if !ok {
+		t.Fatal("the google overlay preset is missing")
+	}
+
+	if google.Pattern() != "google" {
+		t.Errorf("google overlay pattern = %q, want google", google.Pattern())
+	}
+
+	if google.Seqovl() != 679 {
+		t.Errorf("google overlay seqovl = %d, want 679", google.Seqovl())
+	}
+
+	sferum, ok := Named("sferum_decoy")
+	if !ok {
+		t.Fatal("the sferum decoy preset is missing")
+	}
+
+	if sferum.Fake() != "sferum" {
+		t.Errorf("sferum decoy fake = %q, want sferum", sferum.Fake())
+	}
+}
+
+func TestPlainPresetKeepsTheDefaultHello(t *testing.T) {
+	plain, _ := Named("plain")
+
+	if plain.Pattern() != "" || plain.Fake() != "" || plain.Seqovl() != 0 {
+		t.Errorf("plain preset should carry no hello of its own: pattern %q fake %q seqovl %d",
+			plain.Pattern(), plain.Fake(), plain.Seqovl())
+	}
+}
+
 func TestByLabelFindsAMarkedName(t *testing.T) {
 	p, _ := Named("ya_decoy")
 	label := Label(p, "en", []string{"ya_decoy"})

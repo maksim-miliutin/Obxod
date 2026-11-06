@@ -31,6 +31,7 @@ import (
 
 	"golang.org/x/exp/shiny/materialdesign/icons"
 
+	"obxod/internal/cut"
 	"obxod/internal/lang"
 	"obxod/internal/logbook"
 	"obxod/internal/meter"
@@ -99,7 +100,7 @@ func run(w *app.Window) error {
 
 	all := preset.All()
 	chosen := all[0]
-	if strong, ok := preset.Named("ya_decoy"); ok {
+	if strong, ok := preset.Named("google_overlay"); ok {
 		chosen = strong
 	}
 	useFake := true
@@ -1223,8 +1224,8 @@ func start(p preset.Preset, extra []string, report func(string), fakeQUIC bool) 
 		Ports:    runner.DefaultPorts(),
 		Voice:    runner.DefaultVoice(),
 		Voiced:   voiceDatagram,
-		Pattern:  fakeHello,
-		Recorded: fakeHello,
+		Pattern:  laidOver(hello(p.Pattern()), p.Seqovl()),
+		Recorded: hello(p.Fake()),
 		Wet:      true,
 		Report:   report,
 	}
@@ -1239,4 +1240,13 @@ func start(p preset.Preset, extra []string, report func(string), fakeQUIC bool) 
 	}
 
 	return runner.Open(cfg)
+}
+
+// laidOver fills the overlay to seqovl bytes; zero lays the whole hello over.
+func laidOver(raw []byte, seqovl int) []byte {
+	if seqovl == 0 {
+		return cut.Filler(raw, len(raw))
+	}
+
+	return cut.Filler(raw, seqovl)
 }
