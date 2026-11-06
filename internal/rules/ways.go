@@ -244,6 +244,21 @@ var ways = []way{
 		say:   func(r Rule) string { return words("overlap keeping", int64(r.Overlap), r.Overlap == 0) },
 	},
 	{
+		name: "seqovl", hint: "seqovl:679", kind: 0,
+		read: func(r *Rule, value string, _ bool) error {
+			at, err := strconv.Atoi(value)
+			if err != nil || at < 1 {
+				return fmt.Errorf("rules: seqovl wants how many bytes the pattern lays over, at least 1")
+			}
+
+			r.Seqovl = at
+
+			return nil
+		},
+		write: func(r Rule) string { return number("seqovl", int64(r.Seqovl), r.Seqovl == 0) },
+		say:   func(r Rule) string { return words("a pattern laid over", int64(r.Seqovl), r.Seqovl == 0) },
+	},
+	{
 		name: "disorder", hint: "disorder", kind: 0,
 		read:  func(r *Rule, _ string, given bool) error { return bare(&r.Disorder, "disorder", given) },
 		write: func(r Rule) string { return flag("disorder", r.Disorder) },

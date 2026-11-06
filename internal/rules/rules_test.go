@@ -204,6 +204,36 @@ func TestMultiSplitParses(t *testing.T) {
 	}
 }
 
+func TestSeqovlParsesAlongsideMultisplit(t *testing.T) {
+	r, err := Parse("discord.com=multisplit:2+after,seqovl:679")
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+
+	if r.Seqovl != 679 {
+		t.Errorf("Seqovl = %d, want 679", r.Seqovl)
+	}
+
+	if r.MultiSplit != "2+after" {
+		t.Errorf("MultiSplit = %q, want 2+after", r.MultiSplit)
+	}
+}
+
+func TestSeqovlRejectsNonsense(t *testing.T) {
+	for _, text := range []string{
+		"a=multisplit:2+after,seqovl:0",
+		"a=multisplit:2+after,seqovl:-1",
+		"a=multisplit:2+after,seqovl:some",
+		"a=multisplit:2+after,seqovl",
+	} {
+		t.Run(text, func(t *testing.T) {
+			if _, err := Parse(text); err == nil {
+				t.Error("nonsense seqovl was accepted")
+			}
+		})
+	}
+}
+
 func TestMultiSplitRejectsNonsense(t *testing.T) {
 	for _, text := range []string{
 		"multisplit",            // no positions at all
@@ -400,7 +430,7 @@ func TestEveryWayWritesBackAndParsesAgain(t *testing.T) {
 		"ts": "ts:1000", "badsum": "badsum", "md5sig": "md5sig", "decoy": "decoy:mail.ru",
 		"fake": "fake", "fakeudp": "fakeudp:5", "hostfake": "hostfake:mail.ru", "cut": "cut:name", "overlap": "overlap:1",
 		"disorder": "disorder", "repeats": "repeats:5", "multidisorder": "multidisorder:4", "multisplit": "multisplit:1+name",
-		"ipfrag": "ipfrag:24", "rnd": "rnd",
+		"ipfrag": "ipfrag:24", "rnd": "rnd", "seqovl": "seqovl:679",
 	}
 
 	for _, w := range ways {
@@ -447,6 +477,7 @@ func TestOnlyTheRightWaysCountAsOne(t *testing.T) {
 		"ttl:4": false, "badseq:2": false, "badack:-1": false, "ts": false,
 		"badsum": false, "md5sig": false, "decoy": false, "fake": false, "fakeudp:5": false, "hostfake": false, "cut:name": false, "overlap:1": false,
 		"disorder": true, "repeats:5": true, "multidisorder:4": false, "multisplit:1+name": false, "ipfrag:24": false,
+		"seqovl:679": true,
 	}
 
 	for text, blank := range cases {

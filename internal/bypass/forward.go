@@ -161,7 +161,22 @@ func (e *Engine) multisplit(j job) (bool, error) {
 		return false, nil
 	}
 
-	pieces, err := cut.AtPositions(j.packet, points)
+	// A seqovl asks for the pattern over the first piece; without a loaded pattern
+	// it would quietly fall to a plain split, so say so rather than hide it.
+	if j.rule.Seqovl > 0 && len(e.pattern) == 0 {
+		e.once(j.found.Host, "seqovl asked but no pattern loaded: splitting without an overlay")
+	}
+
+	note := ""
+
+	var pieces [][]byte
+	if j.rule.Seqovl > 0 && len(e.pattern) > 0 {
+		note = fmt.Sprintf(", %d bytes laid over the first", j.rule.Seqovl)
+		pieces, err = cut.OverlapAtPositions(j.packet, cut.Filler(e.pattern, j.rule.Seqovl), points)
+	} else {
+		pieces, err = cut.AtPositions(j.packet, points)
+	}
+
 	if err != nil {
 		e.say("  %s: cannot split: %v", j.found.Host, err)
 
@@ -169,12 +184,12 @@ func (e *Engine) multisplit(j job) (bool, error) {
 	}
 
 	if !e.wet {
-		e.say("  %s: would split into %d pieces at %s", j.found.Host, len(pieces), j.rule.MultiSplit)
+		e.say("  %s: would split into %d pieces at %s%s", j.found.Host, len(pieces), j.rule.MultiSplit, note)
 
 		return false, nil
 	}
 
-	e.once(j.found.Host, "split into %d pieces at %s%s", len(pieces), j.rule.MultiSplit, backwards(j.rule.Disorder))
+	e.once(j.found.Host, "split into %d pieces at %s%s%s", len(pieces), j.rule.MultiSplit, note, backwards(j.rule.Disorder))
 
 	if j.rule.Disorder {
 		for lo, hi := 0, len(pieces)-1; lo < hi; lo, hi = lo+1, hi-1 {

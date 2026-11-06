@@ -519,6 +519,49 @@ func TestDisorderAloneIsNotAWay(t *testing.T) {
 	}
 }
 
+func TestMultisplitWithSeqovlLaysThePatternFirst(t *testing.T) {
+	const host = "discord.com"
+
+	r := &recorder{}
+	pattern := clientHello("www.google.com")
+
+	sent, err := engineFor(t, true, pattern, host+"=multisplit:2+after,seqovl:679").forward(r, packet443(clientHello(host)), &divert.Addr{})
+	if err != nil {
+		t.Fatalf("forward: %v", err)
+	}
+
+	if !sent {
+		t.Error("multisplit did not take over sending")
+	}
+
+	if len(r.sent) != 3 {
+		t.Fatalf("sent %d pieces, want 3 (split at 2 and after)", len(r.sent))
+	}
+
+	if !bytes.Contains(r.sent[0], []byte("www.google.com")) {
+		t.Error("the first piece does not carry the laid-over google hello")
+	}
+}
+
+func TestMultisplitWithoutSeqovlDoesNotOverlay(t *testing.T) {
+	const host = "discord.com"
+
+	r := &recorder{}
+	pattern := clientHello("www.google.com")
+
+	if _, err := engineFor(t, true, pattern, host+"=multisplit:2+after").forward(r, packet443(clientHello(host)), &divert.Addr{}); err != nil {
+		t.Fatalf("forward: %v", err)
+	}
+
+	if len(r.sent) != 3 {
+		t.Fatalf("sent %d pieces, want 3", len(r.sent))
+	}
+
+	if bytes.Contains(r.sent[0], []byte("www.google.com")) {
+		t.Error("a plain multisplit must not lay the pattern over anything")
+	}
+}
+
 func TestOverlapGoesOutBackToFrontToo(t *testing.T) {
 	const host = "updates.discord.com"
 

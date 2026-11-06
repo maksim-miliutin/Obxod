@@ -34,6 +34,7 @@ type Rule struct {
 	MultiSplit    string // empty, or positions joined by +, each a byte count or name/after/start
 	IPFrag        int    // 0, or a byte position (multiple of 8) to fragment the ip packet at
 	Overlap       int
+	Seqovl        int // bytes of the pattern laid over the first multisplit piece; 0 is no overlay
 	Repeats       int
 	Recorded      bool
 	BadAck        int32
