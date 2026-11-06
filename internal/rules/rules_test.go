@@ -400,7 +400,7 @@ func TestEveryWayWritesBackAndParsesAgain(t *testing.T) {
 		"ts": "ts:1000", "badsum": "badsum", "md5sig": "md5sig", "decoy": "decoy:mail.ru",
 		"fake": "fake", "fakeudp": "fakeudp:5", "hostfake": "hostfake:mail.ru", "cut": "cut:name", "overlap": "overlap:1",
 		"disorder": "disorder", "repeats": "repeats:5", "multidisorder": "multidisorder:4", "multisplit": "multisplit:1+name",
-		"ipfrag": "ipfrag:24",
+		"ipfrag": "ipfrag:24", "rnd": "rnd",
 	}
 
 	for _, w := range ways {

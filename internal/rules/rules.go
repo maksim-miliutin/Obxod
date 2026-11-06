@@ -40,6 +40,7 @@ type Rule struct {
 	Stale         uint32
 	Signed        bool
 	Disorder      bool
+	Rnd           bool
 	MultiDisorder int
 	HostFake      string
 	FakeUDP       int

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"obxod/internal/attempt"
+	"obxod/internal/clienthello"
 	"obxod/internal/cut"
 	"obxod/internal/divert"
 	"obxod/internal/forge"
@@ -422,7 +423,14 @@ func (e *Engine) canned(j job, recipe forge.Recipe) error {
 	e.say("  %s: %d recorded bytes sent ahead (%s%s)", j.found.Host, len(e.recorded), j.rule.Spoils(), times(copies))
 
 	for range copies {
-		if err := j.to.Send(made, j.addr); err != nil {
+		each := made
+		if j.rule.Rnd {
+			if fresh, err := forge.Instead(j.packet, clienthello.Freshened(e.recorded), recipe); err == nil {
+				each = fresh
+			}
+		}
+
+		if err := j.to.Send(each, j.addr); err != nil {
 			return err
 		}
 	}

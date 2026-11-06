@@ -291,6 +291,18 @@ var ways = []way{
 		write: func(r Rule) string { return number("repeats", int64(r.Repeats), r.Repeats == 0) },
 		say:   func(r Rule) string { return words("copies", int64(r.Repeats), r.Repeats == 0) },
 	},
+	{
+		name: "rnd", hint: "rnd", kind: 0,
+		read:  func(r *Rule, _ string, given bool) error { return bare(&r.Rnd, "rnd", given) },
+		write: func(r Rule) string { return flag("rnd", r.Rnd) },
+		say: func(r Rule) string {
+			if !r.Rnd {
+				return ""
+			}
+
+			return "freshened each time"
+		},
+	},
 }
 
 // A split position is either a named point the hello supplies or a plain byte count.

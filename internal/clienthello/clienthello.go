@@ -1,6 +1,7 @@
 package clienthello
 
 import (
+	"crypto/rand"
 	"encoding/binary"
 	"errors"
 )
@@ -13,6 +14,11 @@ const (
 const (
 	recordHeaderLen    = 5
 	handshakeHeaderLen = 4
+)
+
+const (
+	clientRandomAt  = 2 // in the hello body, past the two-byte client version
+	clientRandomLen = 32
 )
 
 var (
@@ -71,4 +77,20 @@ func Parse(payload []byte) (Hello, error) {
 	}
 
 	return h, nil
+}
+
+func Freshened(payload []byte) []byte {
+	out := make([]byte, len(payload))
+	copy(out, payload)
+
+	h, err := Parse(out)
+	if err != nil || len(h.Body) < clientRandomAt+clientRandomLen {
+		return out
+	}
+
+	// A fresh random each send, so a decoy repeated many times is never twice the
+	// same bytes and cannot be fingerprinted by its content.
+	_, _ = rand.Read(h.Body[clientRandomAt : clientRandomAt+clientRandomLen])
+
+	return out
 }
