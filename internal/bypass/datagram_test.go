@@ -77,6 +77,24 @@ func TestRecordedDatagramsGoFirst(t *testing.T) {
 	}
 }
 
+func TestVoiceStopsFakingAfterTheFlowSettles(t *testing.T) {
+	recorded := bytes.Repeat([]byte{0xab}, 1200)
+
+	e, _ := voiceEngine(t, "discord.media=fakeudp:5", recorded)
+	r := &recorder{}
+
+	for i := 0; i < voiceCutoff+3; i++ {
+		if _, err := e.voice(r, voicePacket(discovery()), &divert.Addr{}); err != nil {
+			t.Fatalf("voice: %v", err)
+		}
+	}
+
+	if len(r.sent) != voiceCutoff*5 {
+		t.Fatalf("sent %d datagrams across a settling flow, want %d (five each for the first %d)",
+			len(r.sent), voiceCutoff*5, voiceCutoff)
+	}
+}
+
 // These ports carry games and voice audio too, and a fake in front of those
 // breaks what was working.
 func TestNothingGoesAheadOfOtherTraffic(t *testing.T) {

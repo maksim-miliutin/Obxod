@@ -31,6 +31,14 @@ func (e *Engine) voice(h sender, packet []byte, addr *divert.Addr) (bool, error)
 		return false, nil
 	}
 
+	// The dpi commits on a flow's first datagrams; faking every one after that only
+	// floods the live stream, and the far side stops hearing us.
+	if e.voiceFlows[datagram.SrcPort] >= voiceCutoff {
+		e.once("voice-settled", "voice flow settled, letting it flow clean")
+
+		return false, nil
+	}
+
 	made, err := seal.Datagram(packet, e.voiced)
 	if err != nil {
 		e.once(opening, "cannot put a datagram ahead: %v", err)
@@ -44,6 +52,7 @@ func (e *Engine) voice(h sender, packet []byte, addr *divert.Addr) (bool, error)
 		return false, nil
 	}
 
+	e.voiceFlows[datagram.SrcPort]++
 	e.once(opening, "%d recorded datagrams sent first", r.FakeUDP)
 
 	for range r.FakeUDP {
@@ -73,3 +82,7 @@ func (e *Engine) voiceRule() (rules.Rule, bool) {
 }
 
 const opening = "voice"
+
+// Voice fakes stop after this many datagrams per flow: enough to fool the dpi on
+// setup, beyond which they only flood the live stream and drown the real audio.
+const voiceCutoff = 4
