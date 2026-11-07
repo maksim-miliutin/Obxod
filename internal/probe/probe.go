@@ -35,6 +35,11 @@ func (v Verdict) String() string {
 	}
 }
 
+// Through reports the hello reached the server past any filter.
+func (v Verdict) Through() bool {
+	return v == Clear
+}
+
 // dialer is net.Dialer's one method we use, pulled out so a test can stand in a
 // fake without touching the network.
 type dialer interface {

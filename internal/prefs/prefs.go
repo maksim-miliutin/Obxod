@@ -8,6 +8,7 @@ type Prefs struct {
 	Lang       string         `json:"lang"`
 	Method     string         `json:"method"`
 	QUICOff    bool           `json:"quic_off"`
+	Ignore     []string       `json:"ignore"`
 }
 
 func Decode(data []byte) Prefs {

@@ -115,3 +115,15 @@ type errTimeout struct{}
 func (errTimeout) Error() string   { return "i/o timeout" }
 func (errTimeout) Timeout() bool   { return true }
 func (errTimeout) Temporary() bool { return true }
+
+func TestThroughOnlyForClear(t *testing.T) {
+	if !Clear.Through() {
+		t.Error("Clear should count as through")
+	}
+
+	for _, v := range []Verdict{NoConnect, NoAnswer, Reset} {
+		if v.Through() {
+			t.Errorf("%v counted as through", v)
+		}
+	}
+}
