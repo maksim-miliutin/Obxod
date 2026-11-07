@@ -84,6 +84,10 @@ type Engine struct {
 	dropped int
 	stepped time.Time
 
+	stallAt   time.Time
+	stallBase int
+	stallSaid bool
+
 	// Grows with the number of distinct names browsed while -seen is on, which is
 	// a flag turned on for a short look rather than left running.
 	seen map[string]bool
@@ -209,6 +213,13 @@ func (e *Engine) Run(wire Wire, eyes Eyes) error {
 // more than handling the packet did.
 const stepEvery = 200 * time.Millisecond
 
+// A black screen is a burst of resets, not a slow trickle, so the hint fires on
+// this many within the window rather than on a total that grows all session.
+const (
+	stallWindow = 15 * time.Second
+	stallHint   = 6
+)
+
 func (e *Engine) step(now time.Time) error {
 	if now.Sub(e.stepped) < stepEvery {
 		return nil
@@ -229,7 +240,26 @@ func (e *Engine) check(now time.Time) error {
 			gone.Host, gone.Port, gone.Bytes, gone.Packets, gone.Silence.Round(time.Second))
 	}
 
+	e.stallCheck(now)
+
 	return nil
+}
+
+// A black screen in a client shows up here as a burst of resets on connections that
+// did open; the bypass is not holding, and a reload often gets past it.
+func (e *Engine) stallCheck(now time.Time) {
+	_, resets := e.health.Score()
+
+	if e.stallAt.IsZero() || now.Sub(e.stallAt) > stallWindow {
+		e.stallAt = now
+		e.stallBase = resets
+		e.stallSaid = false
+	}
+
+	if !e.stallSaid && resets-e.stallBase >= stallHint {
+		e.say("  loading keeps dropping: reload with Ctrl+R, or pick another method")
+		e.stallSaid = true
+	}
 }
 
 func (e *Engine) judge(now time.Time) error {
