@@ -124,6 +124,7 @@ func run(w *app.Window) error {
 
 	pr := loadPrefs()
 	favourites := pr.Favourites
+	folders := pr.Ignore
 	uses := pr.Uses
 	code := pr.Lang
 	if code == "" {
@@ -135,14 +136,14 @@ func run(w *app.Window) error {
 	useFake = pr.FakeQUIC()
 
 	persist := func() {
-		savePrefs(prefs.Prefs{Favourites: favourites, Uses: uses, Lang: code, Method: chosen.Key, QUICOff: !useFake})
+		savePrefs(prefs.Prefs{Favourites: favourites, Uses: uses, Lang: code, Method: chosen.Key, QUICOff: !useFake, Ignore: folders})
 	}
 
 	var session *runner.Session
 	var startErr error
 
 	launch := func() {
-		started, err := start(chosen, own.List(), keep, useFake)
+		started, err := start(chosen, own.List(), folders, keep, useFake)
 		if err != nil {
 			startErr = err
 
@@ -184,13 +185,17 @@ func run(w *app.Window) error {
 
 	var checkBtn widget.Clickable
 	checkResult := make(chan probe.Verdict, 1)
+	folderPicked := make(chan string, 1)
 	var checkText string
 	var checking bool
+	var browsing bool
 	var addSite widget.Clickable
 	var delSites [64]widget.Clickable
 	var siteEditor widget.Editor
 	siteEditor.SingleLine = true
 	siteEditor.Submit = true
+	var addFolder widget.Clickable
+	var delFolders [64]widget.Clickable
 	selectRows := make([]widget.Clickable, len(all))
 	starRows := make([]widget.Clickable, len(all))
 	var navClicks [5]widget.Clickable
@@ -321,10 +326,33 @@ func run(w *app.Window) error {
 					addCurrent()
 				}
 			}
+			if addFolder.Clicked(gtx) && !browsing {
+				browsing = true
+				go func() {
+					folderPicked <- browseFolder()
+					w.Invalidate()
+				}()
+			}
+			for i := range folders {
+				if i < len(delFolders) && delFolders[i].Clicked(gtx) {
+					folders = append(folders[:i], folders[i+1:]...)
+					persist()
+					restart()
+
+					break
+				}
+			}
 			select {
 			case v := <-checkResult:
 				checking = false
 				checkText = checkLine(code, v)
+			case p := <-folderPicked:
+				browsing = false
+				if p != "" {
+					folders = append(folders, p)
+					persist()
+					restart()
+				}
 			default:
 			}
 			if checkBtn.Clicked(gtx) {
@@ -475,7 +503,7 @@ func run(w *app.Window) error {
 					case scrLogs:
 						return layoutLogs(gtx, th, book.Text(), code, dl, traffic, history, session != nil, &logList, &copyLog, &clearLog, copied)
 					case scrSettings:
-						return layoutSettings(gtx, th, code, &fakeBool, &autoBool, &langClick, &settingsList)
+						return layoutSettings(gtx, th, code, &fakeBool, &autoBool, &langClick, &settingsList, folderBox{list: folders, add: &addFolder, dels: delFolders[:]})
 					case scrPick:
 						return layoutPick(gtx, th, all, chosen, sw, code, &pickBtn, &pickList)
 					default:
@@ -833,6 +861,68 @@ func methodRow(gtx C, th *material.Theme, p preset.Preset, code string, selected
 	)
 }
 
+type folderBox struct {
+	list []string
+	add  *widget.Clickable
+	dels []widget.Clickable
+}
+
+func folderChildren(th *material.Theme, folders folderBox, code string) []layout.FlexChild {
+	head := "Игнорируемые папки (их трафик не трогаем)"
+	if code == "en" {
+		head = "Ignored folders (their traffic is left alone)"
+	}
+
+	out := []layout.FlexChild{
+		layout.Rigid(func(gtx C) D {
+			t := material.Body2(th, head)
+			t.Color = colDim
+
+			return layout.Inset{Top: unit.Dp(18), Bottom: unit.Dp(6)}.Layout(gtx, t.Layout)
+		}),
+		layout.Rigid(func(gtx C) D {
+			add := "Добавить папку"
+			if code == "en" {
+				add = "Add a folder"
+			}
+			b := material.Button(th, folders.add, add)
+			b.Background = colTeal
+			b.Color = colBg
+
+			return layout.Inset{Bottom: unit.Dp(2)}.Layout(gtx, b.Layout)
+		}),
+	}
+
+	for i, path := range folders.list {
+		i, path := i, path
+		out = append(out, layout.Rigid(func(gtx C) D {
+			return layout.Inset{Top: unit.Dp(6)}.Layout(gtx, func(gtx C) D {
+				return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
+					layout.Rigid(func(gtx C) D {
+						if i >= len(folders.dels) {
+							return D{}
+						}
+
+						x := material.Button(th, &folders.dels[i], "×")
+						x.Background = colPanel
+						x.Color = colCream
+
+						return layout.Inset{Right: unit.Dp(10)}.Layout(gtx, x.Layout)
+					}),
+					layout.Flexed(1, func(gtx C) D {
+						n := material.Body2(th, path)
+						n.Color = colCream
+
+						return n.Layout(gtx)
+					}),
+				)
+			})
+		}))
+	}
+
+	return out
+}
+
 func layoutSites(gtx C, th *material.Theme, ownList []string, code string, editor *widget.Editor, addBtn, checkBtn *widget.Clickable, dels []widget.Clickable, list *widget.List, checkText string) D {
 	l := lang.Of(code)
 
@@ -1065,7 +1155,7 @@ func layoutLogs(gtx C, th *material.Theme, body, code string, downloaded int, tr
 	})
 }
 
-func layoutSettings(gtx C, th *material.Theme, code string, fake, auto *widget.Bool, langClick *widget.Clickable, list *widget.List) D {
+func layoutSettings(gtx C, th *material.Theme, code string, fake, auto *widget.Bool, langClick *widget.Clickable, list *widget.List, folders folderBox) D {
 	l := lang.Of(code)
 
 	card := func(label, sub string, b *widget.Bool) layout.FlexChild {
@@ -1167,17 +1257,23 @@ func layoutSettings(gtx C, th *material.Theme, code string, fake, auto *widget.B
 		})
 	})
 
+	rows := []layout.FlexChild{
+		card(l.T(lang.FastQUICShort), l.T(lang.FastQUICSub), fake),
+		card(l.T(lang.Autostart), l.T(lang.AutostartSub), auto),
+		langRow,
+		separator,
+	}
+	rows = append(rows, folderChildren(th, folders, code)...)
+	rows = append(rows, separator)
+	rows = append(rows,
+		about(l.T(lang.AboutWhat), colCream, 0),
+		about(l.T(lang.AboutOpens), colDim, 6),
+		about(l.T(lang.AboutUnsigned), colDim, 6),
+	)
+
 	return material.List(th, list).Layout(gtx, 1, func(gtx C, _ int) D {
 		return layout.UniformInset(unit.Dp(14)).Layout(gtx, func(gtx C) D {
-			return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
-				card(l.T(lang.FastQUICShort), l.T(lang.FastQUICSub), fake),
-				card(l.T(lang.Autostart), l.T(lang.AutostartSub), auto),
-				langRow,
-				separator,
-				about(l.T(lang.AboutWhat), colCream, 0),
-				about(l.T(lang.AboutOpens), colDim, 6),
-				about(l.T(lang.AboutUnsigned), colDim, 6),
-			)
+			return layout.Flex{Axis: layout.Vertical}.Layout(gtx, rows...)
 		})
 	})
 }
@@ -1605,7 +1701,7 @@ func sitesFile() string {
 	return filepath.Join(filepath.Dir(exe), "sites.txt")
 }
 
-func start(p preset.Preset, extra []string, report func(string), fakeQUIC bool) (*runner.Session, error) {
+func start(p preset.Preset, extra, ignore []string, report func(string), fakeQUIC bool) (*runner.Session, error) {
 	set, err := p.RulesVoice(extra)
 	if err != nil {
 		return nil, err
@@ -1620,6 +1716,7 @@ func start(p preset.Preset, extra []string, report func(string), fakeQUIC bool) 
 		Recorded: hello(p.Fake()),
 		Wet:      true,
 		Report:   report,
+		Ignore:   ignore,
 	}
 
 	// Faking the Initial keeps the real handshake alive, so http/3 goes on working;
