@@ -22,3 +22,29 @@ func Try(methods []string, apply func(name string) error, works func() bool, sto
 
 	return "", false
 }
+
+// Best applies each method, scores how it does once active, and returns the one
+// that scored highest. A method that will not apply is skipped; stop, checked
+// before each, ends the search and keeps the best found so far. score is read
+// after the method is active, so the caller settles and reads the live score.
+func Best(methods []string, apply func(name string) error, score func() int, stop func() bool) (string, bool) {
+	best := ""
+	top := 0
+	found := false
+
+	for _, name := range methods {
+		if stop() {
+			break
+		}
+
+		if apply(name) != nil {
+			continue
+		}
+
+		if s := score(); !found || s > top {
+			best, top, found = name, s, true
+		}
+	}
+
+	return best, found
+}

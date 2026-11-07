@@ -75,3 +75,58 @@ func TestTryStopsWhenAsked(t *testing.T) {
 		t.Errorf("tried %v, should have stopped after the first", tried)
 	}
 }
+
+func TestBestPicksTheHighestScore(t *testing.T) {
+	scores := map[string]int{"a": 2, "b": 9, "c": 5}
+	active := ""
+
+	name, ok := Best(
+		[]string{"a", "b", "c"},
+		func(n string) error { active = n; return nil },
+		func() int { return scores[active] },
+		func() bool { return false },
+	)
+
+	if !ok || name != "b" {
+		t.Fatalf("got %q %v, want b true", name, ok)
+	}
+}
+
+func TestBestSkipsAMethodThatWillNotApply(t *testing.T) {
+	scores := map[string]int{"good": 3}
+	active := ""
+
+	name, ok := Best(
+		[]string{"bad", "good"},
+		func(n string) error {
+			if n == "bad" {
+				return errors.New("nope")
+			}
+
+			active = n
+
+			return nil
+		},
+		func() int { return scores[active] },
+		func() bool { return false },
+	)
+
+	if !ok || name != "good" {
+		t.Errorf("got %q %v, want good true", name, ok)
+	}
+}
+
+func TestBestKeepsTheBestSoFarWhenStopped(t *testing.T) {
+	seen := 0
+
+	name, ok := Best(
+		[]string{"a", "b"},
+		func(string) error { return nil },
+		func() int { return 7 },
+		func() bool { seen++; return seen > 1 },
+	)
+
+	if !ok || name != "a" {
+		t.Errorf("got %q %v, want a true after stop", name, ok)
+	}
+}
