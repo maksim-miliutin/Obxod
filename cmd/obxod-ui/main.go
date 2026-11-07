@@ -55,6 +55,7 @@ const (
 	scrSites
 	scrLogs
 	scrSettings
+	scrPick
 )
 
 var (
@@ -76,14 +77,15 @@ func main() {
 }
 
 type sweepState struct {
-	on    bool
-	cands []preset.Preset
-	at    int
-	due   time.Time
-	best  string
-	score int
-	found bool
-	back  preset.Preset
+	on      bool
+	cands   []preset.Preset
+	at      int
+	due     time.Time
+	best    string
+	score   int
+	found   bool
+	back    preset.Preset
+	results map[string][2]int
 }
 
 func run(w *app.Window) error {
@@ -116,6 +118,7 @@ func run(w *app.Window) error {
 	}
 	useFake := true
 	var rate meter.Rate
+	var history []float64
 	speed := ""
 	var lastSpeed time.Time
 
@@ -190,13 +193,14 @@ func run(w *app.Window) error {
 	siteEditor.Submit = true
 	selectRows := make([]widget.Clickable, len(all))
 	starRows := make([]widget.Clickable, len(all))
-	var navClicks [4]widget.Clickable
-	var methodList, sitesList, logList, settingsList widget.List
+	var navClicks [5]widget.Clickable
+	var methodList, sitesList, logList, settingsList, pickList widget.List
 	methodList.Axis = layout.Vertical
 	sitesList.Axis = layout.Vertical
 	logList.Axis = layout.Vertical
 	logList.ScrollToEnd = true
 	settingsList.Axis = layout.Vertical
+	pickList.Axis = layout.Vertical
 
 	var fakeBool, autoBool widget.Bool
 	fakeBool.Value = useFake
@@ -208,7 +212,7 @@ func run(w *app.Window) error {
 	// Each method runs this long under live traffic before it is scored.
 	const settle = 6 * time.Second
 
-	navTargets := []int{scrMain, scrSites, scrLogs, scrSettings}
+	navTargets := []int{scrMain, scrSites, scrLogs, scrSettings, scrPick}
 
 	var live atomic.Bool
 	go func() {
@@ -270,16 +274,21 @@ func run(w *app.Window) error {
 				}
 			}
 			if pickBtn.Clicked(gtx) {
-				switch {
-				case sw.on:
+				if sw.on {
 					sw.on = false
 					chosen = sw.back
 					restart()
-				case session != nil:
-					sw = sweepState{on: true, cands: all, back: chosen}
-					chosen = all[0]
-					restart()
-					sw.due = gtx.Now.Add(settle)
+				} else {
+					if session == nil {
+						launch()
+					}
+
+					if session != nil {
+						sw = sweepState{on: true, cands: all, back: chosen, results: map[string][2]int{}}
+						chosen = all[0]
+						restart()
+						sw.due = gtx.Now.Add(settle)
+					}
 				}
 			}
 			if langClick.Clicked(gtx) {
@@ -375,11 +384,14 @@ func run(w *app.Window) error {
 			live.Store(session != nil)
 
 			if sw.on && gtx.Now.After(sw.due) {
-				s := 0
+				answered, reset := 0, 0
 				if session != nil {
-					a, r := session.Score()
-					s = a - r
+					answered, reset = session.Score()
 				}
+				if sw.results != nil {
+					sw.results[sw.cands[sw.at].Key] = [2]int{answered, reset}
+				}
+				s := answered - reset
 				if !sw.found || s > sw.score {
 					sw.best, sw.score, sw.found = sw.cands[sw.at].Key, s, true
 				}
@@ -403,7 +415,12 @@ func run(w *app.Window) error {
 
 			if session != nil {
 				if gtx.Now.Sub(lastSpeed) >= time.Second {
-					speed = humanRate(rate.Sample(session.Downloaded(), gtx.Now), code)
+					bps := rate.Sample(session.Downloaded(), gtx.Now)
+					speed = humanRate(bps, code)
+					history = append(history, bps)
+					if len(history) > graphSamples {
+						history = history[len(history)-graphSamples:]
+					}
 					if answered, reset := session.Score(); answered+reset > 0 {
 						if code == "en" {
 							speed += fmt.Sprintf("   answered %d, reset %d", answered, reset)
@@ -415,6 +432,7 @@ func run(w *app.Window) error {
 				}
 			} else {
 				speed = ""
+				history = nil
 			}
 
 			if sw.on {
@@ -455,9 +473,11 @@ func run(w *app.Window) error {
 					case scrSites:
 						return layoutSites(gtx, th, own.List(), code, &siteEditor, &addSite, &checkBtn, delSites[:], &sitesList, checkText)
 					case scrLogs:
-						return layoutLogs(gtx, th, book.Text(), code, dl, traffic, &logList, &copyLog, &clearLog, copied)
+						return layoutLogs(gtx, th, book.Text(), code, dl, traffic, history, session != nil, &logList, &copyLog, &clearLog, copied)
 					case scrSettings:
 						return layoutSettings(gtx, th, code, &fakeBool, &autoBool, &langClick, &settingsList)
+					case scrPick:
+						return layoutPick(gtx, th, all, chosen, sw, code, &pickBtn, &pickList)
 					default:
 						return layoutMain(gtx, th, icon, chosen, session != nil, anim, code, speed, driverErr, startErr, &znak, &toMethod, &pickBtn, sw.on)
 					}
@@ -477,6 +497,8 @@ func activeNav(screen int) int {
 		return 2
 	case scrSettings:
 		return 3
+	case scrPick:
+		return 4
 	default:
 		return 0
 	}
@@ -484,7 +506,11 @@ func activeNav(screen int) int {
 
 func navBar(gtx C, th *material.Theme, active int, pos float32, code string, clicks []widget.Clickable) D {
 	l := lang.Of(code)
-	labels := []string{l.T(lang.TabBypass), l.T(lang.TabSites), l.T(lang.TabLogs), l.T(lang.TabAbout)}
+	last := "Подбор"
+	if code == "en" {
+		last = "Auto-pick"
+	}
+	labels := []string{l.T(lang.TabBypass), l.T(lang.TabSites), l.T(lang.TabLogs), l.T(lang.TabAbout), last}
 	items := make([]layout.FlexChild, len(labels))
 	for i := range labels {
 		i := i
@@ -615,10 +641,6 @@ func layoutMain(gtx C, th *material.Theme, icon paint.ImageOp, chosen preset.Pre
 				})
 			}),
 			layout.Rigid(func(gtx C) D {
-				if !on {
-					return D{}
-				}
-
 				label := "Подобрать"
 				if picking {
 					label = "Стоп"
@@ -939,7 +961,7 @@ func checkLine(code string, v probe.Verdict) string {
 	}
 }
 
-func layoutLogs(gtx C, th *material.Theme, body, code string, downloaded int, traffic map[string]int, list *widget.List, copyBtn, clear *widget.Clickable, copied bool) D {
+func layoutLogs(gtx C, th *material.Theme, body, code string, downloaded int, traffic map[string]int, history []float64, on bool, list *widget.List, copyBtn, clear *widget.Clickable, copied bool) D {
 	l := lang.Of(code)
 	lines := strings.Split(body, "\n")
 
@@ -953,6 +975,11 @@ func layoutLogs(gtx C, th *material.Theme, body, code string, downloaded int, tr
 
 	return layout.UniformInset(unit.Dp(16)).Layout(gtx, func(gtx C) D {
 		return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
+			layout.Rigid(func(gtx C) D {
+				return layout.Inset{Bottom: unit.Dp(10)}.Layout(gtx, func(gtx C) D {
+					return graph(gtx, th, history, on, code)
+				})
+			}),
 			layout.Rigid(func(gtx C) D {
 				children := []layout.FlexChild{
 					layout.Rigid(func(gtx C) D {
@@ -1155,6 +1182,139 @@ func layoutSettings(gtx C, th *material.Theme, code string, fake, auto *widget.B
 	})
 }
 
+func pickScore(sw sweepState, key string) int {
+	if r, ok := sw.results[key]; ok {
+		return r[0] - r[1]
+	}
+
+	return 0
+}
+
+func layoutPick(gtx C, th *material.Theme, all []preset.Preset, chosen preset.Preset, sw sweepState, code string, pick *widget.Clickable, list *widget.List) D {
+	label := "Подобрать"
+	if sw.on {
+		label = "Стоп"
+	}
+	if code == "en" {
+		label = "Auto-pick"
+		if sw.on {
+			label = "Stop"
+		}
+	}
+
+	var status string
+	switch {
+	case sw.on && code == "en":
+		status = fmt.Sprintf("picking %s  (%d/%d)", sw.cands[sw.at].Name(code), sw.at+1, len(sw.cands))
+	case sw.on:
+		status = fmt.Sprintf("подбираю %s  (%d/%d)", sw.cands[sw.at].Name(code), sw.at+1, len(sw.cands))
+	case sw.found:
+		best, _ := preset.Named(sw.best)
+		if code == "en" {
+			status = "best: " + best.Name(code)
+		} else {
+			status = "лучший: " + best.Name(code)
+		}
+	case code == "en":
+		status = "tap Auto-pick to run every method"
+	default:
+		status = "нажмите «Подобрать», прогоню все методы по очереди"
+	}
+
+	order := make([]preset.Preset, len(all))
+	copy(order, all)
+	sort.SliceStable(order, func(i, j int) bool {
+		return pickScore(sw, order[i].Key) > pickScore(sw, order[j].Key)
+	})
+
+	top := 0
+	for _, p := range all {
+		if s := pickScore(sw, p.Key); s > top {
+			top = s
+		}
+	}
+
+	return layout.UniformInset(unit.Dp(16)).Layout(gtx, func(gtx C) D {
+		return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
+			layout.Rigid(func(gtx C) D {
+				b := material.Button(th, pick, label)
+				b.Background = colTeal
+				b.Color = colBg
+
+				return b.Layout(gtx)
+			}),
+			layout.Rigid(func(gtx C) D {
+				t := material.Body2(th, status)
+				t.Color = colDim
+
+				return layout.Inset{Top: unit.Dp(10), Bottom: unit.Dp(12)}.Layout(gtx, t.Layout)
+			}),
+			layout.Flexed(1, func(gtx C) D {
+				return material.List(th, list).Layout(gtx, len(order), func(gtx C, i int) D {
+					p := order[i]
+					res, tested := sw.results[p.Key]
+
+					return layout.Inset{Bottom: unit.Dp(12)}.Layout(gtx, func(gtx C) D {
+						return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
+							layout.Rigid(func(gtx C) D {
+								return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
+									layout.Flexed(1, func(gtx C) D {
+										n := material.Body1(th, p.Name(code))
+										n.Color = colCream
+										if sw.found && p.Key == sw.best {
+											n.Color = colTeal
+											n.Font.Weight = font.Bold
+										} else if p.Key == chosen.Key {
+											n.Font.Weight = font.Bold
+										}
+
+										return n.Layout(gtx)
+									}),
+									layout.Rigid(func(gtx C) D {
+										txt := "—"
+										if tested {
+											if code == "en" {
+												txt = fmt.Sprintf("answered %d, reset %d", res[0], res[1])
+											} else {
+												txt = fmt.Sprintf("ответили %d, сброшено %d", res[0], res[1])
+											}
+										}
+										v := material.Caption(th, txt)
+										v.Color = colDim
+
+										return v.Layout(gtx)
+									}),
+								)
+							}),
+							layout.Rigid(func(gtx C) D {
+								full := gtx.Constraints.Max.X
+								h := gtx.Dp(3)
+								frac := 0.0
+								if tested && top > 0 {
+									if s := res[0] - res[1]; s > 0 {
+										frac = float64(s) / float64(top)
+									}
+								}
+								bw := int(float64(full) * frac)
+
+								return layout.Inset{Top: unit.Dp(5)}.Layout(gtx, func(gtx C) D {
+									if bw >= 1 {
+										c := clip.Rect{Max: image.Pt(bw, h)}.Push(gtx.Ops)
+										fill(gtx, colTeal)
+										c.Pop()
+									}
+
+									return D{Size: image.Pt(full, h)}
+								})
+							}),
+						)
+					})
+				})
+			}),
+		)
+	})
+}
+
 func approach(cur, tgt, dt, rate float32) float32 {
 	d := tgt - cur
 	if d < 0 {
@@ -1253,6 +1413,121 @@ func byService(traffic map[string]int) []serviceRow {
 	})
 
 	return rows
+}
+
+const (
+	graphSamples = 60
+	graphHeight  = 44
+)
+
+// statusText is the plain-language line atop the logs: is the bypass off, on but
+// idle, or actually carrying traffic right now, so no one has to read the raw log.
+func statusText(on, flowing bool, code string) (string, color.NRGBA) {
+	switch {
+	case !on && code == "en":
+		return "Bypass off", colDim
+	case !on:
+		return "Обход выключен", colDim
+	case flowing && code == "en":
+		return "Working, traffic flowing", colTeal
+	case flowing:
+		return "Работает, трафик идёт", colTeal
+	case code == "en":
+		return "On, no traffic yet", colDim
+	default:
+		return "Включён, трафика пока нет", colDim
+	}
+}
+
+func graph(gtx C, th *material.Theme, history []float64, on bool, code string) D {
+	cur := 0.0
+	flowing := false
+
+	for _, v := range history {
+		if v > 0 {
+			flowing = true
+		}
+	}
+
+	if len(history) > 0 {
+		cur = history[len(history)-1]
+	}
+
+	text, c := statusText(on, flowing, code)
+
+	rows := []layout.FlexChild{
+		layout.Rigid(func(gtx C) D {
+			t := material.Body1(th, text)
+			t.Color = c
+			t.Font.Weight = font.Bold
+
+			return t.Layout(gtx)
+		}),
+		layout.Rigid(func(gtx C) D {
+			t := material.H6(th, humanRate(cur, code))
+			t.Color = colCream
+
+			return layout.Inset{Top: unit.Dp(2)}.Layout(gtx, t.Layout)
+		}),
+	}
+
+	if flowing {
+		rows = append(rows, layout.Rigid(func(gtx C) D {
+			return layout.Inset{Top: unit.Dp(8)}.Layout(gtx, func(gtx C) D {
+				return sparkline(gtx, history)
+			})
+		}))
+	}
+
+	return layout.Flex{Axis: layout.Vertical}.Layout(gtx, rows...)
+}
+
+func sparkline(gtx C, vals []float64) D {
+	w := gtx.Constraints.Max.X
+	h := gtx.Dp(graphHeight)
+	size := image.Pt(w, h)
+
+	if len(vals) == 0 || w <= 0 {
+		return D{Size: size}
+	}
+
+	top := 0.0
+	for _, v := range vals {
+		if v > top {
+			top = v
+		}
+	}
+
+	if top <= 0 {
+		return D{Size: size}
+	}
+
+	bw := w / len(vals)
+	if bw < 1 {
+		bw = 1
+	}
+
+	gap := gtx.Dp(1)
+
+	for i, v := range vals {
+		bh := int(float64(h) * v / top)
+		if bh < 1 {
+			bh = 1
+		}
+
+		wide := bw - gap
+		if wide < 1 {
+			wide = 1
+		}
+
+		o := op.Offset(image.Pt(i*bw, h-bh)).Push(gtx.Ops)
+		c := clip.Rect{Max: image.Pt(wide, bh)}.Push(gtx.Ops)
+		fill(gtx, colTeal)
+		c.Pop()
+		o.Pop()
+	}
+
+	return D{Size: size}
 }
 
 func humanRate(perSecond float64, code string) string {
