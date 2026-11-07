@@ -4,7 +4,6 @@ package owners
 
 import (
 	"encoding/binary"
-	"path/filepath"
 	"strings"
 	"sync"
 	"syscall"
@@ -102,7 +101,7 @@ func tcpPorts() (map[uint16]uint32, error) {
 	return out, nil
 }
 
-// processName is the lowercased exe name behind a pid, empty when it cannot be read
+// processName is the lowercased exe path behind a pid, empty when it cannot be read
 // (a system pid, or one gone between the table and this call).
 func processName(pid uint32) string {
 	handle, _, _ := procOpenProcess.Call(queryLimitedInfo, 0, uintptr(pid))
@@ -119,5 +118,5 @@ func processName(pid uint32) string {
 		return ""
 	}
 
-	return strings.ToLower(filepath.Base(syscall.UTF16ToString(buf[:size])))
+	return strings.ToLower(syscall.UTF16ToString(buf[:size]))
 }

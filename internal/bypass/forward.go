@@ -26,19 +26,54 @@ type sender interface {
 	Send(packet []byte, addr *divert.Addr) error
 }
 
-// leaveAlone reports a hello whose owning program the user listed, so its traffic
-// goes out untouched instead of being bypassed.
+// leaveAlone reports a hello whose owning program the user listed by exe name or by
+// a folder it runs from, so its traffic goes out untouched instead of being bypassed.
 func (e *Engine) leaveAlone(port uint16) (string, bool) {
-	if len(e.ignore) == 0 || e.owners == nil {
+	if e.owners == nil || (len(e.ignore) == 0 && len(e.ignorePaths) == 0) {
 		return "", false
 	}
 
-	name, ok := e.owners.Of(port)
+	path, ok := e.owners.Of(port)
 	if !ok {
 		return "", false
 	}
 
-	return name, e.ignore[strings.ToLower(name)]
+	low := strings.ToLower(path)
+	if e.ignore[baseName(low)] {
+		return path, true
+	}
+
+	for _, dir := range e.ignorePaths {
+		if underFolder(low, dir) {
+			return path, true
+		}
+	}
+
+	return path, false
+}
+
+func isFolder(entry string) bool {
+	return strings.ContainsAny(entry, `\/:`)
+}
+
+func baseName(path string) string {
+	if i := strings.LastIndexAny(path, `\/`); i >= 0 {
+		return path[i+1:]
+	}
+
+	return path
+}
+
+// underFolder reports path sitting inside dir, matched a whole segment at a time, so
+// "c:\games" catches "c:\games\x.exe" but not the sibling "c:\gamessaver\x.exe".
+func underFolder(path, dir string) bool {
+	if !strings.HasPrefix(path, dir) {
+		return false
+	}
+
+	rest := path[len(dir):]
+
+	return rest == "" || rest[0] == '\\' || rest[0] == '/'
 }
 
 // forward returns true when it already put the packet on the wire itself, which

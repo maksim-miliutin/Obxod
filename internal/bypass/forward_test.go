@@ -485,6 +485,34 @@ func TestIgnoredProgramIsLeftAlone(t *testing.T) {
 	}
 }
 
+// A program under an ignored folder is left alone too, matched by path, while a
+// sibling folder with a longer but similar name is not caught by the prefix.
+func TestIgnoredFolderIsLeftAlone(t *testing.T) {
+	const host = "discord.com"
+
+	packet := packet443(clientHello(host))
+
+	skipped := &recorder{}
+	inside := New(Settings{Rules: setOf(t, host+"=hostfake:mail.ru"), Wet: true, Ignore: []string{`C:\Games`}, Owners: stubOwner{`C:\Games\League\league.exe`}})
+	if _, err := inside.forward(skipped, packet, &divert.Addr{}); err != nil {
+		t.Fatalf("forward: %v", err)
+	}
+
+	if len(skipped.sent) != 0 {
+		t.Errorf("sent %d packets for a program under an ignored folder", len(skipped.sent))
+	}
+
+	bypassed := &recorder{}
+	sibling := New(Settings{Rules: setOf(t, host+"=hostfake:mail.ru"), Wet: true, Ignore: []string{`C:\Games`}, Owners: stubOwner{`C:\GamesSaver\x.exe`}})
+	if _, err := sibling.forward(bypassed, packet, &divert.Addr{}); err != nil {
+		t.Fatalf("forward: %v", err)
+	}
+
+	if len(bypassed.sent) == 0 {
+		t.Error("a sibling folder with a similar name was wrongly left alone")
+	}
+}
+
 // The point of disorder: the halves reach the wire back to front, so an inspector
 // reading them in arrival order never sees the hello start where it should.
 func TestDisorderSendsTheHalvesBackToFront(t *testing.T) {
