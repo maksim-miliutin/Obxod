@@ -75,6 +75,17 @@ func main() {
 	app.Main()
 }
 
+type sweepState struct {
+	on    bool
+	cands []preset.Preset
+	at    int
+	due   time.Time
+	best  string
+	score int
+	found bool
+	back  preset.Preset
+}
+
 func run(w *app.Window) error {
 	th := material.NewTheme()
 	th.Shaper = text.NewShaper(text.WithCollection(manropeCollection()))
@@ -192,6 +203,11 @@ func run(w *app.Window) error {
 	autoOn := autostartOn()
 	autoBool.Value = autoOn
 
+	var pickBtn widget.Clickable
+	var sw sweepState
+	// Each method runs this long under live traffic before it is scored.
+	const settle = 6 * time.Second
+
 	navTargets := []int{scrMain, scrSites, scrLogs, scrSettings}
 
 	var live atomic.Bool
@@ -221,6 +237,7 @@ func run(w *app.Window) error {
 			gtx := app.NewContext(&ops, e)
 
 			if znak.Clicked(gtx) {
+				sw.on = false
 				toggle()
 			}
 			if toMethod.Clicked(gtx) {
@@ -240,6 +257,7 @@ func run(w *app.Window) error {
 			}
 			for i := range all {
 				if selectRows[i].Clicked(gtx) {
+					sw.on = false
 					chosen = all[i]
 					uses[all[i].Key]++
 					persist()
@@ -249,6 +267,19 @@ func run(w *app.Window) error {
 				if starRows[i].Clicked(gtx) {
 					favourites = toggleFav(favourites, all[i].Key)
 					persist()
+				}
+			}
+			if pickBtn.Clicked(gtx) {
+				switch {
+				case sw.on:
+					sw.on = false
+					chosen = sw.back
+					restart()
+				case session != nil:
+					sw = sweepState{on: true, cands: all, back: chosen}
+					chosen = all[0]
+					restart()
+					sw.due = gtx.Now.Add(settle)
 				}
 			}
 			if langClick.Clicked(gtx) {
@@ -343,6 +374,33 @@ func run(w *app.Window) error {
 
 			live.Store(session != nil)
 
+			if sw.on && gtx.Now.After(sw.due) {
+				s := 0
+				if session != nil {
+					a, r := session.Score()
+					s = a - r
+				}
+				if !sw.found || s > sw.score {
+					sw.best, sw.score, sw.found = sw.cands[sw.at].Key, s, true
+				}
+
+				sw.at++
+				if sw.at < len(sw.cands) {
+					chosen = sw.cands[sw.at]
+					restart()
+					sw.due = gtx.Now.Add(settle)
+					gtx.Execute(op.InvalidateCmd{At: sw.due})
+				} else {
+					sw.on = false
+					if best, ok := preset.Named(sw.best); ok {
+						chosen = best
+					}
+					uses[chosen.Key]++
+					persist()
+					restart()
+				}
+			}
+
 			if session != nil {
 				if gtx.Now.Sub(lastSpeed) >= time.Second {
 					speed = humanRate(rate.Sample(session.Downloaded(), gtx.Now), code)
@@ -357,6 +415,15 @@ func run(w *app.Window) error {
 				}
 			} else {
 				speed = ""
+			}
+
+			if sw.on {
+				name := sw.cands[sw.at].Name(code)
+				if code == "en" {
+					speed = fmt.Sprintf("auto-picking %s  (%d/%d)", name, sw.at+1, len(sw.cands))
+				} else {
+					speed = fmt.Sprintf("подбираю %s  (%d/%d)", name, sw.at+1, len(sw.cands))
+				}
 			}
 
 			copied := !copiedAt.IsZero() && gtx.Now.Sub(copiedAt) < copiedShown
@@ -392,7 +459,7 @@ func run(w *app.Window) error {
 					case scrSettings:
 						return layoutSettings(gtx, th, code, &fakeBool, &autoBool, &langClick, &settingsList)
 					default:
-						return layoutMain(gtx, th, icon, chosen, session != nil, anim, code, speed, driverErr, startErr, &znak, &toMethod)
+						return layoutMain(gtx, th, icon, chosen, session != nil, anim, code, speed, driverErr, startErr, &znak, &toMethod, &pickBtn, sw.on)
 					}
 				}),
 			)
@@ -470,7 +537,7 @@ func navUnderline(gtx C, pos float32, tabs int) D {
 	return D{Size: image.Pt(w, h)}
 }
 
-func layoutMain(gtx C, th *material.Theme, icon paint.ImageOp, chosen preset.Preset, on bool, anim float32, code, speed string, driverErr, startErr error, znak, toMethod *widget.Clickable) D {
+func layoutMain(gtx C, th *material.Theme, icon paint.ImageOp, chosen preset.Preset, on bool, anim float32, code, speed string, driverErr, startErr error, znak, toMethod, pick *widget.Clickable, picking bool) D {
 	l := lang.Of(code)
 
 	return layout.Center.Layout(gtx, func(gtx C) D {
@@ -544,6 +611,49 @@ func layoutMain(gtx C, th *material.Theme, icon paint.ImageOp, chosen preset.Pre
 						defer paint.PushOpacity(gtx.Ops, o).Pop()
 
 						return methodCard(gtx, th, chosen, code)
+					})
+				})
+			}),
+			layout.Rigid(func(gtx C) D {
+				if !on {
+					return D{}
+				}
+
+				label := "Подобрать"
+				if picking {
+					label = "Стоп"
+				}
+				if code == "en" {
+					label = "Auto-pick"
+					if picking {
+						label = "Stop"
+					}
+				}
+
+				return layout.Inset{Top: unit.Dp(12)}.Layout(gtx, func(gtx C) D {
+					return pick.Layout(gtx, func(gtx C) D {
+						o := float32(1)
+						if pick.Pressed() {
+							o = 0.6
+						}
+						defer paint.PushOpacity(gtx.Ops, o).Pop()
+
+						return layout.Stack{Alignment: layout.Center}.Layout(gtx,
+							layout.Expanded(func(gtx C) D {
+								rrect(gtx, colTeal, gtx.Dp(10))
+
+								return D{Size: gtx.Constraints.Min}
+							}),
+							layout.Stacked(func(gtx C) D {
+								return layout.Inset{Top: unit.Dp(10), Bottom: unit.Dp(10), Left: unit.Dp(22), Right: unit.Dp(22)}.Layout(gtx, func(gtx C) D {
+									t := material.Body1(th, label)
+									t.Color = colBg
+									t.Font.Weight = font.Bold
+
+									return t.Layout(gtx)
+								})
+							}),
+						)
 					})
 				})
 			}),
