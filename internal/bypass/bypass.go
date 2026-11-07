@@ -65,8 +65,9 @@ type Engine struct {
 	voiced   []byte
 	recorded []byte
 
-	ignore map[string]bool
-	owners Owners
+	ignore      map[string]bool
+	ignorePaths []string
+	owners      Owners
 
 	silence  time.Duration
 	dropQUIC bool
@@ -118,12 +119,19 @@ func New(s Settings) *Engine {
 		health:   link.New(),
 	}
 
-	for _, name := range s.Ignore {
+	for _, entry := range s.Ignore {
+		low := strings.ToLower(entry)
+		if isFolder(low) {
+			e.ignorePaths = append(e.ignorePaths, strings.TrimRight(low, `\/`))
+
+			continue
+		}
+
 		if e.ignore == nil {
 			e.ignore = map[string]bool{}
 		}
 
-		e.ignore[strings.ToLower(name)] = true
+		e.ignore[low] = true
 	}
 
 	if s.Seen {
