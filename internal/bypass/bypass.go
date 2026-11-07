@@ -88,10 +88,6 @@ type Engine struct {
 	// a flag turned on for a short look rather than left running.
 	seen map[string]bool
 
-	// Faked datagrams counted per voice flow by source port: the fake stops once
-	// the dpi has committed, so a live stream is not flooded and drowned.
-	voiceFlows map[uint16]int
-
 	// The loop writes these and the reply watcher reads and clears them, so they
 	// need a lock of their own; every other field here belongs to one goroutine.
 	toldMu sync.Mutex
@@ -131,7 +127,6 @@ func New(s Settings) *Engine {
 	}
 
 	e.told = map[string]int{}
-	e.voiceFlows = map[uint16]int{}
 
 	if e.hunt != nil {
 		e.set = withCandidate(e.base, e.hunt.Current())

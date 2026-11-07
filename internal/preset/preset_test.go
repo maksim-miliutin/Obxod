@@ -196,7 +196,7 @@ func TestLabelMarksOnlyFavourites(t *testing.T) {
 }
 
 func TestOverlayPresetsCarryTheirOwnHello(t *testing.T) {
-	for _, key := range []string{"google_full", "google_overlay"} {
+	for _, key := range []string{"google_full", "google_overlay", "google_ghost"} {
 		google, ok := Named(key)
 		if !ok {
 			t.Fatalf("the %s preset is missing", key)
@@ -209,6 +209,14 @@ func TestOverlayPresetsCarryTheirOwnHello(t *testing.T) {
 		if google.Seqovl() != 679 {
 			t.Errorf("%s seqovl = %d, want 679", key, google.Seqovl())
 		}
+	}
+
+	if ghost, _ := Named("google_ghost"); ghost.Fake() != "google" {
+		t.Errorf("google ghost fake = %q, want google", ghost.Fake())
+	}
+
+	if _, ok := Named("scatter"); !ok {
+		t.Fatal("the scatter preset is missing")
 	}
 
 	sferum, ok := Named("sferum_decoy")

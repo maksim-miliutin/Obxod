@@ -77,21 +77,25 @@ func TestRecordedDatagramsGoFirst(t *testing.T) {
 	}
 }
 
-func TestVoiceStopsFakingAfterTheFlowSettles(t *testing.T) {
+// No cutoff: the dpi re-checks the flow on every signaling datagram, so the fake
+// has to keep going. Stopping early is what lets the far side stop hearing us.
+func TestVoiceKeepsFoolingEveryDatagram(t *testing.T) {
 	recorded := bytes.Repeat([]byte{0xab}, 1200)
 
 	e, _ := voiceEngine(t, "discord.media=fakeudp:5", recorded)
 	r := &recorder{}
 
-	for i := 0; i < voiceCutoff+3; i++ {
+	const datagrams = 9
+
+	for range datagrams {
 		if _, err := e.voice(r, voicePacket(discovery()), &divert.Addr{}); err != nil {
 			t.Fatalf("voice: %v", err)
 		}
 	}
 
-	if len(r.sent) != voiceCutoff*5 {
-		t.Fatalf("sent %d datagrams across a settling flow, want %d (five each for the first %d)",
-			len(r.sent), voiceCutoff*5, voiceCutoff)
+	if len(r.sent) != datagrams*5 {
+		t.Fatalf("sent %d fakes over %d datagrams, want %d with no cutoff",
+			len(r.sent), datagrams, datagrams*5)
 	}
 }
 
