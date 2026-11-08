@@ -16,7 +16,7 @@ func systrayLoop(show chan<- struct{}, up *atomic.Bool) {
 	onReady := func() {
 		systray.SetTitle("Obxod")
 		systray.SetTooltip("Obxod")
-		systray.SetIcon(iconPNG)
+		systray.SetIcon(iconICO)
 
 		showItem := systray.AddMenuItem("Показать", "")
 		quitItem := systray.AddMenuItem("Выход", "")
