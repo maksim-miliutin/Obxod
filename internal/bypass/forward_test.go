@@ -455,7 +455,7 @@ func TestRecordedFakeWithoutAFileIsRefused(t *testing.T) {
 
 type stubOwner struct{ name string }
 
-func (o stubOwner) Of(uint16) (string, bool) { return o.name, true }
+func (o stubOwner) Of(uint16, bool) (string, bool) { return o.name, true }
 
 // A program on the ignore list has its hellos pass through untouched even to a
 // watched host, so a vpn or game sharing these ports is never desynced.

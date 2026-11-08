@@ -33,7 +33,7 @@ type Eyes interface {
 }
 
 type Owners interface {
-	Of(port uint16) (string, bool)
+	Of(port uint16, udp bool) (string, bool)
 }
 
 type Settings struct {

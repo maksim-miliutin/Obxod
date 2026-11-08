@@ -26,14 +26,14 @@ type sender interface {
 	Send(packet []byte, addr *divert.Addr) error
 }
 
-// leaveAlone reports a hello whose owning program the user listed by exe name or by
+// leaveAlone reports a port whose owning program the user listed by exe name or by
 // a folder it runs from, so its traffic goes out untouched instead of being bypassed.
-func (e *Engine) leaveAlone(port uint16) (string, bool) {
+func (e *Engine) leaveAlone(port uint16, udp bool) (string, bool) {
 	if e.owners == nil || (len(e.ignore) == 0 && len(e.ignorePaths) == 0) {
 		return "", false
 	}
 
-	path, ok := e.owners.Of(port)
+	path, ok := e.owners.Of(port, udp)
 	if !ok {
 		return "", false
 	}
@@ -95,7 +95,7 @@ func (e *Engine) forward(h sender, packet []byte, addr *divert.Addr) (bool, erro
 		e.caughtByAll(found.Host)
 	}
 
-	if name, leave := e.leaveAlone(found.SrcPort); leave {
+	if name, leave := e.leaveAlone(found.SrcPort, false); leave {
 		e.once(found.Host, "left alone: %s owns this port", name)
 
 		return false, nil
