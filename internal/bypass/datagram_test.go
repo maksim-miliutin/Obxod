@@ -77,6 +77,49 @@ func TestRecordedDatagramsGoFirst(t *testing.T) {
 	}
 }
 
+// Radmin vpn punches holes with stun, and a fake in front of that stun breaks the
+// punch, so a program the user put on the ignore list has to be skipped on the
+// voice path the way the tcp path already skips it.
+func TestVoiceLeavesAnIgnoredOwnerAlone(t *testing.T) {
+	e := New(Settings{
+		Rules:  setOf(t, "discord.media=fakeudp:5"),
+		Wet:    true,
+		Voiced: bytes.Repeat([]byte{0xab}, 100),
+		Ignore: []string{"radmin.exe"},
+		Owners: stubOwner{"Radmin.exe"},
+	})
+	r := &recorder{}
+
+	if _, err := e.voice(r, voicePacket(discovery()), &divert.Addr{}); err != nil {
+		t.Fatalf("voice: %v", err)
+	}
+
+	if len(r.sent) != 0 {
+		t.Fatalf("sent %d datagrams ahead of an ignored program, want none", len(r.sent))
+	}
+}
+
+// The skip is for the listed program only: a datagram from anything else still
+// gets the fake, so the ignore cannot quietly turn voice off for everyone.
+func TestVoiceStillFakesForAnotherOwner(t *testing.T) {
+	e := New(Settings{
+		Rules:  setOf(t, "discord.media=fakeudp:5"),
+		Wet:    true,
+		Voiced: bytes.Repeat([]byte{0xab}, 100),
+		Ignore: []string{"radmin.exe"},
+		Owners: stubOwner{"chrome.exe"},
+	})
+	r := &recorder{}
+
+	if _, err := e.voice(r, voicePacket(discovery()), &divert.Addr{}); err != nil {
+		t.Fatalf("voice: %v", err)
+	}
+
+	if len(r.sent) != 5 {
+		t.Fatalf("sent %d datagrams for a program not on the list, want the five", len(r.sent))
+	}
+}
+
 // No cutoff: the dpi re-checks the flow on every signaling datagram, so the fake
 // has to keep going. Stopping early is what lets the far side stop hearing us.
 func TestVoiceKeepsFoolingEveryDatagram(t *testing.T) {

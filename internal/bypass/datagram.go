@@ -20,6 +20,12 @@ func (e *Engine) voice(h sender, packet []byte, addr *divert.Addr) (bool, error)
 		return false, nil
 	}
 
+	if name, leave := e.leaveAlone(datagram.SrcPort, true); leave {
+		e.once(leftAlone, "left alone: %s owns this udp port", name)
+
+		return false, nil
+	}
+
 	r, ok := e.voiceRule()
 	if !ok {
 		return false, nil
@@ -74,4 +80,7 @@ func (e *Engine) voiceRule() (rules.Rule, bool) {
 	return rules.Rule{}, false
 }
 
-const opening = "voice"
+const (
+	opening   = "voice"
+	leftAlone = "voice left alone"
+)
