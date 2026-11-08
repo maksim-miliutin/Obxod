@@ -199,6 +199,25 @@ func run(w *app.Window, tray trayLinks) error {
 		launch()
 	}
 
+	// A method or site change only swaps the desync rule, so the driver stays open and
+	// live connections survive; quic and folders change the filter and still restart.
+	swap := func() {
+		if session == nil {
+			launch()
+
+			return
+		}
+
+		set, err := chosen.RulesVoice(own.List())
+		if err != nil {
+			restart()
+
+			return
+		}
+
+		session.Swap(set)
+	}
+
 	screen := scrMain
 
 	var znak, toMethod, clearLog, copyLog, langClick widget.Clickable
@@ -303,7 +322,7 @@ func run(w *app.Window, tray trayLinks) error {
 					chosen = all[i]
 					uses[all[i].Key]++
 					persist()
-					restart()
+					swap()
 					screen = scrMain
 				}
 				if starRows[i].Clicked(gtx) {
@@ -315,7 +334,7 @@ func run(w *app.Window, tray trayLinks) error {
 				if sw.on {
 					sw.on = false
 					chosen = sw.back
-					restart()
+					swap()
 				} else {
 					if session == nil {
 						launch()
@@ -324,7 +343,7 @@ func run(w *app.Window, tray trayLinks) error {
 					if session != nil {
 						sw = sweepState{on: true, cands: all, back: chosen, results: map[string][2]int{}}
 						chosen = all[0]
-						restart()
+						swap()
 						swClear, swFail = 0, 0
 						probeBurst(probeResult, probeHost, probeShots)
 						sw.due = gtx.Now.Add(settle)
@@ -347,7 +366,7 @@ func run(w *app.Window, tray trayLinks) error {
 				own.Add(name)
 				_ = own.Save(sitesFile())
 				siteEditor.SetText("")
-				restart()
+				swap()
 			}
 			if addSite.Clicked(gtx) {
 				addCurrent()
@@ -407,7 +426,7 @@ func run(w *app.Window, tray trayLinks) error {
 				if i < len(delSites) && delSites[i].Clicked(gtx) {
 					own.Remove(ownNames[i])
 					_ = own.Save(sitesFile())
-					restart()
+					swap()
 				}
 			}
 			if fakeBool.Value != useFake {
@@ -474,7 +493,7 @@ func run(w *app.Window, tray trayLinks) error {
 				sw.at++
 				if sw.at < len(sw.cands) {
 					chosen = sw.cands[sw.at]
-					restart()
+					swap()
 					probeBurst(probeResult, probeHost, probeShots)
 					sw.due = gtx.Now.Add(settle)
 					gtx.Execute(op.InvalidateCmd{At: sw.due})
@@ -485,7 +504,7 @@ func run(w *app.Window, tray trayLinks) error {
 					}
 					uses[chosen.Key]++
 					persist()
-					restart()
+					swap()
 				}
 			}
 
