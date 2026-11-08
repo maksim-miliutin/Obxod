@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"obxod/internal/attempt"
@@ -97,6 +98,9 @@ type Engine struct {
 	// need a lock of their own; every other field here belongs to one goroutine.
 	toldMu sync.Mutex
 	told   map[string]int
+
+	// Left by Swap from another goroutine, taken by the loop; see takeSwap.
+	pending atomic.Pointer[rules.Set]
 }
 
 func New(s Settings) *Engine {
@@ -147,6 +151,32 @@ func New(s Settings) *Engine {
 	return e
 }
 
+// Swap hands the loop a new rule set for its next packet. The driver stays open, so
+// unlike a stop-and-start the live connections are not reset.
+func (e *Engine) Swap(set rules.Set) {
+	if len(set) == 0 {
+		return
+	}
+
+	e.pending.Store(&set)
+}
+
+// Only the loop calls this, so set and base stay owned by one goroutine; the pointer
+// is the single thing that crosses between goroutines.
+func (e *Engine) takeSwap() {
+	next := e.pending.Swap(nil)
+	if next == nil {
+		return
+	}
+
+	e.base = *next
+	e.set = *next
+
+	if e.hunt != nil {
+		e.set = withCandidate(*next, e.hunt.Current())
+	}
+}
+
 // Run blocks until the driver fails. Replies are watched alongside on eyes, and
 // that watch only reports: losing it leaves the loop running.
 func (e *Engine) Run(wire Wire, eyes Eyes) error {
@@ -163,6 +193,8 @@ func (e *Engine) Run(wire Wire, eyes Eyes) error {
 		}
 
 		packet := buf[:n]
+
+		e.takeSwap()
 
 		if e.fakeQUIC != "" {
 			if isQUICInitial(packet) {

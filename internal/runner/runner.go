@@ -136,3 +136,7 @@ func (s *Session) Traffic() map[string]int {
 func (s *Session) Score() (answered, reset int) {
 	return s.engine.Score()
 }
+
+func (s *Session) Swap(set rules.Set) {
+	s.engine.Swap(set)
+}

@@ -299,6 +299,93 @@ func TestNewPutsTheFirstCandidateInPlace(t *testing.T) {
 	}
 }
 
+// swapWire swaps the engine's rule set right before it hands over a chosen packet,
+// which is how the window changes the method on a running engine.
+type swapWire struct {
+	queue  [][]byte
+	sent   [][]byte
+	engine *Engine
+	before int
+	to     rules.Set
+	n      int
+}
+
+func (w *swapWire) Recv(buf []byte) (int, divert.Addr, error) {
+	if w.n == w.before {
+		w.engine.Swap(w.to)
+	}
+
+	w.n++
+
+	if len(w.queue) == 0 {
+		return 0, divert.Addr{}, errStop
+	}
+
+	packet := w.queue[0]
+	w.queue = w.queue[1:]
+
+	return copy(buf, packet), divert.Addr{}, nil
+}
+
+func (w *swapWire) Send(packet []byte, addr *divert.Addr) error {
+	w.sent = append(w.sent, append([]byte(nil), packet...))
+
+	return nil
+}
+
+// The point of the swap is to change the method without a restart, so the driver is
+// never reopened and live connections are not reset. cut:name sends two halves, a
+// scatter into three sends three; without the swap the second hello would cut again.
+func TestSwapChangesTheMethodMidRun(t *testing.T) {
+	hello := packet443(clientHello("discord.com"))
+
+	out := &lines{}
+	e := New(Settings{Rules: setOf(t, "discord.com=cut:name"), Wet: true, Report: out.say})
+
+	wire := &swapWire{
+		queue:  [][]byte{hello, hello},
+		engine: e,
+		before: 1,
+		to:     setOf(t, "discord.com=multidisorder:3"),
+	}
+
+	if err := e.Run(wire, shutEyes{}); !errors.Is(err, errStop) {
+		t.Fatalf("Run stopped with %v, want the driver error back", err)
+	}
+
+	if len(wire.sent) != 5 {
+		t.Fatalf("sent %d packets, want 2 from the cut then 3 from the swapped scatter", len(wire.sent))
+	}
+}
+
+// Swap comes from the window's goroutine while the loop runs in its own, so the two
+// cross only through the atomic pointer and the race detector has to stay quiet.
+func TestSwapIsSafeFromAnotherGoroutine(t *testing.T) {
+	hello := packet443(clientHello("discord.com"))
+
+	queue := make([][]byte, 4000)
+	for i := range queue {
+		queue[i] = hello
+	}
+
+	e := New(Settings{Rules: setOf(t, "discord.com=cut:name"), Wet: true})
+
+	done := make(chan error, 1)
+	go func() { done <- e.Run(&fakeWire{queue: queue}, shutEyes{}) }()
+
+	cut := setOf(t, "discord.com=cut:name")
+	scatter := setOf(t, "discord.com=multidisorder:3")
+
+	for range 200 {
+		e.Swap(scatter)
+		e.Swap(cut)
+	}
+
+	if err := <-done; !errors.Is(err, errStop) {
+		t.Fatalf("Run stopped with %v, want the driver error back", err)
+	}
+}
+
 // The trap this closes: a site on a name nobody listed goes out untouched and the
 // program says nothing, so the missing rule is invisible.
 func TestNamesWithNoRuleAreReportedOnce(t *testing.T) {
