@@ -64,11 +64,25 @@ var (
 	iconChevron, _    = widget.NewIcon(icons.NavigationChevronRight)
 )
 
+type trayLinks struct {
+	show <-chan struct{}
+	up   *atomic.Bool
+}
+
+func newWindow() *app.Window {
+	w := new(app.Window)
+	w.Option(app.Title("Obxod"), app.Size(unit.Dp(420), unit.Dp(660)), app.MinSize(unit.Dp(360), unit.Dp(540)))
+
+	return w
+}
+
 func main() {
+	show := make(chan struct{}, 1)
+	var trayUp atomic.Bool
+	go systrayLoop(show, &trayUp)
+
 	go func() {
-		w := new(app.Window)
-		w.Option(app.Title("Obxod"), app.Size(unit.Dp(420), unit.Dp(660)), app.MinSize(unit.Dp(360), unit.Dp(540)))
-		if err := run(w); err != nil {
+		if err := run(newWindow(), trayLinks{show: show, up: &trayUp}); err != nil {
 			log.Fatal(err)
 		}
 		os.Exit(0)
@@ -96,7 +110,7 @@ const (
 	probeHost  = "discord.com"
 )
 
-func run(w *app.Window) error {
+func run(w *app.Window, tray trayLinks) error {
 	th := material.NewTheme()
 	th.Shaper = text.NewShaper(text.WithCollection(manropeCollection()))
 	th.Palette.Bg = colBg
@@ -227,10 +241,10 @@ func run(w *app.Window) error {
 
 	navTargets := []int{scrMain, scrSites, scrLogs, scrSettings, scrPick}
 
-	var live atomic.Bool
+	var live, hidden atomic.Bool
 	go func() {
 		for range time.Tick(time.Second) {
-			if live.Load() {
+			if live.Load() && !hidden.Load() {
 				w.Invalidate()
 			}
 		}
@@ -245,11 +259,22 @@ func run(w *app.Window) error {
 	for {
 		switch e := w.Event().(type) {
 		case app.DestroyEvent:
-			if session != nil {
-				session.Stop()
+			// With a tray the close button hides the window and leaves the bypass
+			// running; without one it quits the way it always did.
+			if !tray.up.Load() {
+				if session != nil {
+					session.Stop()
+				}
+
+				return e.Err
 			}
 
-			return e.Err
+			hidden.Store(true)
+			<-tray.show
+			hidden.Store(false)
+			w = newWindow()
+
+			continue
 		case app.FrameEvent:
 			gtx := app.NewContext(&ops, e)
 
