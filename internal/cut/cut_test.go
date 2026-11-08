@@ -192,11 +192,10 @@ func TestAtPositionsErrors(t *testing.T) {
 		{"udp", udpPacket(), []int{5}, ErrNotTCP},
 		{"bare ack", packetWith(1000, nil), []int{5}, ErrNoPayload},
 		{"no points", packetWith(1000, payload), nil, ErrNoRoomLeft},
-		{"a split at the start", packetWith(1000, payload), []int{0}, ErrBadPoint},
-		{"a negative point", packetWith(1000, payload), []int{-1}, ErrBadPoint},
-		{"a point at the end", packetWith(1000, payload), []int{len(payload)}, ErrBadPoint},
-		{"a point past the end", packetWith(1000, payload), []int{len(payload) + 1}, ErrBadPoint},
-		{"one good, one past the end", packetWith(1000, payload), []int{5, len(payload) + 9}, ErrBadPoint},
+		{"a split at the start", packetWith(1000, payload), []int{0}, ErrNoRoomLeft},
+		{"a negative point", packetWith(1000, payload), []int{-1}, ErrNoRoomLeft},
+		{"a point at the end", packetWith(1000, payload), []int{len(payload)}, ErrNoRoomLeft},
+		{"a point past the end", packetWith(1000, payload), []int{len(payload) + 1}, ErrNoRoomLeft},
 	}
 
 	for _, c := range cases {
@@ -205,6 +204,19 @@ func TestAtPositionsErrors(t *testing.T) {
 				t.Errorf("err = %v, want %v", err, c.want)
 			}
 		})
+	}
+}
+
+func TestAtPositionsSkipsAPointPastThePayload(t *testing.T) {
+	payload := hello("updates.discord.com")
+
+	pieces, err := AtPositions(packetWith(1000, payload), []int{5, len(payload) + 9})
+	if err != nil {
+		t.Fatalf("AtPositions: %v", err)
+	}
+
+	if len(pieces) != 2 {
+		t.Errorf("pieces = %d, want 2 (cut only at the point that fits)", len(pieces))
 	}
 }
 

@@ -145,8 +145,10 @@ func interior(points []int, total int) ([]int, error) {
 	var kept []int
 
 	for _, p := range points {
+		// Drop a point outside the payload instead of failing the whole split: a short
+		// hello with the name at its end still gets cut at the points that do fit.
 		if p <= 0 || p >= total {
-			return nil, ErrBadPoint
+			continue
 		}
 
 		if seen[p] {
